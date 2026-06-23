@@ -1,0 +1,206 @@
+# DeepAgents Scaffold - Main Configuration
+# Copy this file and edit values for your project.
+
+config_version: 1
+
+# Logging level: debug, info, warning, error
+log_level: info
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+# Configure one or more LLM providers. The first model is the default.
+# Use $ENV_VAR syntax to reference environment variables.
+models:
+  - name: deepseek-v4-pro
+    display_name: deepseek-v4-pro
+    # Option A: OpenAI-compatible endpoint (simpler, no reasoning_content patch needed)
+    use: langchain_openai:ChatOpenAI
+    base_url: https://api.deepseek.com
+    # Option B: Native DeepSeek adapter (requires langchain-deepseek, auto-patched for reasoning)
+    # use: langchain_deepseek:ChatDeepSeek
+    api_key: $DEEPSEEK_API_KEY
+    model: deepseek-v4-pro
+    # temperature: 0.7
+    # max_tokens: 4096
+    # supports_thinking: true
+    # supports_vision: false
+
+  - name: anthropic-claude-3-5-sonnet
+    display_name: Claude 3.5 Sonnet
+    use: langchain_anthropic:ChatAnthropic
+    api_key: $ANTHROPIC_API_KEY
+    model: claude-3-5-sonnet-20241022
+    temperature: 0.7
+    max_tokens: 4096
+    supports_thinking: true
+    supports_vision: true
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+# Register custom tools here. Each tool references a Python import path.
+# Tools must be async callables accepting a single dict argument.
+tools: []
+
+# Tool groups let you organize tools by category and selectively enable them.
+tool_groups: []
+
+# ---------------------------------------------------------------------------
+# Skills
+# ---------------------------------------------------------------------------
+# Skills are reusable behaviors defined in SKILL.md files under plugins/skills/.
+# Set path to the directory containing skill definitions.
+skills:
+  path: ./plugins/skills
+  container_path: /mnt/skills
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+# Declare the ordered middleware chain injected into DeepAgents agent.
+# Each entry names a middleware class (or alias) and optional kwargs.
+# Built-in aliases: MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
+#   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
+#   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
+#   TodoMiddleware, TitleMiddleware
+middleware:
+  items:
+    - name: ToolErrorHandlingMiddleware
+      enabled: true
+    - name: DynamicContextMiddleware
+      enabled: true
+      kwargs:
+        inject_date: true
+        inject_memory: true
+        memory_sources:
+          - ./data/memory.json
+    - name: LoopDetectionMiddleware
+      enabled: true
+      kwargs:
+        warn_threshold: 3
+        hard_stop_threshold: 5
+    - name: TokenUsageMiddleware
+      enabled: true
+      kwargs:
+        log_interval: 1
+
+# ---------------------------------------------------------------------------
+# Profiles
+# ---------------------------------------------------------------------------
+# Harness profiles customize agent behavior per use-case.
+#   base_system_prompt: replaces the BASE prompt segment
+#   system_prompt_suffix: appended after BASE
+#   excluded_middleware: middleware names to skip
+#   excluded_tools: tool names to remove
+profiles:
+  harness:
+    - name: default
+      base_system_prompt: ""
+      system_prompt_suffix: ""
+      excluded_middleware: []
+      excluded_tools: []
+  default_harness: default
+
+# ---------------------------------------------------------------------------
+# Backend
+# ---------------------------------------------------------------------------
+# DeepAgents execution backend (filesystem, sandbox, composite).
+backend:
+  type: filesystem
+  filesystem:
+    root_dir: /
+  sandbox:
+    provider: local
+    timeout_seconds: 60
+    mounts: []
+
+# ---------------------------------------------------------------------------
+# Memory
+# ---------------------------------------------------------------------------
+# Persistent memory for cross-session personalization.
+memory:
+  enabled: true
+  injection_enabled: true
+  storage_path: ./data/memory.json
+  debounce_seconds: 30
+  model_name: null  # null = use default model
+  max_facts: 100
+  fact_confidence_threshold: 0.7
+  max_injection_tokens: 2000
+
+# ---------------------------------------------------------------------------
+# Subagents
+# ---------------------------------------------------------------------------
+# Enable sub-agent delegation for complex multi-step tasks.
+subagents:
+  enabled: true
+  max_concurrent: 3
+  timeout_seconds: 900
+
+# Define subagents that the main agent can delegate to via the task tool.
+subagent_definitions:
+  items:
+    - name: researcher
+      description: "Search and synthesize information from various sources"
+      system_prompt: "You are a research assistant. Find relevant information, cite sources, and synthesize findings clearly."
+      # model: "openai:gpt-4o-mini"  # optional model override
+      # tools: ["search", "read_file"]  # optional tool whitelist
+      # skills: ["./plugins/skills/research"]  # optional skill paths
+      enabled: true
+    - name: coder
+      description: "Write, review, and debug code"
+      system_prompt: "You are an expert software engineer. Write clean, well-tested code. Use available file tools to read and write code."
+      enabled: true
+
+# ---------------------------------------------------------------------------
+# Channels (IM Platform Integrations)
+# ---------------------------------------------------------------------------
+# Configure external messaging platforms to interact with your agents.
+channels:
+  langgraph_url: http://localhost:8000/api
+  gateway_url: http://localhost:8000
+
+  # Feishu (Lark) integration
+  feishu:
+    enabled: false
+    app_id: $FEISHU_APP_ID
+    app_secret: $FEISHU_APP_SECRET
+
+  # Slack integration
+  slack:
+    enabled: false
+    bot_token: $SLACK_BOT_TOKEN
+    app_token: $SLACK_APP_TOKEN
+
+# ---------------------------------------------------------------------------
+# Tracing
+# ---------------------------------------------------------------------------
+# Observability via LangSmith or Langfuse.
+tracing:
+  enabled: false
+  providers: []  # e.g., ["langsmith", "langfuse"]
+
+# ---------------------------------------------------------------------------
+# Gateway
+# ---------------------------------------------------------------------------
+gateway:
+  host: 0.0.0.0
+  port: 8000
+  enable_docs: true
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+# SQLite is the default. Set backend to "postgres" for production.
+database:
+  backend: sqlite
+  sqlite_dir: ./data
+
+# ---------------------------------------------------------------------------
+# Stream Bridge
+# ---------------------------------------------------------------------------
+# Bridges streaming events between agent runs and connected clients.
+stream_bridge:
+  type: memory
+  queue_maxsize: 256
