@@ -1,9 +1,9 @@
-"""Tool registration and discovery.
+"""工具注册与发现。
 
-Supports:
-- Custom tools from config.yaml import paths
-- Automatic discovery of tools in plugins/tools/
-- MCP tools (future)
+支持：
+- 通过 config.yaml 中的导入路径加载自定义工具
+- 自动发现 plugins/tools/ 目录下的工具
+- MCP 工具（未来）
 """
 
 from __future__ import annotations
@@ -24,22 +24,22 @@ ToolFunc = Callable[..., Any]
 
 
 def _import_callable(use_path: str) -> ToolFunc:
-    """Import a callable from 'module.path:function_name'."""
+    """从 'module.path:function_name' 导入可调用对象。"""
     module_path, attr_name = use_path.split(":")
     module = importlib.import_module(module_path)
     return getattr(module, attr_name)
 
 
 def load_tool_from_config(tool_config: ToolConfig) -> StructuredTool:
-    """Load a single tool from its config definition."""
+    """根据配置定义加载单个工具。"""
     func = _import_callable(tool_config.use)
 
-    # Derive description from config or docstring
+    # 从配置或文档字符串推导描述信息
     description = tool_config.description
     if description is None and func.__doc__:
         description = inspect.cleandoc(func.__doc__).split("\n")[0]
 
-    # Wrap async or sync function
+    # 包装异步或同步函数
     if inspect.iscoroutinefunction(func):
         return StructuredTool.from_function(
             coroutine=func,
@@ -54,13 +54,13 @@ def load_tool_from_config(tool_config: ToolConfig) -> StructuredTool:
 
 
 def get_available_tools(app_config: AppConfig | None = None) -> list[StructuredTool]:
-    """Load all configured tools.
+    """加载所有已配置的工具。
 
     Args:
-        app_config: Optional AppConfig. Loads from disk if omitted.
+        app_config: 可选的 AppConfig。省略时从磁盘加载。
 
     Returns:
-        List of StructuredTool instances.
+        StructuredTool 实例列表。
     """
     if app_config is None:
         app_config = get_app_config()

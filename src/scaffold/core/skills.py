@@ -1,9 +1,8 @@
-"""Skills system.
+"""技能系统。
 
-Loads SKILL.md definitions and provides skill discovery for the
-SkillsMiddleware.
+加载 SKILL.md 定义文件，并为 SkillsMiddleware 提供技能发现能力。
 
-Adapted from deer-flow's skill loading infrastructure.
+改编自 deer-flow 的技能加载基础设施。
 """
 
 from __future__ import annotations
@@ -19,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 def _scan_skill_directories(skills_path: str) -> list[Path]:
-    """Scan the skills directory for SKILL.md files.
+    """扫描技能目录中的 SKILL.md 文件。
 
-    Returns a list of directories that contain a SKILL.md file.
+    返回包含 SKILL.md 文件的目录列表。
     """
     base = Path(skills_path)
     if not base.exists():
@@ -35,21 +34,21 @@ def _scan_skill_directories(skills_path: str) -> list[Path]:
 
 
 def get_skill_names(app_config: AppConfig) -> list[str]:
-    """Return the list of skill directory names available for loading.
+    """返回可供加载的技能目录名称列表。
 
-    These names are passed to DeepAgents SkillsMiddleware.
+    这些名称将传给 DeepAgents 的 SkillsMiddleware。
     """
     path = app_config.skills.path
-    # Expand env vars and ~
+    # 展开环境变量与 ~
     path = os.path.expandvars(os.path.expanduser(path))
     dirs = _scan_skill_directories(path)
     return [d.name for d in dirs]
 
 
 def load_skills(app_config: AppConfig) -> list[dict[str, Any]]:
-    """Load all SKILL.md files and return parsed skill metadata.
+    """加载所有 SKILL.md 文件并返回解析后的技能元数据。
 
-    Returns a list of dicts with 'name', 'description', 'content' keys.
+    返回包含 'name'、'description'、'content' 键的字典列表。
     """
     path = app_config.skills.path
     path = os.path.expandvars(os.path.expanduser(path))
@@ -75,9 +74,9 @@ def load_skills(app_config: AppConfig) -> list[dict[str, Any]]:
 
 
 def _parse_skill_frontmatter(content: str) -> dict[str, Any]:
-    """Parse YAML frontmatter from a SKILL.md file.
+    """解析 SKILL.md 文件中的 YAML frontmatter。
 
-    Expects format:
+    期望格式：
         ---
         name: my-skill
         description: Does something useful

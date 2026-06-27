@@ -1,1 +1,1 @@
-"""Core layer — DeepAgents integration, tools, skills, memory."""
+"""运行时核心层 —— DeepAgents 集成、工具、技能与记忆。"""

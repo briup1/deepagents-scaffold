@@ -1,7 +1,7 @@
-"""SubAgent system.
+"""子 Agent 系统。
 
-Loads subagent definitions from config.yaml and builds DeepAgents
-SubAgent TypedDict instances for create_deep_agent(subagents=[...]).
+从 config.yaml 加载子 agent 定义，并构建 DeepAgents 所需的
+SubAgent TypedDict 实例，供 create_deep_agent(subagents=[...]) 使用。
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from typing import Any
 from scaffold.core.tools import get_available_tools
 from scaffold.infra.config.app_config import AppConfig
 from scaffold.infra.config.subagent_config import SubAgentDefinitionConfig
-from scaffold.infra.middleware.factory import build_middleware_chain
 from scaffold.infra.middleware.registry import get_middleware_registry
 from scaffold.infra.models.factory import create_chat_model
 from scaffold.infra.config.app_config import get_app_config
@@ -21,13 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 def build_subagents(app_config: AppConfig | None = None) -> list[Any]:
-    """Build DeepAgents SubAgent instances from config.yaml definitions.
+    """根据 config.yaml 中的定义构建 DeepAgents SubAgent 实例。
 
     Args:
-        app_config: AppConfig with subagent definitions.
+        app_config: 包含子 agent 定义的 AppConfig。
 
     Returns:
-        List of SubAgent TypedDicts for create_deep_agent().
+        供 create_deep_agent() 使用的 SubAgent TypedDict 列表。
     """
     if app_config is None:
         app_config = get_app_config()
@@ -56,20 +55,20 @@ def _build_single_subagent(
     cfg: SubAgentDefinitionConfig,
     app_config: AppConfig,
 ) -> Any | None:
-    """Build a single DeepAgents SubAgent from config."""
+    """根据配置构建单个 DeepAgents SubAgent。"""
     from deepagents.middleware.subagents import SubAgent
 
-    # Resolve tools
+    # 解析工具
     tools = _resolve_tools(cfg.tools, app_config)
 
-    # Resolve model override
+    # 解析模型覆盖配置
     model = None
     if cfg.model:
         model_cfg = app_config.get_model_config(cfg.model)
         if model_cfg:
             model = create_chat_model(model_cfg)
         else:
-            # Try provider:model string format
+            # 尝试 provider:model 字符串格式
             try:
                 from langchain.chat_models import init_chat_model
 
@@ -77,7 +76,7 @@ def _build_single_subagent(
             except Exception:
                 logger.warning("Could not resolve model '%s' for subagent '%s'", cfg.model, cfg.name)
 
-    # Resolve middleware
+    # 解析中间件
     middleware = []
     for mw_name in cfg.middleware:
         try:
@@ -87,7 +86,7 @@ def _build_single_subagent(
         except Exception:
             logger.warning("Could not resolve middleware '%s' for subagent '%s'", mw_name, cfg.name)
 
-    # Build SubAgent spec
+    # 构建 SubAgent 规格
     spec: dict[str, Any] = {
         "name": cfg.name,
         "description": cfg.description,
@@ -108,7 +107,7 @@ def _build_single_subagent(
 
 
 def _resolve_tools(tool_names: list[str], app_config: AppConfig) -> list[Any]:
-    """Resolve tool names to actual tool instances."""
+    """将工具名称解析为实际工具实例。"""
     if not tool_names:
         return []
 
