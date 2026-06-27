@@ -1,7 +1,6 @@
-"""Run execution API — stream and wait endpoints.
+"""Run execution API — 流式与阻塞端点。
 
-Compatible with LangGraph Platform API conventions. Runs are executed by a
-background worker that publishes events to a ``StreamBridge`` keyed by run_id.
+兼容 LangGraph Platform API 规范。Run 由后台 worker 执行，并将事件发布到以 run_id 为键的 ``StreamBridge``。
 """
 
 from __future__ import annotations
@@ -52,7 +51,7 @@ def _normalise_stream_modes(stream_mode: str | list[str]) -> list[str]:
 
 @router.post("/stream")
 async def stream_run(body: RunCreateRequest, request: Request) -> StreamingResponse:
-    """Create a run and stream events via SSE."""
+    """创建 run 并通过 SSE 流式返回事件。"""
     checkpointer = get_checkpointer(request)
     bridge = get_stream_bridge(request)
 
@@ -95,7 +94,7 @@ async def stream_run(body: RunCreateRequest, request: Request) -> StreamingRespo
 
 @router.post("/wait", response_model=dict)
 async def wait_run(body: RunCreateRequest, request: Request) -> dict:
-    """Create a run, block until completion, and return the final checkpoint."""
+    """创建 run，阻塞直到完成，并返回最终 checkpoint。"""
     checkpointer = get_checkpointer(request)
     bridge = get_stream_bridge(request)
 
@@ -159,7 +158,7 @@ async def sse_consumer(
     last_event_id: str | None = None,
     heartbeat_interval: float = 15.0,
 ) -> AsyncIterator[str]:
-    """Consume events from ``bridge`` for *run_id* and yield SSE frames."""
+    """从 ``bridge`` 中消费指定 *run_id* 的事件并生成 SSE 帧。"""
     event_counter = 0
     async for item in bridge.subscribe(
         run_id,
@@ -193,10 +192,9 @@ async def _wait_for_run_completion(
     *,
     heartbeat_interval: float = 15.0,
 ) -> None:
-    """Block until the bridge emits an end sentinel for this run.
+    """阻塞直到 bridge 为该 run 发出 end sentinel。
 
-    Periodic disconnect checks and heartbeat wakes keep the handler responsive
-    even when the agent produces no events for a long time.
+    定期检测连接断开与心跳唤醒，即使 agent 长时间未产生事件，也能保持 handler 响应。
     """
     async for item in bridge.subscribe(run_id, heartbeat_interval=heartbeat_interval):
         if item is END_SENTINEL:
@@ -206,10 +204,9 @@ async def _wait_for_run_completion(
 
 
 def format_sse(event: str, data: str, event_id: str | None = None) -> str:
-    """Format a single SSE frame matching LangGraph Platform field order.
+    """格式化单条 SSE 帧，字段顺序与 LangGraph Platform 保持一致。
 
-    Field order: ``event``, ``data``, ``id`` (each terminated by ``\n``), with a
-    final blank line.
+    字段顺序：``event``、``data``、``id``（每项以 ``\n`` 结尾），最后跟一个空行。
     """
     lines: list[str] = [f"event: {event}", f"data: {data}"]
     if event_id is not None:
@@ -218,7 +215,7 @@ def format_sse(event: str, data: str, event_id: str | None = None) -> str:
 
 
 def _serialize_event_data(data: Any) -> str:
-    """Best-effort JSON stringification of event payloads."""
+    """尽力将 event payload 序列化为 JSON 字符串。"""
     try:
         return json.dumps(_serialize_event(data), ensure_ascii=False, default=str)
     except (TypeError, ValueError) as exc:
@@ -227,7 +224,7 @@ def _serialize_event_data(data: Any) -> str:
 
 
 def _serialize_event(event: Any) -> Any:
-    """Best-effort serialization of LangGraph events for JSON."""
+    """尽力将 LangGraph event 序列化为可 JSON 化的对象。"""
     if isinstance(event, dict):
         return {k: _serialize_event(v) for k, v in event.items()}
     if isinstance(event, list):
@@ -246,7 +243,7 @@ def _serialize_event(event: Any) -> Any:
 
 
 def _serialize_checkpoint(checkpoint: Any) -> dict[str, Any]:
-    """Best-effort serialization of a LangGraph checkpoint tuple."""
+    """尽力将 LangGraph checkpoint tuple 序列化为字典。"""
     if checkpoint is None:
         return {}
     if hasattr(checkpoint, "checkpoint"):

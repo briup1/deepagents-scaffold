@@ -1,6 +1,6 @@
-"""Dependency injection for FastAPI routes.
+"""FastAPI 路由的依赖注入。
 
-Provides singleton accessors and lifespan management for LangGraph runtime.
+为 LangGraph 运行时提供单例访问器和生命周期管理。
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_config() -> AppConfig:
-    """Return the freshest AppConfig for the current request."""
+    """返回当前请求最新的 AppConfig。"""
     try:
         return get_app_config()
     except Exception as exc:
@@ -35,14 +35,14 @@ def get_config() -> AppConfig:
 
 @asynccontextmanager
 async def scaffold_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Bootstrap LangGraph runtime: checkpointer, store, etc.
+    """启动 LangGraph 运行时：checkpointer、store 等。
 
-    Stores singletons on app.state for request-time access.
+    将单例存储在 app.state 中，供请求时访问。
     """
     config = get_config()
 
     async with AsyncExitStack() as stack:
-        # SQLite checkpointer (default)
+        # SQLite checkpointer（默认）
         db_path = f"{config.database.sqlite_dir}/checkpoints.db"
         os.makedirs(config.database.sqlite_dir, exist_ok=True)
 
@@ -58,7 +58,7 @@ async def scaffold_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
 
         yield
 
-        # Cleanup
+        # 清理
         logger.info("Shutting down scaffold runtime")
 
 

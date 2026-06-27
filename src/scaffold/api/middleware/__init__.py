@@ -1,6 +1,6 @@
-"""FastAPI Gateway middleware.
+"""FastAPI 网关中间件。
 
-Authentication, request ID, rate limiting, and error handling.
+身份验证、请求 ID、速率限制和错误处理。
 """
 
 from __future__ import annotations

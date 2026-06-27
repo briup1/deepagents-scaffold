@@ -1,4 +1,4 @@
-"""Tool listing API."""
+"""工具列表 API。"""
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -19,6 +19,6 @@ class ToolsListResponse(BaseModel):
 
 @router.get("/", response_model=ToolsListResponse)
 async def list_tools() -> ToolsListResponse:
-    """List all available tools."""
+    """列出所有可用工具。"""
     tools = get_available_tools()
     return ToolsListResponse(tools=[ToolInfo(name=t.name, description=t.description) for t in tools])

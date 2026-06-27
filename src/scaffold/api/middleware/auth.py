@@ -1,6 +1,6 @@
-"""Authentication middleware.
+"""认证中间件。
 
-Supports API key header authentication with configurable enablement.
+支持通过 API key 请求头进行认证，可配置是否启用。
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from starlette.responses import JSONResponse
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """API key authentication via X-API-Key header."""
+    """通过 X-API-Key 请求头进行 API key 认证。"""
 
     def __init__(self, app: Any, *, api_key: str | None = None, enabled: bool = True) -> None:
         super().__init__(app)
@@ -25,7 +25,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not self.enabled or not self.api_key:
             return await call_next(request)
 
-        # Skip auth for health, docs, and static files
+        # 对 health、docs 和静态文件跳过认证
         path = request.url.path
         if path in ("/health", "/docs", "/redoc", "/openapi.json") or path.startswith("/static"):
             return await call_next(request)

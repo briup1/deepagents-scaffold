@@ -1,1 +1,1 @@
-"""FastAPI Gateway layer."""
+"""FastAPI 网关层。"""

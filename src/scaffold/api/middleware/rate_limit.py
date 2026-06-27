@@ -1,6 +1,6 @@
-"""Rate limiting middleware.
+"""限流中间件。
 
-Simple in-memory rate limiter per client IP.
+基于客户端 IP 的简单内存限流器。
 """
 
 from __future__ import annotations
@@ -14,11 +14,11 @@ from starlette.responses import JSONResponse
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limit requests by client IP.
+    """基于客户端 IP 的限流中间件。
 
     Args:
-        requests_per_minute: Max requests allowed per window.
-        window_seconds: Time window in seconds.
+        requests_per_minute: 每个时间窗口内允许的最大请求数。
+        window_seconds: 时间窗口长度（秒）。
     """
 
     def __init__(
@@ -42,7 +42,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
 
-        # Clean old entries
+        # 清理旧记录
         window_start = now - self.window
         self._store.setdefault(client_ip, [])
         self._store[client_ip] = [t for t in self._store[client_ip] if t > window_start]

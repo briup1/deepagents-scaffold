@@ -1,6 +1,6 @@
-"""Global error handler middleware.
+"""全局错误处理中间件。
 
-Catches unhandled exceptions and returns standardized JSON error responses.
+捕获未处理的异常并返回标准化的 JSON 错误响应。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ logger = logging.getLogger("scaffold.api.errors")
 
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):
-    """Catch all unhandled exceptions and return structured error responses."""
+    """捕获所有未处理的异常并返回结构化的错误响应。"""
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         try:

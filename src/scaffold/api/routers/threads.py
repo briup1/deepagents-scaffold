@@ -1,4 +1,4 @@
-"""Thread management API (LangGraph-compatible)."""
+"""线程管理 API（兼容 LangGraph）。"""
 
 import uuid
 from typing import Any
@@ -23,9 +23,9 @@ class ThreadResponse(BaseModel):
 
 @router.post("/", response_model=ThreadResponse)
 async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadResponse:
-    """Create a new conversation thread.
+    """创建新的会话线程。
 
-    Returns the thread_id; the actual checkpoint is created on the first run.
+    返回 thread_id；实际的 checkpoint 在首次运行时创建。
     """
     thread_id = body.thread_id or str(uuid.uuid4())
     return ThreadResponse(thread_id=thread_id, metadata=body.metadata)
@@ -33,7 +33,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
 async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
-    """Get thread metadata."""
+    """获取线程元数据。"""
     checkpointer = get_checkpointer(request)
     config = {"configurable": {"thread_id": thread_id}}
     checkpoint = await checkpointer.aget_tuple(config)

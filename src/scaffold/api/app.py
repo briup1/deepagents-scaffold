@@ -1,4 +1,4 @@
-"""FastAPI application factory."""
+"""FastAPI 应用工厂。"""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan handler."""
+    """应用生命周期处理器。"""
     try:
         config = get_app_config()
         configure_logging(
@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
+    """创建并配置 FastAPI 应用。"""
     config = get_app_config()
     docs_url = "/docs" if config.gateway.enable_docs else None
     redoc_url = "/redoc" if config.gateway.enable_docs else None
@@ -67,20 +67,20 @@ def create_app() -> FastAPI:
         redoc_url=redoc_url,
     )
 
-    # Gateway middleware (innermost first, outermost last)
-    # Error handler wraps everything
+    # Gateway 中间件（最内层先添加，最外层后添加）
+    # Error handler 包裹所有中间件
     app.add_middleware(ErrorHandlerMiddleware)
-    # Logging captures request/response metrics
+    # Logging 记录请求/响应指标
     app.add_middleware(LoggingMiddleware)
-    # Rate limiting
+    # 限流
     app.add_middleware(
         RateLimitMiddleware,
         requests_per_minute=120,
         enabled=True,
     )
-    # Request ID for tracing
+    # Request ID 用于链路追踪
     app.add_middleware(RequestIdMiddleware)
-    # Authentication
+    # 认证
     app.add_middleware(
         AuthMiddleware,
         api_key=os.getenv("SCAFFOLD_API_KEY"),
@@ -95,7 +95,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Routers
+    # 路由
     app.include_router(agents.router)
     app.include_router(runs.router)
     app.include_router(threads.router)
@@ -103,7 +103,7 @@ def create_app() -> FastAPI:
     app.include_router(tools.router)
     app.include_router(health.router)
 
-    # Static frontend
+    # 静态前端
     _web_dir = os.path.join(os.path.dirname(__file__), "..", "..", "web")
     _web_dir = os.path.abspath(_web_dir)
     if os.path.isdir(_web_dir):

@@ -1,4 +1,4 @@
-"""Agent listing API."""
+"""Agent 列表 API。"""
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -14,5 +14,5 @@ class AgentsListResponse(BaseModel):
 
 @router.get("/", response_model=AgentsListResponse)
 async def list_registered_agents() -> AgentsListResponse:
-    """List all registered agents."""
+    """列出所有已注册的 agent。"""
     return AgentsListResponse(agents=list_agents())
