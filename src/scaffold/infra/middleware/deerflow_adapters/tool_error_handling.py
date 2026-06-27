@@ -9,11 +9,9 @@ ToolMessage，以便 agent 能够继续运行而不会崩溃。
 from __future__ import annotations
 
 import logging
-import traceback
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
-from langchain_core.messages import ToolMessage
 from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)

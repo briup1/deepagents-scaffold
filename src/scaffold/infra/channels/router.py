@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from scaffold.core.agents import create_agent, get_agent
 from scaffold.infra.config.app_config import AppConfig, get_app_config

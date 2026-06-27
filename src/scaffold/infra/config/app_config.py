@@ -112,7 +112,6 @@ class AppConfig(BaseModel):
         return next((t for t in self.tools if t.name == name), None)
 
     def get_harness_profile(self, name: str) -> Any | None:
-        from scaffold.infra.config.profile_config import HarnessProfileConfig
 
         return next(
             (p for p in self.profiles.harness if p.name == name),
@@ -163,12 +162,6 @@ class AppConfig(BaseModel):
         if isinstance(config, list):
             return [cls._resolve_env_variables(item) for item in config]
         return config
-
-    def get_model_config(self, name: str) -> ModelConfig | None:
-        return next((m for m in self.models if m.name == name), None)
-
-    def get_tool_config(self, name: str) -> ToolConfig | None:
-        return next((t for t in self.tools if t.name == name), None)
 
 
 # 基于 mtime 的单例缓存，支持热重载

@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from scaffold.api.deps import get_checkpointer, get_config
+from scaffold.api.deps import get_checkpointer
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
