@@ -1,5 +1,5 @@
 """Deer-Flow middleware adapters for DeepAgents.
 
-Each module adapts a Deer-Flow middleware concept into a LangChain
-AgentMiddleware subclass that can be injected via create_deep_agent().
+每个模块将 Deer-Flow 中间件概念适配为 LangChain AgentMiddleware 子类，
+可通过 create_deep_agent() 注入。
 """

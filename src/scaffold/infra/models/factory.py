@@ -1,6 +1,6 @@
-"""Model factory — create LLM instances from config.
+"""模型工厂 — 根据配置创建 LLM 实例。
 
-Adapted from deerflow.models.factory, simplified for the scaffold.
+从 deerflow.models.factory 移植并简化，适配本脚手架。
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_env_variables(value: Any) -> Any:
-    """Recursively resolve $ENV_VAR placeholders."""
+    """递归解析 $ENV_VAR 占位符。"""
     if isinstance(value, str) and value.startswith("$"):
         env_name = value[1:]
         env_value = os.getenv(env_name)
@@ -33,21 +33,20 @@ def _resolve_env_variables(value: Any) -> Any:
 
 
 def _import_class(class_path: str) -> type:
-    """Import a class from 'module.path:ClassName'."""
+    """从 'module.path:ClassName' 导入类。"""
     module_path, class_name = class_path.split(":")
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
 
 def _maybe_patch_deepseek(cls: type, config: ModelConfig) -> type:
-    """Apply Deer-Flow's PatchedChatDeepSeek when using native DeepSeek adapter.
+    """使用原生 DeepSeek adapter 时应用 Deer-Flow 的 PatchedChatDeepSeek。
 
-    DeepSeek's reasoning/thinking mode requires reasoning_content to be present
-    on ALL assistant messages in multi-turn conversations. The original
-    ChatDeepSeek stores it in additional_kwargs but drops it on subsequent API
-    calls. PatchedChatDeepSeek preserves it across turns.
+    DeepSeek 的 reasoning/thinking 模式要求多轮对话中所有 assistant 消息
+    都包含 reasoning_content。原生的 ChatDeepSeek 将其存储在 additional_kwargs 中，
+    但在后续 API 调用时会丢失。PatchedChatDeepSeek 会在多轮对话中保留该字段。
 
-    See: deerflow/models/patched_deepseek.py
+    参见: deerflow/models/patched_deepseek.py
     """
     if config.use == "langchain_deepseek:ChatDeepSeek":
         try:
@@ -67,20 +66,20 @@ def create_chat_model(
     thinking_enabled: bool = False,
     **overrides: Any,
 ) -> BaseChatModel:
-    """Instantiate a chat model from a ModelConfig.
+    """根据 ModelConfig 实例化一个聊天模型。
 
     Args:
-        config: The model configuration.
-        thinking_enabled: Whether to enable model thinking/reasoning.
-        **overrides: Additional kwargs passed to the model constructor.
+        config: 模型配置。
+        thinking_enabled: 是否启用模型 thinking/reasoning。
+        **overrides: 额外传入模型构造器的参数。
 
     Returns:
-        An instantiated LangChain chat model.
+        已实例化的 LangChain 聊天模型。
     """
     raw_cls = _import_class(config.use)
     cls = _maybe_patch_deepseek(raw_cls, config)
 
-    # Build kwargs from config
+    # 从配置构建 kwargs
     kwargs: dict[str, Any] = {
         "model": config.model,
         "temperature": config.temperature,
@@ -94,7 +93,7 @@ def create_chat_model(
     if config.api_version is not None:
         kwargs["api_version"] = _resolve_env_variables(config.api_version)
 
-    # Merge provider-specific extras (anything not explicitly handled above)
+    # 合并 provider 特定的额外参数（上面未显式处理的任何字段）
     extras = {
         k: v
         for k, v in config.model_dump().items()
@@ -117,7 +116,7 @@ def create_chat_model(
     }
     kwargs.update(extras)
 
-    # Apply thinking overrides
+    # 应用 thinking 覆盖参数
     if thinking_enabled and config.when_thinking_enabled:
         for key, value in config.when_thinking_enabled.items():
             if key in kwargs and isinstance(kwargs[key], dict) and isinstance(value, dict):
@@ -125,10 +124,10 @@ def create_chat_model(
             else:
                 kwargs[key] = value
 
-    # Apply caller overrides
+    # 应用调用方覆盖参数
     kwargs.update(overrides)
 
-    # Resolve any remaining $ENV_VAR in nested values
+    # 解析嵌套值中剩余的 $ENV_VAR
     kwargs = _resolve_env_variables(kwargs)
 
     logger.debug("Creating chat model %s with kwargs %s", config.name, list(kwargs.keys()))

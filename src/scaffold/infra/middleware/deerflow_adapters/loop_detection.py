@@ -1,9 +1,8 @@
-"""Loop detection middleware.
+"""循环检测中间件。
 
-Detects repetitive tool-call patterns and interrupts the agent before it
-enters an infinite loop.
+检测重复的工具调用模式，并在 agent 进入无限循环前将其中断。
 
-Adapted from deerflow.agents.middlewares.loop_detection_middleware.
+改编自 deerflow.agents.middlewares.loop_detection_middleware。
 """
 
 from __future__ import annotations
@@ -20,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 class LoopDetectionMiddleware(AgentMiddleware):
-    """Detect repetitive tool call patterns and emit warnings/interrupts.
+    """检测重复的工具调用模式并发出警告/中断。
 
-    Uses a two-layer detection strategy:
-    1. Identical call-set hashing — warns after N repeats, hard-stops at M.
-    2. Per-tool frequency counting — warns at high frequency.
+    使用双层检测策略：
+    1. 相同调用集合哈希 — 重复 N 次后警告，M 次后强制停止。
+    2. 单工具频率计数 — 高频时警告。
     """
 
     def __init__(
@@ -43,7 +42,7 @@ class LoopDetectionMiddleware(AgentMiddleware):
         self.per_tool_hard = per_tool_hard
 
     def before_agent(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Initialize loop tracking state on the thread."""
+        """在 thread 上初始化循环追踪状态。"""
         return {
             "_loop_history": deque(maxlen=self.window_size),
             "_loop_counts": {},
@@ -51,7 +50,7 @@ class LoopDetectionMiddleware(AgentMiddleware):
         }
 
     def after_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Check for loops after each model response."""
+        """每次模型响应后检查循环。"""
         messages = state.get("messages", [])
         if not messages:
             return None
@@ -61,7 +60,7 @@ class LoopDetectionMiddleware(AgentMiddleware):
         if not tool_calls:
             return None
 
-        # Hash the tool-call signature
+        # 对工具调用签名进行哈希
         call_keys = [tc.get("name", str(tc)) for tc in tool_calls]
         call_str = ",".join(sorted(call_keys))
         call_hash = hashlib.sha256(call_str.encode()).hexdigest()[:16]
@@ -69,11 +68,11 @@ class LoopDetectionMiddleware(AgentMiddleware):
         loop_history: deque[str] = state.get("_loop_history", deque(maxlen=self.window_size))
         loop_counts: dict[str, int] = state.get("_loop_counts", {})
 
-        # Track identical call-set repeats
+        # 追踪相同调用集合的重复次数
         loop_history.append(call_hash)
         identical_count = sum(1 for h in loop_history if h == call_hash)
 
-        # Track per-tool frequency
+        # 追踪单工具频率
         for key in call_keys:
             loop_counts[key] = loop_counts.get(key, 0) + 1
 
@@ -87,7 +86,7 @@ class LoopDetectionMiddleware(AgentMiddleware):
                 "Loop detected: identical call set repeated %d times. Stopping agent.",
                 identical_count,
             )
-            # Inject a warning message
+            # 注入警告消息
             from langchain_core.messages import SystemMessage
 
             return {
@@ -106,7 +105,7 @@ class LoopDetectionMiddleware(AgentMiddleware):
                 identical_count,
             )
 
-        # Check per-tool frequency
+        # 检查单工具频率
         for key, count in loop_counts.items():
             if count >= self.per_tool_hard:
                 logger.warning("Tool '%s' called %d times — possible loop.", key, count)
@@ -127,5 +126,5 @@ class LoopDetectionMiddleware(AgentMiddleware):
         return updates
 
     async def aafter_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Async variant."""
+        """异步变体。"""
         return self.after_model(state, runtime)

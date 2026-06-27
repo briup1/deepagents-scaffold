@@ -1,4 +1,4 @@
-"""Model configuration schema and helpers."""
+"""模型配置 schema 与辅助工具。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ModelConfig(BaseModel):
-    """Configuration for a single LLM provider."""
+    """单个 LLM provider 的配置。"""
 
     model_config = ConfigDict(extra="allow")
 
@@ -25,5 +25,5 @@ class ModelConfig(BaseModel):
     api_version: str | None = Field(default=None, description="API version for Azure/OpenAI-compatible endpoints")
     supports_thinking: bool = Field(default=False)
     supports_vision: bool = Field(default=False)
-    # Provider-specific overrides when thinking is enabled
+    # 启用 thinking 时的 provider 专属覆盖参数
     when_thinking_enabled: dict[str, Any] | None = Field(default=None)

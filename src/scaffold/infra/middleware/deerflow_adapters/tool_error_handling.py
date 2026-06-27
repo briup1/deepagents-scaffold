@@ -1,9 +1,9 @@
-"""Tool error handling middleware.
+"""工具错误处理中间件。
 
-Catches exceptions during tool execution and converts them into error
-ToolMessages so the agent can continue rather than crashing.
+捕获工具执行期间的异常并将其转换为错误
+ToolMessage，以便 agent 能够继续运行而不会崩溃。
 
-Adapted from deerflow.agents.middlewares.tool_error_handling_middleware.
+改编自 deerflow.agents.middlewares.tool_error_handling_middleware。
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class ToolErrorHandlingMiddleware(AgentMiddleware):
-    """Wrap tool calls to catch exceptions and convert to error ToolMessages."""
+    """包装工具调用以捕获异常并将其转换为错误 ToolMessage。"""
 
     def wrap_tool_call(
         self,
@@ -28,12 +28,12 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
         state: Any,
         runtime: Runtime[Any],
     ) -> Any:
-        """Wrap a single tool call with error handling."""
+        """为单个工具调用包装错误处理。"""
         try:
             return call
         except Exception as exc:
-            # This hook fires around tool execution; actual exception handling
-            # happens in the tool node. We log here for observability.
+            # 此 hook 在工具执行前后触发；实际异常处理
+            # 发生在 tool node 中。我们在此处记录日志以增强可观测性。
             logger.exception("Tool execution failed: %s", exc)
             raise
 
@@ -43,5 +43,5 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
         state: Any,
         runtime: Runtime[Any],
     ) -> Any:
-        """Async variant — delegates to sync version."""
+        """异步变体 —— 委托给同步版本。"""
         return self.wrap_tool_call(call, state, runtime)

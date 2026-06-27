@@ -1,8 +1,7 @@
-"""Application configuration system.
+"""应用配置系统。
 
-Simplified from deerflow.config.app_config for the scaffold.
-Supports YAML config loading, env-var substitution, and hot-reload.
-"""
+从 deerflow.config.app_config 简化而来，用于 scaffold。
+支持 YAML 配置加载、环境变量替换和热重载。"""
 
 from __future__ import annotations
 
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 class DatabaseConfig(BaseModel):
     backend: str = Field(default="sqlite", description="sqlite or postgres")
     sqlite_dir: str = Field(default="./data", description="Directory for SQLite files")
-    # Postgres fields omitted for brevity; add host/port/user/password/dbname as needed
+    # Postgres 字段已省略，按需添加 host/port/user/password/dbname
 
 
 class StreamBridgeConfig(BaseModel):
@@ -84,7 +83,7 @@ class SkillsConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    """Root application configuration."""
+    """根应用配置。"""
 
     model_config = ConfigDict(extra="allow")
 
@@ -172,7 +171,7 @@ class AppConfig(BaseModel):
         return next((t for t in self.tools if t.name == name), None)
 
 
-# Singleton cache with mtime-based hot reload
+# 基于 mtime 的单例缓存，支持热重载
 _app_config: AppConfig | None = None
 _app_config_path: Path | None = None
 _app_config_mtime: float | None = None
@@ -187,7 +186,7 @@ def _get_config_mtime(path: Path) -> float | None:
 
 
 def get_app_config(config_path: str | None = None) -> AppConfig:
-    """Get the application config, auto-reloading when the file changes."""
+    """获取应用配置，文件变更时自动重载。"""
     global _app_config, _app_config_path, _app_config_mtime
 
     runtime_override = _current_app_config.get()

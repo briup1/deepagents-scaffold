@@ -1,9 +1,9 @@
 """Todo list middleware.
 
-Manages a todo list with context-loss detection (when summarization
-scrolls out todo history) and premature-exit prevention.
+管理待办列表，支持上下文丢失检测（当摘要滚动导致待办历史被移出时）
+以及过早退出预防。
 
-Adapted from deerflow.agents.middlewares.todo_middleware.
+改编自 deerflow.agents.middlewares.todo_middleware。
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 class TodoMiddleware(AgentMiddleware):
-    """Track todo items and inject reminders when incomplete todos exist.
+    """跟踪待办事项，并在存在未完成的待办时注入提醒。
 
     Args:
-        max_todos: Maximum number of todos to track per thread.
-        reminder_threshold: Inject reminder if more than this many todos are incomplete.
+        max_todos: 每个线程最多跟踪的待办数量。
+        reminder_threshold: 当未完成的待办超过此数量时注入提醒。
     """
 
     def __init__(
@@ -36,7 +36,7 @@ class TodoMiddleware(AgentMiddleware):
         self.reminder_threshold = reminder_threshold
 
     def before_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Inject todo reminder if incomplete todos exist."""
+        """如果存在未完成的待办，注入待办提醒。"""
         todos = state.get("_todos", [])
         incomplete = [t for t in todos if not t.get("done", False)]
 
@@ -60,5 +60,5 @@ class TodoMiddleware(AgentMiddleware):
         return {"messages": messages}
 
     async def abefore_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Async variant."""
+        """异步版本。"""
         return self.before_model(state, runtime)

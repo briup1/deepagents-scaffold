@@ -1,6 +1,6 @@
 """Profile configuration schema.
 
-HarnessProfile and ProviderProfile settings for DeepAgents customization.
+HarnessProfile 与 ProviderProfile 的 DeepAgents 自定义配置。
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 
 class HarnessProfileConfig(BaseModel):
-    """Configuration for a HarnessProfile."""
+    """HarnessProfile 的配置。"""
 
     name: str = Field(..., description="Profile identifier")
     base_system_prompt: str | None = Field(default=None, description="Replaces BASE prompt segment")
@@ -22,7 +22,7 @@ class HarnessProfileConfig(BaseModel):
 
 
 class ProviderProfileConfig(BaseModel):
-    """Configuration for a ProviderProfile."""
+    """ProviderProfile 的配置。"""
 
     name: str = Field(..., description="Provider identifier")
     model_pattern: str | None = Field(default=None, description="Model name regex pattern")
@@ -30,7 +30,7 @@ class ProviderProfileConfig(BaseModel):
 
 
 class ProfilesConfig(BaseModel):
-    """Root profile configuration."""
+    """根 profile 配置。"""
 
     harness: list[HarnessProfileConfig] = Field(default_factory=list)
     providers: list[ProviderProfileConfig] = Field(default_factory=list)

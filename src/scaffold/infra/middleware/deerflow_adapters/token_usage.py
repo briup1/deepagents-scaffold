@@ -1,8 +1,8 @@
-"""Token usage tracking middleware.
+"""Token usage 追踪 middleware。
 
-Logs token consumption per turn and aggregates across the conversation.
+记录每次轮次的 token 消耗，并在整个会话中聚合。
 
-Adapted from deerflow.agents.middlewares.token_usage_middleware.
+改编自 deerflow.agents.middlewares.token_usage_middleware。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class TokenUsageMiddleware(AgentMiddleware):
-    """Track and log token usage per model call."""
+    """追踪并记录每次模型调用的 token 用量。"""
 
     def __init__(
         self,
@@ -30,7 +30,7 @@ class TokenUsageMiddleware(AgentMiddleware):
         self._call_count = 0
 
     def before_agent(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Initialize token counters."""
+        """初始化 token 计数器。"""
         return {
             "_token_usage_total": 0,
             "_token_usage_prompt": 0,
@@ -38,7 +38,7 @@ class TokenUsageMiddleware(AgentMiddleware):
         }
 
     def after_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Extract token usage from the last AIMessage."""
+        """从最后一条 AIMessage 中提取 token 用量。"""
         messages = state.get("messages", [])
         if not messages:
             return None
@@ -76,5 +76,5 @@ class TokenUsageMiddleware(AgentMiddleware):
         }
 
     async def aafter_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Async variant."""
+        """异步版本。"""
         return self.after_model(state, runtime)

@@ -1,12 +1,11 @@
-"""Patched ChatDeepSeek that preserves reasoning_content in multi-turn conversations.
+"""修复后的 ChatDeepSeek，在多轮对话中保留 reasoning_content。
 
-Adapted from deerflow.models.patched_deepseek.
+从 deerflow.models.patched_deepseek 移植。
 
-When using thinking/reasoning enabled models, the DeepSeek API expects
-reasoning_content to be present on ALL assistant messages in multi-turn
-conversations. The original langchain-deepseek implementation stores
-reasoning_content in additional_kwargs but doesn't include it when making
-subsequent API calls, which causes errors with APIs that require it.
+在使用 thinking/reasoning 模型时，DeepSeek API 要求
+reasoning_content 出现在多轮对话的**所有** assistant 消息中。
+原始 langchain-deepseek 实现将 reasoning_content 存放在 additional_kwargs 中，
+但在后续 API 调用时不会将其包含进去，导致对需要该字段的 API 报错。
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from langchain_deepseek import ChatDeepSeek
 
 
 class PatchedChatDeepSeek(ChatDeepSeek):
-    """ChatDeepSeek with proper reasoning_content preservation."""
+    """正确保留 reasoning_content 的 ChatDeepSeek。"""
 
     @classmethod
     def is_lc_serializable(cls) -> bool:
@@ -36,7 +35,7 @@ class PatchedChatDeepSeek(ChatDeepSeek):
         stop: list[str] | None = None,
         **kwargs: Any,
     ) -> dict:
-        """Get request payload with reasoning_content preserved."""
+        """获取请求 payload，同时保留 reasoning_content。"""
         original_messages = self._convert_input(input_).to_messages()
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         payload_messages = payload.get("messages", [])

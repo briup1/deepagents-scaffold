@@ -1,1 +1,1 @@
-"""Infrastructure layer — configuration, middleware, tracing, channels."""
+"""基础设施层 —— 配置、中间件、链路追踪、通道。"""

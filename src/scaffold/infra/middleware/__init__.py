@@ -1,7 +1,7 @@
-"""Scaffold middleware framework.
+"""Scaffold 中间件框架。
 
-Provides a registry + factory for instantiating DeepAgents AgentMiddleware
-instances from config.yaml declarations, plus Deer-Flow middleware adapters.
+提供注册表 + 工厂，用于从 config.yaml 声明实例化 DeepAgents AgentMiddleware
+实例，以及 Deer-Flow 中间件适配器。
 """
 
 from __future__ import annotations

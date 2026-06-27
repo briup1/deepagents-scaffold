@@ -1,10 +1,9 @@
 """Summarization middleware.
 
-Truncates old messages and replaces history with summaries when the
-context window fills up. Extends LangChain's SummarizationMiddleware
-with skill preservation hooks.
+在上下文窗口填满时截断旧消息并用摘要替换历史记录。
+扩展 LangChain 的 SummarizationMiddleware，增加技能保留钩子。
 
-Adapted from deerflow.agents.middlewares.summarization_middleware.
+改编自 deerflow.agents.middlewares.summarization_middleware。
 """
 
 from __future__ import annotations
@@ -20,12 +19,12 @@ logger = logging.getLogger(__name__)
 
 
 class SummarizationMiddleware(AgentMiddleware):
-    """Summarize conversation history when token count exceeds threshold.
+    """当 token 数量超过阈值时，对对话历史进行摘要。
 
     Args:
-        max_context_tokens: Trigger summarization when context exceeds this.
-        keep_recent_turns: Number of recent turns to preserve verbatim.
-        summary_model_name: Optional model name for summarization (uses default if None).
+        max_context_tokens: 当上下文超过此值时触发摘要。
+        keep_recent_turns: 保留最近多少轮对话原文。
+        summary_model_name: 用于摘要的可选模型名称（None 则使用默认模型）。
     """
 
     def __init__(
@@ -41,12 +40,12 @@ class SummarizationMiddleware(AgentMiddleware):
         self._summaries: dict[str, str] = {}
 
     def before_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Check context size and summarize if needed."""
+        """检查上下文大小，必要时进行摘要。"""
         messages = list(state.get("messages", []))
         if len(messages) < self.keep_recent_turns * 2:
             return None
 
-        # Simple token estimation (1 token ~= 4 chars for CJK, ~= 4 chars for English)
+        # 简单估算 token（1 token 约等于 4 个字符，对 CJK 和英文均适用）
         total_chars = sum(len(str(m.content)) for m in messages if hasattr(m, "content"))
         estimated_tokens = total_chars // 3
 
@@ -55,7 +54,7 @@ class SummarizationMiddleware(AgentMiddleware):
 
         thread_id = state.get("configurable", {}).get("thread_id", "default")
 
-        # Keep recent turns, summarize the rest
+        # 保留最近轮次，对其余部分进行摘要
         cutoff = len(messages) - self.keep_recent_turns * 2
         to_summarize = messages[:cutoff]
         recent = messages[cutoff:]
@@ -77,14 +76,14 @@ class SummarizationMiddleware(AgentMiddleware):
         return {"messages": new_messages}
 
     async def abefore_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Async variant."""
+        """异步版本。"""
         return self.before_model(state, runtime)
 
 
 def _summarize_messages(messages: list[Any]) -> str:
-    """Create a simple summary from message history.
+    """从消息历史创建简单摘要。
 
-    In production this should call an LLM for high-quality summarization.
+    在生产环境中应调用 LLM 以生成高质量摘要。
     """
     parts: list[str] = []
     for msg in messages:
@@ -92,4 +91,4 @@ def _summarize_messages(messages: list[Any]) -> str:
         content = str(getattr(msg, "content", ""))[:200]
         if content:
             parts.append(f"[{role}] {content}")
-    return "\n".join(parts[:20])  # Cap summary length
+    return "\n".join(parts[:20])  # 限制摘要长度

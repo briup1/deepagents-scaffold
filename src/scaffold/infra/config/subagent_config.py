@@ -1,7 +1,6 @@
-"""SubAgent configuration schema.
+"""子 Agent 配置 schema。
 
-Defines subagent specifications that can be declared in config.yaml
-and passed to create_deep_agent(subagents=[...]).
+定义可在 config.yaml 中声明并传给 create_deep_agent(subagents=[...]) 的子 Agent 规格。
 """
 
 from __future__ import annotations
@@ -12,7 +11,7 @@ from pydantic import BaseModel, Field
 
 
 class SubAgentDefinitionConfig(BaseModel):
-    """Configuration for a single subagent definition."""
+    """单个 subagent 定义的配置。"""
 
     name: str = Field(..., description="Unique identifier for the subagent")
     description: str = Field(..., description="What this subagent does")
@@ -27,10 +26,10 @@ class SubAgentDefinitionConfig(BaseModel):
 
 
 class SubAgentsDefinitionsConfig(BaseModel):
-    """Collection of subagent definitions."""
+    """subagent 定义集合。"""
 
     items: list[SubAgentDefinitionConfig] = Field(default_factory=list)
 
     def get_enabled(self) -> list[SubAgentDefinitionConfig]:
-        """Return only enabled subagent definitions."""
+        """仅返回启用的 subagent 定义。"""
         return [s for s in self.items if s.enabled]

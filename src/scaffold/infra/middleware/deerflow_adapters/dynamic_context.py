@@ -1,9 +1,8 @@
-"""Dynamic context middleware.
+"""动态上下文中间件。
 
-Injects memory and current date/time as a system-reminder style message
-before each model call.
+在每次模型调用前注入记忆和当前日期/时间，作为 system-reminder 风格的消息。
 
-Adapted from deerflow.agents.middlewares.dynamic_context_middleware.
+改编自 deerflow.agents.middlewares.dynamic_context_middleware。
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class DynamicContextMiddleware(AgentMiddleware):
-    """Inject dynamic context (date, memory summary) before each LLM call."""
+    """在每次 LLM 调用前注入动态上下文（日期、记忆摘要）。"""
 
     def __init__(
         self,
@@ -36,7 +35,7 @@ class DynamicContextMiddleware(AgentMiddleware):
         self.timezone_str = timezone_str
 
     def before_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Inject context reminder before the model call."""
+        """在模型调用前注入上下文提醒。"""
         reminders: list[str] = []
 
         if self.inject_date:
@@ -44,7 +43,7 @@ class DynamicContextMiddleware(AgentMiddleware):
             reminders.append(f"Current date and time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
         if self.inject_memory and self.memory_sources:
-            # Load memory from files (simplified — full implementation would use MemoryStorage)
+            # 从文件加载记忆（简化版 — 完整实现应使用 MemoryStorage）
             for source in self.memory_sources:
                 try:
                     content = _load_memory_source(source)
@@ -67,15 +66,15 @@ class DynamicContextMiddleware(AgentMiddleware):
         return {"messages": messages}
 
     async def abefore_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """Async variant."""
+        """异步版本。"""
         return self.before_model(state, runtime)
 
 
 def _load_memory_source(source: str) -> str | None:
-    """Load a memory source file."""
+    """加载记忆源文件。"""
     import os
 
-    # Expand ~ and env vars
+    # 展开 ~ 和环境变量
     path = os.path.expandvars(os.path.expanduser(source))
     if not os.path.isfile(path):
         return None

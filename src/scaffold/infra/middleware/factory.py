@@ -1,6 +1,6 @@
 """Middleware factory.
 
-Builds AgentMiddleware instances from MiddlewareConfig declarations.
+从 MiddlewareConfig 声明构建 AgentMiddleware 实例。
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_kwargs(kwargs: dict[str, Any], app_config: AppConfig) -> dict[str, Any]:
-    """Resolve configuration references in middleware kwargs.
+    """解析 middleware kwargs 中的配置引用。
 
-    Supports:
-    - $config.memory — injects MemoryConfig dict
-    - $config.models[0] — injects first ModelConfig dict
-    - $env.VAR_NAME — environment variable
+    支持：
+    - $config.memory — 注入 MemoryConfig dict
+    - $config.models[0] — 注入第一个 ModelConfig dict
+    - $env.VAR_NAME — 环境变量
     """
     resolved: dict[str, Any] = {}
     for key, value in kwargs.items():
@@ -48,7 +48,7 @@ def _resolve_kwargs(kwargs: dict[str, Any], app_config: AppConfig) -> dict[str, 
 
 
 def _get_config_attr(app_config: AppConfig, attr_path: str) -> Any:
-    """Resolve a dotted config attribute path."""
+    """解析点号分隔的配置属性路径。"""
     parts = attr_path.split(".")
     obj: Any = app_config
     for part in parts:
@@ -65,20 +65,20 @@ def build_middleware_chain(
     config: MiddlewareChainConfig | None = None,
     app_config: AppConfig | None = None,
 ) -> list[AgentMiddleware[Any, Any, Any]]:
-    """Build an ordered list of AgentMiddleware instances from config.
+    """从 config 构建有序的 AgentMiddleware 实例列表。
 
     Args:
-        config: Middleware chain config. Loaded from app_config if omitted.
-        app_config: AppConfig for resolving $config references.
+        config: middleware 链配置。省略时从 app_config 加载。
+        app_config: 用于解析 $config 引用的 AppConfig。
 
     Returns:
-        Ordered list of middleware instances for create_deep_agent(middleware=...).
+        供 create_deep_agent(middleware=...) 使用的有序 middleware 实例列表。
     """
     if app_config is None:
         app_config = get_app_config()
 
     if config is None:
-        # Try to get from app_config; fallback to empty chain
+        # 尝试从 app_config 获取；回退到空链
         chain_cfg = getattr(app_config, "middleware", None)
         if chain_cfg is None:
             return []
