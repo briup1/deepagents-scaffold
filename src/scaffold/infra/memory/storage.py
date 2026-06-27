@@ -1,6 +1,6 @@
 """Memory storage backends.
 
-Simple file-based storage for agent memory.
+基于文件的简单 agent 记忆存储。
 """
 
 from __future__ import annotations
@@ -15,19 +15,19 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryStorage:
-    """Abstract memory storage."""
+    """抽象的记忆存储。"""
 
     async def load(self, key: str) -> dict[str, Any] | None:
-        """Load memory data by key."""
+        """根据 key 加载记忆数据。"""
         raise NotImplementedError
 
     async def save(self, key: str, data: dict[str, Any]) -> None:
-        """Save memory data by key."""
+        """根据 key 保存记忆数据。"""
         raise NotImplementedError
 
 
 class FileMemoryStorage(MemoryStorage):
-    """File-based memory storage with JSON serialization."""
+    """基于文件的记忆存储，使用 JSON 序列化。"""
 
     def __init__(self, base_dir: str = "./data") -> None:
         self.base_dir = Path(base_dir)
@@ -64,14 +64,14 @@ class FileMemoryStorage(MemoryStorage):
             logger.exception("Failed to save memory to %s", path)
 
     def get_facts(self, key: str) -> list[dict[str, Any]]:
-        """Get facts from memory."""
+        """从记忆中获取 facts。"""
         data = self._cache.get(key)
         if not data:
             return []
         return data.get("facts", [])
 
     def add_fact(self, key: str, fact: dict[str, Any]) -> None:
-        """Add a fact to memory."""
+        """向记忆中添加一条 fact。"""
         data = self._cache.get(key) or {}
         facts = data.get("facts", [])
         facts.append(fact)

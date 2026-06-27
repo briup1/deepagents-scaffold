@@ -1,6 +1,6 @@
-"""Channel message router.
+"""Channel 消息路由器。
 
-Routes incoming messages from channels to the appropriate agent.
+将来自 channel 的传入消息路由到对应的 agent。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChannelRouter:
-    """Routes channel messages to agents and streams responses back."""
+    """将 channel 消息路由到 agent，并将响应流式返回。"""
 
     def __init__(self, app_config: AppConfig | None = None) -> None:
         self.app_config = app_config or get_app_config()
@@ -28,16 +28,16 @@ class ChannelRouter:
         *,
         agent_name: str = "default",
     ) -> str:
-        """Handle an incoming message and return the agent response.
+        """处理传入消息并返回 agent 响应。
 
         Args:
-            user_id: Platform-specific user identifier.
-            text: Message text.
-            thread_id: Conversation thread identifier.
-            agent_name: Which agent to use.
+            user_id: 平台特定的用户标识符。
+            text: 消息文本。
+            thread_id: 会话线程标识符。
+            agent_name: 使用的 agent 名称。
 
         Returns:
-            Agent response text.
+            Agent 响应文本。
         """
         try:
             agent = get_agent(agent_name)
@@ -59,7 +59,7 @@ class ChannelRouter:
             config=config,
         )
 
-        # Extract response text
+        # 提取响应文本
         response = ""
         for msg in result.get("messages", []):
             if hasattr(msg, "content") and getattr(msg, "type", None) == "ai":

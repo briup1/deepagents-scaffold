@@ -1,4 +1,4 @@
-"""In-memory stream bridge backed by a per-run bounded event log."""
+"""基于按运行划分的有界事件日志的内存流桥接器。"""
 
 from __future__ import annotations
 
@@ -23,13 +23,13 @@ class _RunStream:
 
 
 class MemoryStreamBridge(StreamBridge):
-    """Per-run in-memory event log implementation.
+    """按运行划分的内存事件日志实现。
 
-    Events are retained for a bounded window per run so late subscribers and
-    reconnecting clients can replay buffered events from ``Last-Event-ID``.
+    事件按运行保留在有界窗口内，以便延迟订阅者和
+    重新连接的客户端可以通过 ``Last-Event-ID`` 重放缓冲的事件。
 
-    Improvements over the original DeerFlow implementation:
-    - O(1) ``Last-Event-ID`` lookup via a per-run ``id_to_offset`` dict.
+    相较原始 DeerFlow 实现的改进：
+    - 通过按运行的 ``id_to_offset`` 字典实现 O(1) 的 ``Last-Event-ID`` 查找。
     """
 
     def __init__(self, *, queue_maxsize: int = 256) -> None:
@@ -38,10 +38,10 @@ class MemoryStreamBridge(StreamBridge):
         self._maxsize = queue_maxsize
         self._streams: dict[str, _RunStream] = {}
         self._counters: dict[str, int] = {}
-        # run_id -> {event_id -> absolute_offset}
+        # run_id -> {event_id -> 绝对偏移量}
         self._id_to_offset: dict[str, dict[str, int]] = {}
 
-    # -- helpers ---------------------------------------------------------------
+    # -- 辅助方法 ---------------------------------------------------------------
 
     def _get_or_create_stream(self, run_id: str) -> _RunStream:
         if run_id not in self._streams:

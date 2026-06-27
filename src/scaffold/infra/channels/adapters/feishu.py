@@ -1,7 +1,7 @@
-"""Feishu (Lark) channel adapter.
+"""飞书（Lark）通道适配器。
 
-Uses Feishu's webhook/bot API for messaging.
-Install with: uv pip install lark-oapi>=1.4.0
+使用飞书的 webhook/机器人 API 进行消息收发。
+安装依赖：uv pip install lark-oapi>=1.4.0
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class FeishuChannel(Channel):
-    """Feishu (Lark) channel adapter using bot webhook.
+    """飞书（Lark）通道适配器，使用机器人 webhook。
 
-    Requires:
+    依赖：
         - lark-oapi>=1.4.0
     """
 
@@ -30,18 +30,17 @@ class FeishuChannel(Channel):
         self._client: Any = None
 
     async def start(self) -> None:
-        """Start Feishu webhook listener."""
+        """启动飞书 webhook 监听器。"""
         logger.info("Feishu channel '%s' ready (webhook mode)", self.name)
 
     async def stop(self) -> None:
-        """Stop Feishu connection."""
+        """停止飞书连接。"""
         logger.info("Feishu channel '%s' stopping...", self.name)
 
     async def send_message(self, user_id: str, text: str, **kwargs: Any) -> None:
-        """Send a message via Feishu bot webhook.
+        """通过飞书机器人 webhook 发送消息。
 
-        If webhook_url is configured, uses it directly.
-        Otherwise requires lark-oapi SDK.
+        如果配置了 webhook_url，则直接使用；否则需要 lark-oapi SDK。
         """
         if self._webhook_url:
             await self._send_via_webhook(user_id, text)
@@ -56,7 +55,7 @@ class FeishuChannel(Channel):
         if self._client is None:
             self._client = Client.builder().app_id(self._app_id).app_secret(self._app_secret).build()
 
-        # Send via Open API
+        # 通过 Open API 发送
         try:
             from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
 
@@ -74,7 +73,7 @@ class FeishuChannel(Channel):
             logger.exception("Failed to send Feishu message")
 
     async def _send_via_webhook(self, user_id: str, text: str) -> None:
-        """Send via custom webhook URL."""
+        """通过自定义 webhook URL 发送。"""
         import httpx
 
         try:

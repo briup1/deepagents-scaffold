@@ -1,6 +1,6 @@
-"""Logging configuration.
+"""日志配置。
 
-Supports level selection, format choice (text/json), and output targets.
+支持级别选择、格式选择（text/json）以及输出目标。
 """
 
 from __future__ import annotations
@@ -19,20 +19,20 @@ def configure_logging(
     json_indent: int | None = None,
     handlers: list[logging.Handler] | None = None,
 ) -> None:
-    """Configure root logging for the scaffold.
+    """为 scaffold 配置根日志。
 
     Args:
-        level: Log level (debug/info/warning/error).
-        format_type: 'text' or 'json'.
-        json_indent: Indent for JSON output (None = compact).
-        handlers: Optional custom handlers (defaults to stderr).
+        level: 日志级别（debug/info/warning/error）。
+        format_type: 'text' 或 'json'。
+        json_indent: JSON 输出的缩进（None 表示紧凑）。
+        handlers: 可选的自定义 handler（默认为 stderr）。
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
 
     root = logging.getLogger("scaffold")
     root.setLevel(log_level)
 
-    # Clear existing handlers to avoid duplication on reload
+    # 清除已有 handler，避免热重载时重复
     for h in list(root.handlers):
         root.removeHandler(h)
 
@@ -53,9 +53,9 @@ def configure_logging(
             )
         root.addHandler(handler)
 
-    # Propagate to children
+    # 向子 logger 传播
     root.propagate = False
 
-    # Also set common library loggers
+    # 同时设置常用库的日志级别
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)

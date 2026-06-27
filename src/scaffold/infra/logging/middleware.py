@@ -1,4 +1,4 @@
-"""FastAPI request/response logging middleware."""
+"""FastAPI 请求/响应日志中间件。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ logger = logging.getLogger("scaffold.api")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
-    """Log every request with timing, method, path, and status."""
+    """记录每个请求的耗时、方法、路径和状态。"""
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
         start = time.perf_counter()

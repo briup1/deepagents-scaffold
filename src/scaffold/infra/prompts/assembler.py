@@ -1,9 +1,9 @@
-"""Prompt assembler.
+"""提示词组装器。
 
-Assembles system prompts following DeepAgents convention:
-USER -> BASE -> CUSTOM -> SUFFIX.
+按照 DeepAgents 约定组装系统提示词：
+USER -> BASE -> CUSTOM -> SUFFIX。
 
-This matches the assembly order documented in deepagents.graph.
+与 deepagents.graph 中记录的组装顺序一致。
 """
 
 from __future__ import annotations
@@ -15,14 +15,14 @@ from scaffold.infra.prompts.registry import PromptRegistry
 
 
 class PromptAssembler:
-    """Assemble system prompts from template segments."""
+    """从模板片段组装系统提示词。"""
 
     def __init__(self) -> None:
         self.registry = PromptRegistry()
         self._loaded = False
 
     def load_defaults(self) -> None:
-        """Load default templates from the templates directory."""
+        """从 templates 目录加载默认模板。"""
         if self._loaded:
             return
         loader = PromptLoader()
@@ -37,16 +37,16 @@ class PromptAssembler:
         custom: str | None = None,
         suffix: str | None = None,
     ) -> str:
-        """Assemble a prompt string.
+        """组装提示词字符串。
 
         Args:
-            user: USER segment (front, caller instructions).
-            base: BASE segment (default behavior).
-            custom: CUSTOM segment (replaces BASE if provided).
-            suffix: SUFFIX segment (appended last, model tuning).
+            user: USER 片段（前置，调用者指令）。
+            base: BASE 片段（默认行为）。
+            custom: CUSTOM 片段（若提供则替换 BASE）。
+            suffix: SUFFIX 片段（最后追加，模型调优）。
 
         Returns:
-            Assembled prompt text.
+            组装后的提示词文本。
         """
         self.load_defaults()
 
@@ -71,6 +71,6 @@ class PromptAssembler:
         custom: str | None = None,
         suffix: str | None = None,
     ) -> SystemMessage:
-        """Assemble a SystemMessage from segments."""
+        """从片段组装 SystemMessage。"""
         text = self.assemble(user=user, base=base, custom=custom, suffix=suffix)
         return SystemMessage(content=text)

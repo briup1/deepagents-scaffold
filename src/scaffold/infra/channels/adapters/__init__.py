@@ -1,4 +1,4 @@
-"""Channel adapter implementations.
+"""通道适配器实现。
 
-Each module provides a concrete Channel subclass for an IM platform.
+每个模块为某一 IM 平台提供具体的 Channel 子类。
 """

@@ -1,6 +1,6 @@
-"""Prompt template registry.
+"""提示词模板注册表。
 
-Manages named prompt templates for agent system prompt assembly.
+管理具名提示词模板，用于 agent 系统提示词组装。
 """
 
 from __future__ import annotations
@@ -9,21 +9,21 @@ from typing import Any
 
 
 class PromptRegistry:
-    """Registry for named prompt templates."""
+    """用于管理具名提示词模板的注册表。"""
 
     def __init__(self) -> None:
         self._templates: dict[str, str] = {}
 
     def register(self, name: str, template: str) -> None:
-        """Register a named prompt template."""
+        """注册一个具名提示词模板。"""
         self._templates[name] = template
 
     def get(self, name: str) -> str | None:
-        """Retrieve a template by name."""
+        """按名称检索模板。"""
         return self._templates.get(name)
 
     def list_names(self) -> list[str]:
-        """List all registered template names."""
+        """列出所有已注册的模板名称。"""
         return list(self._templates.keys())
 
     def build(
@@ -33,9 +33,9 @@ class PromptRegistry:
         custom_name: str | None = None,
         suffix_name: str | None = None,
     ) -> str:
-        """Assemble a prompt from named segments.
+        """从具名片段组装提示词。
 
-        Order: USER -> BASE -> CUSTOM -> SUFFIX
+        顺序: USER -> BASE -> CUSTOM -> SUFFIX
         """
         parts: list[str] = []
         if user_prompt:

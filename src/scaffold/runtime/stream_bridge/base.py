@@ -1,8 +1,8 @@
 """Abstract stream bridge protocol.
 
-StreamBridge decouples agent workers (producers) from SSE endpoints
-(consumers), aligning with LangGraph Platform's queue + stream architecture.
-Each run gets its own logical stream keyed by ``run_id``.
+StreamBridge 将 agent worker（生产者）与 SSE 端点（消费者）解耦，
+与 LangGraph Platform 的 queue + stream 架构对齐。
+每个 run 拥有独立的逻辑流，以 ``run_id`` 为键。
 """
 
 from __future__ import annotations
@@ -15,14 +15,14 @@ from typing import Any
 
 @dataclass(frozen=True)
 class StreamEvent:
-    """Single stream event.
+    """单个流事件。
 
     Attributes:
-        id: Monotonically increasing event ID (used as SSE ``id:`` field,
-            supports ``Last-Event-ID`` reconnection).
-        event: SSE event name, e.g. ``"metadata"``, ``"values"``,
-            ``"messages"``, ``"error"``, ``"end"``.
-        data: JSON-serialisable payload.
+        id: 单调递增的事件 ID（用作 SSE ``id:`` 字段，
+            支持 ``Last-Event-ID`` 重连）。
+        event: SSE 事件名称，例如 ``"metadata"``、``"values"``、
+            ``"messages"``、``"error"``、``"end"``。
+        data: 可 JSON 序列化的 payload。
     """
 
     id: str
@@ -35,19 +35,19 @@ END_SENTINEL = StreamEvent(id="", event="__end__", data=None)
 
 
 class StreamBridge(abc.ABC):
-    """Abstract base for stream bridges.
+    """流桥接器的抽象基类。
 
-    A single bridge instance may multiplex many run-scoped streams.  Producers
-    and consumers always identify a stream by ``run_id``.
+    单个桥接器实例可以复用多个 run 作用域的流。生产者和消费者
+    始终通过 ``run_id`` 标识流。
     """
 
     @abc.abstractmethod
     async def publish(self, run_id: str, event: str, data: Any) -> None:
-        """Enqueue a single event for *run_id* (producer side)."""
+        """为 *run_id* 入队单个事件（生产者侧）。"""
 
     @abc.abstractmethod
     async def publish_end(self, run_id: str) -> None:
-        """Signal that no more events will be produced for *run_id*."""
+        """标记 *run_id* 不再产生新事件。"""
 
     @abc.abstractmethod
     def subscribe(
@@ -57,20 +57,19 @@ class StreamBridge(abc.ABC):
         last_event_id: str | None = None,
         heartbeat_interval: float = 15.0,
     ) -> AsyncIterator[StreamEvent]:
-        """Async iterator that yields events for *run_id* (consumer side).
+        """为 *run_id* 产生事件的异步迭代器（消费者侧）。
 
-        Yields :data:`HEARTBEAT_SENTINEL` when no event arrives within
-        *heartbeat_interval* seconds.  Yields :data:`END_SENTINEL` once
-        the producer calls :meth:`publish_end`.
+        当 *heartbeat_interval* 秒内未收到事件时，产出 :data:`HEARTBEAT_SENTINEL`。
+        当生产者调用 :meth:`publish_end` 后，产出 :data:`END_SENTINEL`。
         """
 
     @abc.abstractmethod
     async def cleanup(self, run_id: str, *, delay: float = 0) -> None:
-        """Release resources associated with *run_id*.
+        """释放与 *run_id* 关联的资源。
 
-        If *delay* > 0 the implementation should wait before releasing,
-        giving late subscribers a chance to drain remaining events.
+        若 *delay* > 0，实现应等待后再释放，
+        给延迟订阅者留出排空剩余事件的机会。
         """
 
     async def close(self) -> None:
-        """Release backend resources.  Default is a no-op."""
+        """释放后端资源。默认实现为空操作。"""

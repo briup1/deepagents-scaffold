@@ -1,4 +1,4 @@
-"""Async stream bridge factory."""
+"""异步流桥工厂。"""
 
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 async def make_stream_bridge(
     config: dict[str, Any] | None = None,
 ) -> AsyncIterator[StreamBridge]:
-    """Async context manager that yields a :class:`StreamBridge`.
+    """异步上下文管理器，生成一个 :class:`StreamBridge`。
 
-    Falls back to :class:`MemoryStreamBridge` when no configuration is provided.
+    未提供配置时回退到 :class:`MemoryStreamBridge`。
     """
     config = config or {}
     bridge_type = config.get("type", "memory")

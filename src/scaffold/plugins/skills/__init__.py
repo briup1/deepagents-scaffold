@@ -1,10 +1,10 @@
-"""Skills directory.
+"""技能目录。
 
-Place SKILL.md files in subdirectories here. Each skill is a directory containing:
-- SKILL.md (with YAML frontmatter)
-- Optional supporting files
+将 SKILL.md 文件放在此目录的子目录中。每个技能是一个包含以下内容的目录：
+- SKILL.md（带有 YAML 前置元数据）
+- 可选的支持文件
 
-Example SKILL.md:
+SKILL.md 示例：
     ---
     name: data-analysis
     description: Analyze CSV data and produce insights

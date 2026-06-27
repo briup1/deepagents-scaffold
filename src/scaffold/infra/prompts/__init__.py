@@ -1,7 +1,7 @@
-"""Prompt engineering system.
+"""提示词工程系统。
 
-Template registry, loader, and assembler following DeepAgents
-prompt assembly convention: USER -> BASE -> CUSTOM -> SUFFIX.
+模板注册表、加载器和组装器，遵循 DeepAgents 提示词组装约定：
+USER -> BASE -> CUSTOM -> SUFFIX。
 """
 
 from __future__ import annotations

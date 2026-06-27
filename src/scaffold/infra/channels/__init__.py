@@ -1,7 +1,6 @@
-"""Channel adapter framework.
+"""通道适配器框架。
 
-Provides abstract base class, registry, and message router for
-IM platform integrations.
+提供抽象基类、注册表以及用于 IM 平台集成的消息路由器。
 """
 
 from __future__ import annotations

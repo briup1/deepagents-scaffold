@@ -1,8 +1,7 @@
-"""Background worker for executing agent runs and streaming events via a bridge.
+"""用于执行 agent 运行并通过桥接器流式传输事件的背景 worker。
 
-The worker runs as an asyncio Task, publishes events to a per-run
-``StreamBridge`` stream, and is consumed by either an SSE endpoint or a
-blocking wait endpoint.
+该 worker 以 asyncio Task 形式运行，将事件发布到每个运行对应的
+``StreamBridge`` 流中，由 SSE 端点或阻塞等待端点消费。
 """
 
 from __future__ import annotations
@@ -29,18 +28,18 @@ async def run_worker(
     stream_modes: Iterable[str],
     stream_subgraphs: bool = False,
 ) -> None:
-    """Execute an agent run in the background and publish events to ``bridge``.
+    """在后台执行 agent 运行并将事件发布到 ``bridge``。
 
     Args:
-        bridge: Stream bridge used to publish events to consumers.
-        agent: Compiled DeepAgents graph (CompiledStateGraph).
-        run_id: Unique run identifier.
-        thread_id: Conversation thread identifier.
-        input: Input state passed to the agent (e.g. ``{"messages": [...]}``).
-        config: RunnableConfig overrides (must already include ``thread_id``).
-        stream_modes: LangGraph ``stream_mode`` values to request (e.g.
-            ``["values"]``, ``["messages"]``, ``["debug"]``).
-        stream_subgraphs: Whether to stream events from nested subgraphs.
+        bridge: 用于向消费者发布事件的流桥接器。
+        agent: 已编译的 DeepAgents 图（CompiledStateGraph）。
+        run_id: 唯一运行标识符。
+        thread_id: 对话线程标识符。
+        input: 传递给 agent 的输入状态（例如 ``{"messages": [...]}``）。
+        config: RunnableConfig 覆盖项（必须已包含 ``thread_id``）。
+        stream_modes: 请求的 LangGraph ``stream_mode`` 值（例如
+            ``["values"]``、``["messages"]``、``["debug"]``）。
+        stream_subgraphs: 是否从嵌套子图中流式传输事件。
     """
     stream_mode_arg: str | list[str]
     modes = list(stream_modes)
@@ -121,7 +120,7 @@ async def run_worker(
 
 
 async def _safe_cleanup(bridge: StreamBridge, run_id: str, delay: float) -> None:
-    """Cleanup the per-run stream after a delay, logging any exception."""
+    """延迟一段时间后清理每个运行对应的流，并记录任何异常。"""
     try:
         await asyncio.sleep(delay)
         await bridge.cleanup(run_id, delay=0)
@@ -131,7 +130,7 @@ async def _safe_cleanup(bridge: StreamBridge, run_id: str, delay: float) -> None
 
 
 def _serialize_chunk(chunk: Any) -> Any:
-    """Best-effort JSON-serialisable representation of a stream chunk."""
+    """尽力将流式分块转换为可 JSON 序列化的表示。"""
     if chunk is None:
         return None
     if isinstance(chunk, BaseMessage):

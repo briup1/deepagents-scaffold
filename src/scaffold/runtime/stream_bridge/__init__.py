@@ -1,4 +1,4 @@
-"""Stream bridge: decouple agent-run event producers from SSE consumers."""
+"""流桥（Stream bridge）：将 agent 运行事件的生产者与 SSE 消费者解耦。"""
 
 from .base import END_SENTINEL, HEARTBEAT_SENTINEL, StreamBridge, StreamEvent
 from .memory import MemoryStreamBridge

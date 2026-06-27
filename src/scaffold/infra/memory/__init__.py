@@ -1,7 +1,6 @@
 """Memory system.
 
-Persistent memory with LLM-driven fact extraction, confidence scoring,
-and async updates.
+持久化记忆，支持 LLM 驱动的事实提取、置信度评分与异步更新。
 """
 
 from __future__ import annotations

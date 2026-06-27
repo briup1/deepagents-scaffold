@@ -1,1 +1,1 @@
-"""Plugin directory — custom tools and skills go here."""
+"""插件目录 —— 自定义工具与技能存放于此。"""

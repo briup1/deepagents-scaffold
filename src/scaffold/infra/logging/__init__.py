@@ -1,7 +1,7 @@
-"""Structured logging system.
+"""结构化日志系统。
 
-Provides JSON-structured logging, request/response middleware,
-and configurable log levels.
+提供 JSON 结构化日志、请求/响应中间件，
+以及可配置的日志级别。
 """
 
 from __future__ import annotations

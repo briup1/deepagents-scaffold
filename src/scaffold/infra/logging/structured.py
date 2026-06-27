@@ -1,4 +1,4 @@
-"""JSON structured log formatter."""
+"""JSON 结构化日志格式化器。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 
 class JSONFormatter(logging.Formatter):
-    """Format log records as JSON lines."""
+    """将日志记录格式化为 JSON 行。"""
 
     def __init__(self, indent: int | None = None) -> None:
         self.indent = indent
@@ -34,5 +34,5 @@ class JSONFormatter(logging.Formatter):
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Get a scaffold-namespaced logger."""
+    """获取一个 scaffold 命名空间的 logger。"""
     return logging.getLogger(f"scaffold.{name}")

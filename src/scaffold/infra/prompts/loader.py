@@ -1,6 +1,6 @@
-"""Prompt template loader.
+"""提示词模板加载器。
 
-Loads .md template files from the filesystem.
+从文件系统加载 .md 模板文件。
 """
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ DEFAULT_TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
 class PromptLoader:
-    """Load prompt templates from Markdown files on disk."""
+    """从磁盘加载 Markdown 格式的提示词模板。"""
 
     def __init__(self, directory: Path | str | None = None) -> None:
         self.directory = Path(directory) if directory else DEFAULT_TEMPLATE_DIR
 
     def load_all(self, registry: PromptRegistry | None = None) -> PromptRegistry:
-        """Load all .md files from the directory into a registry.
+        """从目录加载所有 .md 文件到注册表中。
 
-        File names (without .md) become template names.
+        文件名（不含 .md）作为模板名称。
         """
         if registry is None:
             registry = PromptRegistry()

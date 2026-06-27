@@ -1,1 +1,1 @@
-"""Scaffold runtime package."""
+"""Scaffold 运行时包。"""

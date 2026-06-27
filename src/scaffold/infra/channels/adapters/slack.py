@@ -1,7 +1,7 @@
-"""Slack channel adapter.
+"""Slack 通道适配器。
 
-Uses Slack's Socket Mode for real-time messaging.
-Install with: uv pip install -e ".[channels]"
+使用 Slack 的 Socket Mode 实现实时消息收发。
+安装方式：uv pip install -e ".[channels]"
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class SlackChannel(Channel):
-    """Slack channel adapter using Socket Mode.
+    """基于 Socket Mode 的 Slack 通道适配器。
 
-    Requires:
+    依赖：
         - slack-sdk>=3.34.0
-        - slack-bolt>=1.20.0 (for Socket Mode)
+        - slack-bolt>=1.20.0（用于 Socket Mode）
     """
 
     def __init__(self, name: str, config: dict[str, Any]) -> None:
@@ -30,7 +30,7 @@ class SlackChannel(Channel):
         self._app_token = config.get("app_token") or ""
 
     async def start(self) -> None:
-        """Start Slack Socket Mode connection."""
+        """启动 Slack Socket Mode 连接。"""
         try:
             from slack_bolt.async_app import AsyncApp
             from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -53,11 +53,11 @@ class SlackChannel(Channel):
         await handler.start_async()
 
     async def stop(self) -> None:
-        """Stop Slack connection."""
+        """停止 Slack 连接。"""
         logger.info("Slack channel '%s' stopping...", self.name)
 
     async def send_message(self, user_id: str, text: str, **kwargs: Any) -> None:
-        """Send a message to a Slack channel/user."""
+        """向 Slack 频道或用户发送消息。"""
         if self._client is None:
             try:
                 from slack_sdk.web.async_client import AsyncWebClient
