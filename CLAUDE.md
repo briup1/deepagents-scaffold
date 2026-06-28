@@ -41,17 +41,6 @@ bash scripts/dev.sh
 - **测试**: pytest + pytest-asyncio（asyncio_mode=auto）
 - **包管理**: uv + hatchling
 
-## 项目结构
-
-```
-src/scaffold/
-├── core/          # 运行时层：DeepAgents SDK 集成
-├── api/           # 网关层：FastAPI 路由与中间件
-├── infra/         # 基础设施层：配置、模型、日志、通道
-└── plugins/       # 扩展：自定义工具和技能
-config.yaml       # 唯一配置来源（支持热重载）
-```
-
 ## 代码风格
 
 - **命名**: snake_case（函数/变量），PascalCase（类）
