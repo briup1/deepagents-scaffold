@@ -1,23 +1,23 @@
-# DeepAgents Scaffold - Main Configuration
-# Copy this file and edit values for your project.
+# DeepAgents Scaffold - 主配置文件
+# 复制此文件并根据项目需求编辑。
 
 config_version: 1
 
-# Logging level: debug, info, warning, error
+# 日志级别：debug, info, warning, error
 log_level: info
 
 # ---------------------------------------------------------------------------
-# Models
+# 模型配置
 # ---------------------------------------------------------------------------
-# Configure one or more LLM providers. The first model is the default.
-# Use $ENV_VAR syntax to reference environment variables.
+# 配置一个或多个 LLM 提供商，第一个模型为默认模型。
+# 使用 $ENV_VAR 语法引用环境变量。
 models:
   - name: deepseek-v4-pro
     display_name: deepseek-v4-pro
-    # Option A: OpenAI-compatible endpoint (simpler, no reasoning_content patch needed)
+    # 方式 A：OpenAI 兼容端点（更简单，无需 reasoning_content 补丁）
     use: langchain_openai:ChatOpenAI
     base_url: https://api.deepseek.com
-    # Option B: Native DeepSeek adapter (requires langchain-deepseek, auto-patched for reasoning)
+    # 方式 B：原生 DeepSeek 适配器（需要 langchain-deepseek，自动补丁推理功能）
     # use: langchain_deepseek:ChatDeepSeek
     api_key: $DEEPSEEK_API_KEY
     model: deepseek-v4-pro
@@ -37,30 +37,30 @@ models:
     supports_vision: true
 
 # ---------------------------------------------------------------------------
-# Tools
+# 工具配置
 # ---------------------------------------------------------------------------
-# Register custom tools here. Each tool references a Python import path.
-# Tools must be async callables accepting a single dict argument.
+# 在此注册自定义工具，每个工具引用一个 Python 导入路径。
+# 工具必须是异步可调用对象，接受单个 dict 参数。
 tools: []
 
-# Tool groups let you organize tools by category and selectively enable them.
+# 工具分组，按类别组织工具并选择性启用。
 tool_groups: []
 
 # ---------------------------------------------------------------------------
-# Skills
+# 技能配置
 # ---------------------------------------------------------------------------
-# Skills are reusable behaviors defined in SKILL.md files under plugins/skills/.
-# Set path to the directory containing skill definitions.
+# 技能是定义在 plugins/skills/ 目录下 SKILL.md 文件中的可复用行为。
+# 设置包含技能定义的目录路径。
 skills:
   path: ./plugins/skills
   container_path: /mnt/skills
 
 # ---------------------------------------------------------------------------
-# Middleware
+# 中间件配置
 # ---------------------------------------------------------------------------
-# Declare the ordered middleware chain injected into DeepAgents agent.
-# Each entry names a middleware class (or alias) and optional kwargs.
-# Built-in aliases: MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
+# 声明注入到 DeepAgents agent 的有序中间件链。
+# 每个条目指定一个中间件类（或别名）和可选的 kwargs。
+# 内置别名：MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
 #   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
 #   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
 #   TodoMiddleware, TitleMiddleware
@@ -86,13 +86,13 @@ middleware:
         log_interval: 1
 
 # ---------------------------------------------------------------------------
-# Profiles
+# 配置画像
 # ---------------------------------------------------------------------------
-# Harness profiles customize agent behavior per use-case.
-#   base_system_prompt: replaces the BASE prompt segment (if empty, uses default template)
-#   system_prompt_suffix: appended after BASE
-#   excluded_middleware: middleware names to skip
-#   excluded_tools: tool names to remove
+# Harness 画像根据使用场景自定义 agent 行为。
+#   base_system_prompt: 替换 BASE 提示词段（为空则使用默认模板）
+#   system_prompt_suffix: 追加到 BASE 之后
+#   excluded_middleware: 要跳过的中间件名称
+#   excluded_tools: 要移除的工具名称
 profiles:
   harness:
     - name: default
@@ -101,16 +101,16 @@ profiles:
       excluded_middleware: []
       excluded_tools: []
     - name: coding
-      base_system_prompt: "You are an expert software engineer. Write clean, well-tested code. Use available file tools to read and write code."
-      system_prompt_suffix: "Always follow best practices and write unit tests."
+      base_system_prompt: "你是一名资深软件工程师，你叫紫云，擅长编写高质量代码。"
+      system_prompt_suffix: "请始终遵循最佳实践并编写单元测试。"
       excluded_middleware: []
       excluded_tools: []
-  default_harness: default
+  default_harness: coding
 
 # ---------------------------------------------------------------------------
-# Backend
+# 执行后端
 # ---------------------------------------------------------------------------
-# DeepAgents execution backend (filesystem, sandbox, composite).
+# DeepAgents 执行后端（filesystem: 文件系统, sandbox: 沙箱, composite: 组合）。
 backend:
   type: filesystem
   filesystem:
@@ -121,73 +121,73 @@ backend:
     mounts: []
 
 # ---------------------------------------------------------------------------
-# Memory
+# 记忆系统
 # ---------------------------------------------------------------------------
-# Persistent memory for cross-session personalization.
+# 跨会话持久化记忆，用于个性化。
 memory:
   enabled: true
   injection_enabled: true
   storage_path: ./data/memory.json
   debounce_seconds: 30
-  model_name: null  # null = use default model
+  model_name: null  # null = 使用默认模型
   max_facts: 100
   fact_confidence_threshold: 0.7
   max_injection_tokens: 2000
 
 # ---------------------------------------------------------------------------
-# Subagents
+# 子 Agent
 # ---------------------------------------------------------------------------
-# Enable sub-agent delegation for complex multi-step tasks.
+# 启用子 agent 委托，用于复杂多步骤任务。
 subagents:
   enabled: true
   max_concurrent: 3
   timeout_seconds: 900
 
-# Define subagents that the main agent can delegate to via the task tool.
+# 定义主 agent 可通过 task 工具委托的子 agent。
 subagent_definitions:
   items:
     - name: researcher
-      description: "Search and synthesize information from various sources"
-      system_prompt: "You are a research assistant. Find relevant information, cite sources, and synthesize findings clearly."
-      # model: "openai:gpt-4o-mini"  # optional model override
-      # tools: ["search", "read_file"]  # optional tool whitelist
-      # skills: ["./plugins/skills/research"]  # optional skill paths
+      description: "从各种来源搜索和综合信息"
+      system_prompt: "你是一名研究助手。查找相关信息，引用来源，并清晰地综合发现。"
+      # model: "openai:gpt-4o-mini"  # 可选的模型覆盖
+      # tools: ["search", "read_file"]  # 可选的工具白名单
+      # skills: ["./plugins/skills/research"]  # 可选的技能路径
       enabled: true
     - name: coder
-      description: "Write, review, and debug code"
-      system_prompt: "You are an expert software engineer. Write clean, well-tested code. Use available file tools to read and write code."
+      description: "编写、审查和调试代码"
+      system_prompt: "你是一名资深软件工程师。编写清晰、可测试的代码。使用可用的文件工具读写代码。"
       enabled: true
 
 # ---------------------------------------------------------------------------
-# Channels (IM Platform Integrations)
+# 通道（即时通讯平台集成）
 # ---------------------------------------------------------------------------
-# Configure external messaging platforms to interact with your agents.
+# 配置外部消息平台以与 agent 交互。
 channels:
   langgraph_url: http://localhost:8000/api
   gateway_url: http://localhost:8000
 
-  # Feishu (Lark) integration
+  # 飞书集成
   feishu:
     enabled: false
     app_id: $FEISHU_APP_ID
     app_secret: $FEISHU_APP_SECRET
 
-  # Slack integration
+  # Slack 集成
   slack:
     enabled: false
     bot_token: $SLACK_BOT_TOKEN
     app_token: $SLACK_APP_TOKEN
 
 # ---------------------------------------------------------------------------
-# Tracing
+# 链路追踪
 # ---------------------------------------------------------------------------
-# Observability via LangSmith or Langfuse.
+# 通过 LangSmith 或 Langfuse 实现可观测性。
 tracing:
   enabled: false
-  providers: []  # e.g., ["langsmith", "langfuse"]
+  providers: []  # 例如：["langsmith", "langfuse"]
 
 # ---------------------------------------------------------------------------
-# Gateway
+# 网关配置
 # ---------------------------------------------------------------------------
 gateway:
   host: 0.0.0.0
@@ -195,17 +195,17 @@ gateway:
   enable_docs: true
 
 # ---------------------------------------------------------------------------
-# Database
+# 数据库配置
 # ---------------------------------------------------------------------------
-# SQLite is the default. Set backend to "postgres" for production.
+# 默认使用 SQLite，生产环境可设置为 "postgres"。
 database:
   backend: sqlite
   sqlite_dir: ./data
 
 # ---------------------------------------------------------------------------
-# Stream Bridge
+# 流桥接器
 # ---------------------------------------------------------------------------
-# Bridges streaming events between agent runs and connected clients.
+# 桥接 agent 运行与连接客户端之间的流式事件。
 stream_bridge:
   type: memory
   queue_maxsize: 256

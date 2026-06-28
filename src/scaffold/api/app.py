@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         configure_logging(
             level=config.log_level,
             format_type="text",
+            log_dir="logs",
         )
         logger.info(
             "Configuration loaded — %d model(s), %d tool(s), %d middleware",
