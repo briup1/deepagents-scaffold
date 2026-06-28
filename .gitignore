@@ -3,3 +3,6 @@
 # Python
 __pycache__/
 *.py[cod]
+
+data/
+data/checkpoints.db

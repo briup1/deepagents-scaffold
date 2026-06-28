@@ -15,8 +15,7 @@ from deepagents import (
     create_deep_agent as _create_deep_agent,
     DeepAgentState,
 )
-from deepagents.middleware.memory import MemoryMiddleware
-from deepagents.middleware.skills import SkillsMiddleware
+
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
@@ -29,6 +28,7 @@ from scaffold.infra.config.model_config import ModelConfig
 from scaffold.infra.config.profile_config import HarnessProfileConfig
 from scaffold.infra.middleware.factory import build_middleware_chain
 from scaffold.infra.models.factory import create_chat_model
+from scaffold.infra.prompts.assembler import PromptAssembler
 
 logger = logging.getLogger(__name__)
 
@@ -167,59 +167,36 @@ def _build_system_prompt(
 ) -> str | SystemMessage | None:
     """构建最终系统提示词。
 
-    优先级：用户覆盖 > harness profile > 默认 scaffold 提示词。
+    优先级：用户覆盖 > harness profile > PromptAssembler 默认模板。
     """
+    # 优先级 1: 用户直接覆盖
     if override is not None:
         return override
 
-    # 检查 harness profile 提示词
+    # 优先级 2: harness profile 配置
     profile = app_config.get_default_harness_profile()
     if isinstance(profile, HarnessProfileConfig):
-        parts: list[str] = []
-        if profile.base_system_prompt:
-            parts.append(profile.base_system_prompt)
-        if profile.system_prompt_suffix:
-            parts.append(profile.system_prompt_suffix)
-        if parts:
-            return "\n\n".join(parts)
+        assembler = PromptAssembler()
+        
+        # 如果 profile 有自定义 prompt，使用 PromptAssembler 组装
+        if profile.base_system_prompt or profile.system_prompt_suffix:
+            return assembler.assemble(
+                custom=profile.base_system_prompt,
+                suffix=profile.system_prompt_suffix,
+            )
 
-    # 默认 scaffold 提示词
-    return (
-        "You are a helpful AI assistant running in the DeepAgents Scaffold. "
-        "Use the available tools when needed, think step by step, and be concise."
-    )
+    # 优先级 3: 使用 PromptAssembler 默认模板
+    assembler = PromptAssembler()
+    return assembler.assemble()
 
 
 def _build_native_middleware(app_config: AppConfig) -> list[Any]:
-    """构建 DeepAgents 原生中间件（MemoryMiddleware、SkillsMiddleware）。"""
-    native: list[Any] = []
+    """构建 DeepAgents 原生中间件。
 
-    # MemoryMiddleware（记忆中间件）
-    if app_config.memory.enabled:
-        try:
-            from deepagents.backends.filesystem import FilesystemBackend
-
-            backend = FilesystemBackend(root_dir="/")
-            memory_mw = MemoryMiddleware(
-                backend=backend,
-                sources=[app_config.memory.storage_path],
-            )
-            native.append(memory_mw)
-            logger.debug("Enabled MemoryMiddleware")
-        except Exception:
-            logger.exception("Failed to initialize MemoryMiddleware")
-
-    # SkillsMiddleware（技能中间件）
-    try:
-        skill_names = get_skill_names(app_config)
-        if skill_names:
-            skills_mw = SkillsMiddleware(skills=skill_names)
-            native.append(skills_mw)
-            logger.debug("Enabled SkillsMiddleware for %d skills", len(skill_names))
-    except Exception:
-        logger.exception("Failed to initialize SkillsMiddleware")
-
-    return native
+    注意：MemoryMiddleware 和 SkillsMiddleware 已由 create_deep_agent 自动添加
+    （通过 memory 和 skills 参数），此处不再重复创建以避免 "duplicate middleware" 错误。
+    """
+    return []
 
 
 def _build_backend(backend_config: BackendConfig) -> Any | None:

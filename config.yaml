@@ -89,7 +89,7 @@ middleware:
 # Profiles
 # ---------------------------------------------------------------------------
 # Harness profiles customize agent behavior per use-case.
-#   base_system_prompt: replaces the BASE prompt segment
+#   base_system_prompt: replaces the BASE prompt segment (if empty, uses default template)
 #   system_prompt_suffix: appended after BASE
 #   excluded_middleware: middleware names to skip
 #   excluded_tools: tool names to remove
@@ -98,6 +98,11 @@ profiles:
     - name: default
       base_system_prompt: ""
       system_prompt_suffix: ""
+      excluded_middleware: []
+      excluded_tools: []
+    - name: coding
+      base_system_prompt: "You are an expert software engineer. Write clean, well-tested code. Use available file tools to read and write code."
+      system_prompt_suffix: "Always follow best practices and write unit tests."
       excluded_middleware: []
       excluded_tools: []
   default_harness: default
