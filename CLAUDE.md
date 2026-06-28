@@ -6,30 +6,22 @@
 
 基于 DeepAgents SDK + Deer-Flow 基础设施的生产级多 Agent 脚手架。支持可配置中间件、通道、记忆和链路追踪。
 
+项目包含两个主要部分：
+- **后端** (`src/scaffold/`)：Python FastAPI 服务，提供 Agent 工厂、中间件链、记忆系统
+- **前端** (`src/web/`)：React 18 + TypeScript 界面，支持 SSE 流式响应
+
 ## 常用命令
 
 ```bash
-# 安装依赖
-uv pip install -e ".[dev]"
-
-# 运行 FastAPI 服务（带热重载）
-PYTHONPATH=src uvicorn scaffold.api.app:app --reload
-
-# 运行全部测试
-pytest
-
-# 运行单个测试文件
-pytest tests/test_config.py
-
-# 运行指定测试
-pytest tests/test_api.py::test_health -v
-
-# 格式化与检查
-ruff format src tests
-ruff check src tests
-
 # 同时启动后端与前端
 bash scripts/dev.sh
+
+# 后端命令（详见 src/scaffold/CLAUDE.md）
+PYTHONPATH=src uvicorn scaffold.api.app:app --reload
+pytest
+
+# 前端命令（详见 src/web/CLAUDE.md）
+cd src/web && npm run dev
 ```
 
 ## 技术栈与约定
@@ -48,37 +40,18 @@ bash scripts/dev.sh
 - **类型**: 完整类型注解
 - **格式**: 遵循 ruff 默认规则
 
-## 分层模式
-
-项目按三层组织，添加功能时请放入正确层级：
-
-| 层级 | 路径 | 职责 |
-|------|------|------|
-| 运行时层 | `core/` | DeepAgents SDK 集成，Agent 工厂 |
-| 网关层 | `api/` | FastAPI 路由、认证、限流 |
-| 基础设施层 | `infra/` | 配置、模型、日志、通道（框架无关） |
-
-**配置驱动**: `config.yaml` 是唯一事实来源，支持环境变量替换（`$ENV_VAR`）和热重载。
-
-## 模块引用规范
-
-三层依赖方向必须遵守：
+## 项目结构
 
 ```
-core → infra  ✓（允许）
-api  → infra  ✓（允许）
-infra → core  ✗（禁止）
-infra → api   ✗（禁止）
-core ↔ api    ✗（禁止直接调用）
+deepagents-scaffold/
+├── src/
+│   ├── scaffold/     # 后端 Python 项目
+│   └── web/          # 前端 TypeScript 项目
+├── config.yaml       # 唯一配置来源（支持热重载）
+├── tests/            # 后端测试
+└── scripts/          # 开发脚本
 ```
 
-- 运行时层和网关层可依赖基础设施层
-- 基础设施层不可依赖上层
-- 跨层通信通过配置或接口
-
-## 测试约定
-
-- 使用 `TestClient` 作为上下文管理器（lifespan 依赖）
-- 测试文件命名：`test_*.py`
-- 测试函数命名：`test_*`
-- fixture 定义在 `tests/conftest.py`
+详细项目结构请参考：
+- 后端：`src/scaffold/CLAUDE.md`
+- 前端：`src/web/CLAUDE.md`
