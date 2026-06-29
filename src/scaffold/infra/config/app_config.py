@@ -82,6 +82,19 @@ class SkillsConfig(BaseModel):
     container_path: str = "/mnt/skills"
 
 
+class AgentConfig(BaseModel):
+    """编排循环行为配置。"""
+
+    max_iterations: int = Field(
+        default=40,
+        description="ReAct 循环的最大迭代次数（映射到 LangGraph 的 recursion_limit）",
+    )
+    drop_error_from_history: bool = Field(
+        default=True,
+        description="工具/模型执行错误是否从对话历史中剔除，防止毒消息死循环",
+    )
+
+
 class AppConfig(BaseModel):
     """根应用配置。"""
 
@@ -104,6 +117,7 @@ class AppConfig(BaseModel):
     backend: BackendConfig = Field(default_factory=BackendConfig)
     subagent_definitions: SubAgentsDefinitionsConfig = Field(default_factory=SubAgentsDefinitionsConfig)
     stream_bridge: StreamBridgeConfig = Field(default_factory=StreamBridgeConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
 
     def get_model_config(self, name: str) -> ModelConfig | None:
         return next((m for m in self.models if m.name == name), None)

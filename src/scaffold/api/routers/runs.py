@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from scaffold.api.deps import get_checkpointer, get_stream_bridge
 from scaffold.core.agents import create_agent, get_agent
+from scaffold.infra.config.app_config import get_app_config
 from scaffold.runtime.stream_bridge import END_SENTINEL, HEARTBEAT_SENTINEL, StreamBridge
 from scaffold.runtime.worker import run_worker
 
@@ -49,15 +50,41 @@ def _normalise_stream_modes(stream_mode: str | list[str]) -> list[str]:
     return list(stream_mode)
 
 
+def _build_run_config(body: "RunCreateRequest", app_config: Any) -> tuple[str, str, dict[str, Any]]:
+    """构建传给 LangGraph 的 RunnableConfig。
+
+    注入 recursion_limit（来自 ``agent.max_iterations``）并保留用户覆盖项。
+
+    Returns:
+        ``(thread_id, run_id, config)`` 三元组。
+    """
+    thread_id = (body.config.get("configurable") or {}).get("thread_id") or str(uuid.uuid4())
+    run_id = str(uuid.uuid4())
+
+    config: dict[str, Any] = {
+        "configurable": {"thread_id": thread_id, "run_id": run_id},
+        # LangGraph 原生迭代预算：达到该值会抛出 GraphRecursionError，作为兜底出口
+        "recursion_limit": app_config.agent.max_iterations,
+    }
+
+    # 合并用户提供的 body.config（configurable 字段做浅合并，其余直接覆盖）
+    for key, value in body.config.items():
+        if key == "configurable" and isinstance(value, dict):
+            config["configurable"] = {**config["configurable"], **value}
+        else:
+            config[key] = value
+
+    return thread_id, run_id, config
+
+
 @router.post("/stream")
 async def stream_run(body: RunCreateRequest, request: Request) -> StreamingResponse:
     """创建 run 并通过 SSE 流式返回事件。"""
     checkpointer = get_checkpointer(request)
     bridge = get_stream_bridge(request)
+    app_config = get_app_config()
 
-    thread_id = (body.config.get("configurable") or {}).get("thread_id") or str(uuid.uuid4())
-    run_id = str(uuid.uuid4())
-    config = {"configurable": {"thread_id": thread_id, "run_id": run_id}, **body.config}
+    thread_id, run_id, config = _build_run_config(body, app_config)
 
     try:
         agent = get_agent(body.assistant_id)
@@ -97,10 +124,9 @@ async def wait_run(body: RunCreateRequest, request: Request) -> dict:
     """创建 run，阻塞直到完成，并返回最终 checkpoint。"""
     checkpointer = get_checkpointer(request)
     bridge = get_stream_bridge(request)
+    app_config = get_app_config()
 
-    thread_id = (body.config.get("configurable") or {}).get("thread_id") or str(uuid.uuid4())
-    run_id = str(uuid.uuid4())
-    config = {"configurable": {"thread_id": thread_id, "run_id": run_id}, **body.config}
+    thread_id, run_id, config = _build_run_config(body, app_config)
 
     try:
         agent = get_agent(body.assistant_id)

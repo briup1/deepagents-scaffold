@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from langchain.agents.middleware.types import ToolCallRequest
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+from scaffold.infra.middleware.deerflow_adapters.tool_error_handling import ToolErrorHandlingMiddleware
 from scaffold.infra.middleware.factory import build_middleware_chain
 from scaffold.infra.middleware.registry import get_middleware_registry
 
@@ -81,3 +85,124 @@ class TestScaffoldSummarizationMiddleware:
         assert len(calls) == 1
         assert calls[0].name == "fake-model"
         assert instance.model is fake_model
+
+
+class TestToolErrorHandlingMiddleware:
+    def test_wrap_tool_call_converts_exception_to_error_tool_message(self):
+        mw = ToolErrorHandlingMiddleware()
+        request = ToolCallRequest(
+            tool_call={"id": "call-1", "name": "bad_tool"},
+            tool=None,
+            state={},
+            runtime=None,
+        )
+
+        def failing_handler(request):
+            raise ValueError("tool exploded")
+
+        result = mw.wrap_tool_call(request, failing_handler)
+
+        assert isinstance(result, ToolMessage)
+        assert result.tool_call_id == "call-1"
+        assert result.status == "error"
+        assert "ValueError: tool exploded" in result.content
+
+    async def test_awrap_tool_call_converts_exception_to_error_tool_message(self):
+        mw = ToolErrorHandlingMiddleware()
+        request = ToolCallRequest(
+            tool_call={"id": "call-2", "name": "async_bad_tool"},
+            tool=None,
+            state={},
+            runtime=None,
+        )
+
+        async def failing_handler(request):
+            raise RuntimeError("async tool exploded")
+
+        result = await mw.awrap_tool_call(request, failing_handler)
+
+        assert isinstance(result, ToolMessage)
+        assert result.tool_call_id == "call-2"
+        assert result.status == "error"
+        assert "RuntimeError: async tool exploded" in result.content
+
+    def test_after_model_drops_error_finish_reason(self):
+        mw = ToolErrorHandlingMiddleware(drop_error_from_history=True)
+        messages = [
+            HumanMessage("hi"),
+            AIMessage(content="x", response_metadata={"finish_reason": "error"}),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update == {"messages": [messages[0]]}
+
+    def test_after_model_keeps_normal_finish_reason(self):
+        mw = ToolErrorHandlingMiddleware(drop_error_from_history=True)
+        messages = [
+            HumanMessage("hi"),
+            AIMessage(content="ok", response_metadata={"finish_reason": "stop"}),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is None
+
+    def test_after_model_respects_disable_flag(self):
+        mw = ToolErrorHandlingMiddleware(drop_error_from_history=False)
+        messages = [
+            HumanMessage("hi"),
+            AIMessage(content="x", response_metadata={"finish_reason": "error"}),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is None
+
+    def test_factory_auto_wires_drop_error_from_history(self, monkeypatch):
+        from scaffold.infra.config import middleware_config as middleware_config_module
+        from scaffold.infra.config.app_config import AgentConfig, AppConfig
+
+        app_config = AppConfig(
+            agent=AgentConfig(max_iterations=40, drop_error_from_history=False),
+        )
+
+        chain = build_middleware_chain(
+            config=middleware_config_module.MiddlewareChainConfig(
+                items=[
+                    middleware_config_module.MiddlewareConfig(
+                        name="ToolErrorHandlingMiddleware",
+                        enabled=True,
+                    )
+                ]
+            ),
+            app_config=app_config,
+        )
+
+        assert len(chain) == 1
+        assert isinstance(chain[0], ToolErrorHandlingMiddleware)
+        assert chain[0].drop_error_from_history is False
+
+    def test_factory_allows_explicit_override(self, monkeypatch):
+        from scaffold.infra.config import middleware_config as middleware_config_module
+        from scaffold.infra.config.app_config import AgentConfig, AppConfig
+
+        app_config = AppConfig(
+            agent=AgentConfig(max_iterations=40, drop_error_from_history=False),
+        )
+
+        chain = build_middleware_chain(
+            config=middleware_config_module.MiddlewareChainConfig(
+                items=[
+                    middleware_config_module.MiddlewareConfig(
+                        name="ToolErrorHandlingMiddleware",
+                        enabled=True,
+                        kwargs={"drop_error_from_history": True},
+                    )
+                ]
+            ),
+            app_config=app_config,
+        )
+
+        assert len(chain) == 1
+        assert chain[0].drop_error_from_history is True

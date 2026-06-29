@@ -12,6 +12,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.config.middleware_config import MiddlewareChainConfig
+from scaffold.infra.middleware.deerflow_adapters.tool_error_handling import ToolErrorHandlingMiddleware
 from scaffold.infra.middleware.registry import get_middleware_registry
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,14 @@ def build_middleware_chain(
         try:
             cls = registry.resolve(item.name)
             resolved_kwargs = _resolve_kwargs(item.kwargs, app_config)
+
+            # ToolErrorHandlingMiddleware 的 drop_error_from_history 默认跟随 app_config.agent
+            if (
+                cls is ToolErrorHandlingMiddleware
+                and "drop_error_from_history" not in resolved_kwargs
+            ):
+                resolved_kwargs["drop_error_from_history"] = app_config.agent.drop_error_from_history
+
             instance = cls(**resolved_kwargs)
             instances.append(instance)
             logger.info("Loaded middleware: %s", item.name)
