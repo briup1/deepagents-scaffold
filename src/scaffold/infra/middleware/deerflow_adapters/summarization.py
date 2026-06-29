@@ -1,9 +1,14 @@
-"""Summarization middleware.
+"""Summarization middleware adapter.
 
-在上下文窗口填满时截断旧消息并用摘要替换历史记录。
-扩展 LangChain 的 SummarizationMiddleware，增加技能保留钩子。
+本模块把 ``langchain.agents.middleware`` 提供的生产级 ``SummarizationMiddleware``
+包装成适合本脚手架配置的版本：自动从 ``config.yaml`` 解析要使用的 LLM，
+其余参数（``trigger`` / ``keep`` / ``trim_tokens_to_summarize`` 等）全部透传给上游实现。
 
-改编自 deerflow.agents.middlewares.summarization_middleware。
+上游实现会：
+- 根据 ``trigger`` 阈值（消息数 / 绝对 token / 模型最大输入比例）决定是否摘要；
+- 使用独立的 LLM 调用生成结构化摘要（SESSION INTENT / SUMMARY / ARTIFACTS / NEXT STEPS）；
+- 通过 ``RemoveMessage(id=REMOVE_ALL_MESSAGES)`` 清空旧消息，并保留 ``keep`` 指定的近期消息；
+- 在截断时保护 ``AIMessage.tool_calls`` 与对应 ``ToolMessage`` 不被拆散。
 """
 
 from __future__ import annotations
@@ -11,84 +16,60 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from langchain.agents.middleware.types import AgentMiddleware
-from langchain_core.messages import SystemMessage
-from langgraph.runtime import Runtime
+from langchain.agents.middleware.summarization import (
+    SummarizationMiddleware as _LangChainSummarizationMiddleware,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class SummarizationMiddleware(AgentMiddleware):
-    """当 token 数量超过阈值时，对对话历史进行摘要。
+class SummarizationMiddleware(_LangChainSummarizationMiddleware):
+    """自动注入模型配置的 SummarizationMiddleware 包装器。
 
     Args:
-        max_context_tokens: 当上下文超过此值时触发摘要。
-        keep_recent_turns: 保留最近多少轮对话原文。
-        summary_model_name: 用于摘要的可选模型名称（None 则使用默认模型）。
+        model_name: 要用于摘要的模型名称（对应 ``config.yaml`` 中 ``models`` 的
+            ``name`` 字段）。为 ``None`` 时使用第一个已配置的模型。
+        **kwargs: 其余参数全部透传给
+            ``langchain.agents.middleware.summarization.SummarizationMiddleware``。
+            常用参数：
+
+            - ``trigger``: 触发摘要的阈值，例如
+              ``[("messages", 200), ("tokens", 6000)]``。
+            - ``keep``: 摘要后保留的近期消息，例如 ``("messages", 20)``。
+            - ``trim_tokens_to_summarize``: 生成摘要前对旧消息做截断的 token 上限。
+            - ``summary_prompt``: 自定义摘要生成 prompt。
     """
 
     def __init__(
         self,
         *,
-        max_context_tokens: int = 8000,
-        keep_recent_turns: int = 4,
-        summary_model_name: str | None = None,
+        model_name: str | None = None,
+        **kwargs: Any,
     ) -> None:
-        self.max_context_tokens = max_context_tokens
-        self.keep_recent_turns = keep_recent_turns
-        self.summary_model_name = summary_model_name
-        self._summaries: dict[str, str] = {}
+        from scaffold.infra.config.app_config import get_app_config
+        from scaffold.infra.models.factory import create_chat_model
 
-    def before_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """检查上下文大小，必要时进行摘要。"""
-        messages = list(state.get("messages", []))
-        if len(messages) < self.keep_recent_turns * 2:
-            return None
+        app_config = get_app_config()
 
-        # 简单估算 token（1 token 约等于 4 个字符，对 CJK 和英文均适用）
-        total_chars = sum(len(str(m.content)) for m in messages if hasattr(m, "content"))
-        estimated_tokens = total_chars // 3
+        if model_name is not None:
+            model_cfg = app_config.get_model_config(model_name)
+            if model_cfg is None:
+                raise ValueError(
+                    f"Model '{model_name}' not found in config.yaml. "
+                    f"Available models: {[m.name for m in app_config.models]}"
+                )
+        else:
+            if not app_config.models:
+                raise ValueError(
+                    "No models configured in config.yaml. "
+                    "SummarizationMiddleware requires at least one model."
+                )
+            model_cfg = app_config.models[0]
 
-        if estimated_tokens < self.max_context_tokens:
-            return None
-
-        thread_id = state.get("configurable", {}).get("thread_id", "default")
-
-        # 保留最近轮次，对其余部分进行摘要
-        cutoff = len(messages) - self.keep_recent_turns * 2
-        to_summarize = messages[:cutoff]
-        recent = messages[cutoff:]
-
-        summary_text = _summarize_messages(to_summarize)
-        self._summaries[thread_id] = summary_text
-
+        model = create_chat_model(model_cfg)
         logger.info(
-            "Summarized %d messages -> %d chars for thread %s",
-            len(to_summarize),
-            len(summary_text),
-            thread_id,
+            "SummarizationMiddleware initialized with model '%s' (%s)",
+            model_cfg.name,
+            model_cfg.use,
         )
-
-        new_messages = [
-            SystemMessage(content=f"Previous conversation summary:\n{summary_text}"),
-            *recent,
-        ]
-        return {"messages": new_messages}
-
-    async def abefore_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        """异步版本。"""
-        return self.before_model(state, runtime)
-
-
-def _summarize_messages(messages: list[Any]) -> str:
-    """从消息历史创建简单摘要。
-
-    在生产环境中应调用 LLM 以生成高质量摘要。
-    """
-    parts: list[str] = []
-    for msg in messages:
-        role = getattr(msg, "type", "unknown")
-        content = str(getattr(msg, "content", ""))[:200]
-        if content:
-            parts.append(f"[{role}] {content}")
-    return "\n".join(parts[:20])  # 限制摘要长度
+        super().__init__(model=model, **kwargs)

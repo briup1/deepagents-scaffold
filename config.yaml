@@ -63,7 +63,7 @@ skills:
 # 内置别名：MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
 #   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
 #   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
-#   TodoMiddleware, TitleMiddleware
+#   TodoMiddleware, TitleMiddleware, ScaffoldSummarizationMiddleware
 middleware:
   items:
     - name: ToolErrorHandlingMiddleware
@@ -84,6 +84,14 @@ middleware:
       enabled: true
       kwargs:
         log_interval: 1
+    - name: ScaffoldSummarizationMiddleware
+      enabled: true
+      kwargs:
+        model_name: null
+        trigger:
+          - ["messages", 20]
+        keep: ["messages", 4]
+        trim_tokens_to_summarize: 4000
 
 # ---------------------------------------------------------------------------
 # 配置画像
