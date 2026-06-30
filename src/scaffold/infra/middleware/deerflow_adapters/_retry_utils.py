@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def _build_retry_predicate(status_codes: list[int]):
+def _build_retry_predicate(status_codes: list[int]) -> Callable[[Exception], bool]:
     """Build a callable that decides whether an exception should be retried.
 
     Matches first by ``status_code`` attribute, then by known provider
