@@ -32,6 +32,9 @@ _DEFAULT_MIDDLEWARE_MAP: dict[str, str] = {
     "TodoMiddleware": "scaffold.infra.middleware.deerflow_adapters.todo:TodoMiddleware",
     "TitleMiddleware": "scaffold.infra.middleware.deerflow_adapters.title:TitleMiddleware",
     "ScaffoldSummarizationMiddleware": "scaffold.infra.middleware.deerflow_adapters.summarization:SummarizationMiddleware",
+    "ModelRetryMiddleware": "scaffold.infra.middleware.deerflow_adapters.model_retry:ModelRetryAdapter",
+    "ToolRetryMiddleware": "scaffold.infra.middleware.deerflow_adapters.tool_retry:ToolRetryAdapter",
+    "ModelFallbackMiddleware": "scaffold.infra.middleware.deerflow_adapters.model_fallback:ModelFallbackAdapter",
 }
 
 
