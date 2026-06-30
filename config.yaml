@@ -85,6 +85,33 @@ middleware:
       kwargs:
         log_interval: 1
 
+    # 韧性中间件（模型重试、工具重试、模型回退）
+    # 按需取消注释并调整 fallback_models 为你的实际模型名称。
+    # - name: ModelFallbackMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     models: $config.models
+    #     fallback_models:
+    #       - fallback-model-name
+    # - name: ModelRetryMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     max_retries: 2
+    #     backoff_factor: 2.0
+    #     initial_delay: 1.0
+    #     max_delay: 60.0
+    #     jitter: true
+    #     retry_on_status_codes: [429, 502, 503, 504]
+    # - name: ToolRetryMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     max_retries: 1
+    #     backoff_factor: 2.0
+    #     initial_delay: 1.0
+    #     max_delay: 60.0
+    #     jitter: true
+    #     retry_on_status_codes: [429, 502, 503, 504]
+
 # ---------------------------------------------------------------------------
 # Profiles
 # ---------------------------------------------------------------------------
