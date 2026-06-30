@@ -1,6 +1,5 @@
 """Integration tests for the FastAPI Gateway."""
 
-import pytest
 
 
 def test_health_check(client):

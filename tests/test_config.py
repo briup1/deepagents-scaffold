@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 
-import pytest
 
-from scaffold.infra.config.app_config import AppConfig, get_app_config, reload_app_config
+from scaffold.infra.config.app_config import AppConfig
 from scaffold.infra.config.backend_config import BackendConfig
 from scaffold.infra.config.middleware_config import MiddlewareChainConfig, MiddlewareConfig
 from scaffold.infra.config.profile_config import HarnessProfileConfig, ProfilesConfig

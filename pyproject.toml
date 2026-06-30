@@ -46,3 +46,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.20",
+]

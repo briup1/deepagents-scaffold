@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
 
-from scaffold.infra.channels.base import Channel
 from scaffold.infra.channels.registry import get_channel_registry
 from scaffold.infra.channels.router import ChannelRouter
 
