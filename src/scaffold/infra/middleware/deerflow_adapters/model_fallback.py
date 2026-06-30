@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -52,7 +53,7 @@ class ModelFallbackAdapter(AgentMiddleware):
         return await self._middleware.awrap_model_call(request, self._wrap_handler(request, handler))
 
     def _wrap_handler(self, request: Any, handler: Any) -> Any:
-        """Wrap handler to log each fallback model being tried."""
+        """Wrap handler to log when falling back to a non-primary model."""
         thread_id = _extract_thread_id(request)
         is_first = True
 
@@ -79,8 +80,6 @@ class ModelFallbackAdapter(AgentMiddleware):
                 )
             is_first = False
             return await handler(req)
-
-        import inspect
 
         return awrapped if inspect.iscoroutinefunction(handler) else wrapped
 
