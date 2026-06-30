@@ -7,6 +7,7 @@ import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from scaffold.infra.middleware.deerflow_adapters.safety_termination import SafetyTerminationMiddleware
 from scaffold.infra.middleware.deerflow_adapters.tool_error_handling import ToolErrorHandlingMiddleware
 from scaffold.infra.middleware.factory import build_middleware_chain
 from scaffold.infra.middleware.registry import get_middleware_registry
@@ -68,9 +69,7 @@ class TestScaffoldSummarizationMiddleware:
             def get_model_config(self, name):
                 return FakeModelConfig() if name == "fake-model" else None
 
-        monkeypatch.setattr(
-            app_config_module, "get_app_config", lambda config_path=None: FakeAppConfig()
-        )
+        monkeypatch.setattr(app_config_module, "get_app_config", lambda config_path=None: FakeAppConfig())
         calls = []
 
         def fake_create_chat_model(cfg, **kwargs):
@@ -206,3 +205,179 @@ class TestToolErrorHandlingMiddleware:
 
         assert len(chain) == 1
         assert chain[0].drop_error_from_history is True
+
+
+class TestSafetyTerminationMiddleware:
+    def test_no_intervention_without_tool_calls(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("hi"),
+            AIMessage(
+                content="I cannot help with that policy.",
+                response_metadata={"finish_reason": "content_filter"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is None
+
+    def test_strips_tool_calls_on_content_filter(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("write bad file"),
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "call-1", "name": "write_file", "args": {"path": "/tmp/bad"}}],
+                response_metadata={"finish_reason": "content_filter"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is not None
+        patched = update["messages"][-1]
+        assert isinstance(patched, AIMessage)
+        assert patched.tool_calls == []
+        assert "content_filter" in patched.content
+        assert "suppressed" in patched.content
+
+    def test_preserves_message_metadata(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                id="msg-123",
+                content="",
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+                response_metadata={"finish_reason": "SAFETY", "model_name": "gpt-test"},
+                usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        patched = update["messages"][-1]
+        assert patched.id == "msg-123"
+        assert patched.response_metadata == {"finish_reason": "SAFETY", "model_name": "gpt-test"}
+        assert patched.usage_metadata == {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+
+    def test_records_safety_termination_in_additional_kwargs(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "call-1", "name": "write_file", "args": {}}],
+                response_metadata={"finish_reason": "refusal"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        patched = update["messages"][-1]
+        meta = patched.additional_kwargs["safety_termination"]
+        assert meta["reason_field"] == "finish_reason"
+        assert meta["reason_value"] == "refusal"
+        assert meta["suppressed_tool_call_count"] == 1
+        assert meta["suppressed_tool_call_names"] == ["write_file"]
+
+    def test_detects_content_keyword_signal(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                content="I cannot process this request due to SAFETY policy.",
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is not None
+        meta = update["messages"][-1].additional_kwargs["safety_termination"]
+        assert meta["reason_field"] == "content"
+        assert meta["reason_value"] == "SAFETY"
+
+    def test_extra_signals_are_respected(self):
+        mw = SafetyTerminationMiddleware(extra_signals=["custom_block"])
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+                response_metadata={"finish_reason": "custom_block"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is not None
+        assert update["messages"][-1].tool_calls == []
+
+    def test_no_intervention_on_normal_stop(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("hi"),
+            AIMessage(
+                content="Hello!",
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+                response_metadata={"finish_reason": "stop"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        assert update is None
+
+    def test_disable_warning_does_not_append_text(self):
+        mw = SafetyTerminationMiddleware(emit_warning=False)
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                content="original",
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+                response_metadata={"finish_reason": "content_filter"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        patched = update["messages"][-1]
+        assert patched.content == "original"
+        assert patched.additional_kwargs["safety_termination"]["suppressed_tool_call_count"] == 1
+
+    def test_append_to_list_content(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                content=[{"type": "text", "text": "partial"}],
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+                response_metadata={"finish_reason": "content_filter"},
+            ),
+        ]
+
+        update = mw.after_model({"messages": messages}, runtime=None)
+
+        patched = update["messages"][-1]
+        assert isinstance(patched.content, list)
+        assert patched.content[0] == {"type": "text", "text": "partial"}
+        assert patched.content[-1]["type"] == "text"
+        assert "content_filter" in patched.content[-1]["text"]
+
+    async def test_aafter_model_delegates_to_sync(self):
+        mw = SafetyTerminationMiddleware()
+        messages = [
+            HumanMessage("x"),
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "call-1", "name": "tool", "args": {}}],
+                response_metadata={"finish_reason": "content_filter"},
+            ),
+        ]
+
+        update = await mw.aafter_model({"messages": messages}, runtime=None)
+
+        assert update is not None
+        assert update["messages"][-1].tool_calls == []
