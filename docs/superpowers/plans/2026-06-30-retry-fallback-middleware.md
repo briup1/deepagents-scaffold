@@ -942,7 +942,7 @@ git commit -m "feat: add ModelFallbackAdapter with registry alias"
 
 - [x] **Step 1: Add commented example middleware declarations**
 
-Append the following block to the end of `middleware.items` in `config.yaml`, after `ScaffoldSummarizationMiddleware`:
+Append the following block to the end of `middleware.items` in `config.yaml`:
 
 ```yaml
     # 韧性中间件（模型重试、工具重试、模型回退）

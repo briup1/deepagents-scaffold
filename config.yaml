@@ -74,7 +74,7 @@ skills:
 # 内置别名：MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
 #   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
 #   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
-#   TodoMiddleware, TitleMiddleware, ScaffoldSummarizationMiddleware
+#   TodoMiddleware, TitleMiddleware, DeepAgentsSummarizationMiddleware
 middleware:
   items:
     - name: ToolErrorHandlingMiddleware

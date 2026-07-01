@@ -100,7 +100,7 @@ Agent 中间件（DeepAgents 层）：
 - `DynamicContextMiddleware`: 注入日期/记忆上下文
 - `TokenUsageMiddleware`: token 消耗追踪
 - `SafetyTerminationMiddleware`: 安全拒绝信号检测
-- `ScaffoldSummarizationMiddleware`: 包装 langchain 原生 SummarizationMiddleware，上下文窗口满时调用 LLM 生成结构化摘要
+- `DeepAgentsSummarizationMiddleware`: 继承 DeepAgents 原生 SummarizationMiddleware，支持通过 `config.yaml` 自定义 trigger/keep/summary_prompt 等参数，上下文窗口满时生成摘要
 - `TodoMiddleware`: 待办事项跟踪提醒
 - `TitleMiddleware`: 自动生成会话标题
 
