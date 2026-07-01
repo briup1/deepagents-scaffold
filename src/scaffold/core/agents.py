@@ -177,7 +177,7 @@ def _build_system_prompt(
     profile = app_config.get_default_harness_profile()
     if isinstance(profile, HarnessProfileConfig):
         assembler = PromptAssembler()
-        
+
         # 如果 profile 有自定义 prompt，使用 PromptAssembler 组装
         if profile.base_system_prompt or profile.system_prompt_suffix:
             return assembler.assemble(

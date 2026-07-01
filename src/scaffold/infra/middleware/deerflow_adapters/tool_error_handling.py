@@ -92,9 +92,8 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
         if hasattr(last_msg, "response_metadata"):
             finish_reason = str(last_msg.response_metadata.get("finish_reason", ""))
 
-        is_error = (
-            finish_reason == "error"
-            or (hasattr(last_msg, "status") and getattr(last_msg, "status", None) == "error")
+        is_error = finish_reason == "error" or (
+            hasattr(last_msg, "status") and getattr(last_msg, "status", None) == "error"
         )
 
         if not is_error:

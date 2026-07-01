@@ -94,10 +94,7 @@ def build_middleware_chain(
             resolved_kwargs = _resolve_kwargs(item.kwargs, app_config)
 
             # ToolErrorHandlingMiddleware 的 drop_error_from_history 默认跟随 app_config.agent
-            if (
-                cls is ToolErrorHandlingMiddleware
-                and "drop_error_from_history" not in resolved_kwargs
-            ):
+            if cls is ToolErrorHandlingMiddleware and "drop_error_from_history" not in resolved_kwargs:
                 resolved_kwargs["drop_error_from_history"] = app_config.agent.drop_error_from_history
 
             instance = cls(**resolved_kwargs)
