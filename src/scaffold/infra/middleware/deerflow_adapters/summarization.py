@@ -23,7 +23,7 @@ from langchain.agents.middleware.summarization import (
 logger = logging.getLogger(__name__)
 
 
-class SummarizationMiddleware(_LangChainSummarizationMiddleware):
+class ScaffoldSummarizationMiddleware(_LangChainSummarizationMiddleware):
     """自动注入模型配置的 SummarizationMiddleware 包装器。
 
     Args:
@@ -61,8 +61,7 @@ class SummarizationMiddleware(_LangChainSummarizationMiddleware):
         else:
             if not app_config.models:
                 raise ValueError(
-                    "No models configured in config.yaml. "
-                    "SummarizationMiddleware requires at least one model."
+                    "No models configured in config.yaml. SummarizationMiddleware requires at least one model."
                 )
             model_cfg = app_config.models[0]
 

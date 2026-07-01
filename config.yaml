@@ -95,43 +95,21 @@ middleware:
       enabled: true
       kwargs:
         log_interval: 1
-    # DeepAgents 已自动注入 SummarizationMiddleware，此处无需重复声明，
-    # 否则会因为 middleware name 重复而触发 AssertionError。
-    # - name: ScaffoldSummarizationMiddleware
+    # DeepAgents 已自动注入原生 SummarizationMiddleware（根据模型 profile 自动选择
+    # trigger/keep，并带 backend offload）。如果想自定义摘要参数，请：
+    #   1. 在下方 profiles.harness.<name>.excluded_middleware 中加入
+    #      "SummarizationMiddleware" 以排除默认版本；
+    #   2. 取消注释下面的 DeepAgentsSummarizationMiddleware 并调整 kwargs。
+    # - name: DeepAgentsSummarizationMiddleware
     #   enabled: true
     #   kwargs:
     #     model_name: null
     #     trigger:
-    #       - ["messages", 20]
-    #     keep: ["messages", 4]
+    #       - ["messages", 30]
+    #     keep: ["messages", 5]
+    #     summary_prompt: null
     #     trim_tokens_to_summarize: 4000
-    # 韧性中间件（模型重试、工具重试、模型回退）
-    # 按需取消注释并调整 fallback_models 为你的实际模型名称。
-    # - name: ModelFallbackMiddleware
-    #   enabled: true
-    #   kwargs:
-    #     models: $config.models
-    #     fallback_models:
-    #       - fallback-model-name
-    # - name: ModelRetryMiddleware
-    #   enabled: true
-    #   kwargs:
-    #     max_retries: 2
-    #     backoff_factor: 2.0
-    #     initial_delay: 1.0
-    #     max_delay: 60.0
-    #     jitter: true
-    #     retry_on_status_codes: [429, 502, 503, 504]
-    # - name: ToolRetryMiddleware
-    #   enabled: true
-    #   kwargs:
-    #     max_retries: 1
-    #     backoff_factor: 2.0
-    #     initial_delay: 1.0
-    #     max_delay: 60.0
-    #     jitter: true
-    #     retry_on_status_codes: [429, 502, 503, 504]
-
+    #     token_counter: null
     # 韧性中间件（模型重试、工具重试、模型回退）
     # 按需取消注释并调整 fallback_models 为你的实际模型名称。
     # - name: ModelFallbackMiddleware

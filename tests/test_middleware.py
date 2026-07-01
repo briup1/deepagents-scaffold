@@ -51,7 +51,7 @@ class TestScaffoldSummarizationMiddleware:
     def test_alias_resolves(self):
         registry = get_middleware_registry()
         cls = registry.resolve("ScaffoldSummarizationMiddleware")
-        assert cls.__name__ == "SummarizationMiddleware"
+        assert cls.__name__ == "ScaffoldSummarizationMiddleware"
 
     def test_wrapper_injects_model_from_config(self, monkeypatch):
         import scaffold.infra.config.app_config as app_config_module
