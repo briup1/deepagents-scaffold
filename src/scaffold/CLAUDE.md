@@ -1,19 +1,19 @@
 # 后端项目指南
 
-本文件为 Claude Code 在后端项目 `src/scaffold/` 中工作时提供指引。
+本文件聚焦 `src/scaffold/` 内的后端实现。AI 协作原则、安全红线、跨前后端验证闭环、环境变量配置见根目录 `CLAUDE.md`。
 
 ## 项目简介
 
-基于 DeepAgents SDK 的多 Agent 后端服务。提供 FastAPI 网关、Agent 工厂、中间件链、记忆系统和流式响应。
+基于 DeepAgents SDK 的多 Agent 后端服务。提供 FastAPI 网关、Agent 工厂、中间件链、记忆系统、通道适配和流式响应。
 
 ## 项目结构
 
 ```
 src/scaffold/
-├── api/           # 网关层：FastAPI 路由与中间件
+├── api/           # 网关层：FastAPI 路由与 HTTP 中间件
 ├── core/          # 运行时层：DeepAgents SDK 集成
-├── infra/         # 基础设施层：配置、模型、日志、通道
-├── plugins/       # 扩展：自定义工具和技能
+├── infra/         # 基础设施层：配置、模型、日志、通道、提示词
+├── plugins/       # 扩展：自定义工具和 SKILL.md
 └── runtime/       # 运行时基础设施：Worker、StreamBridge
 ```
 
@@ -175,7 +175,7 @@ tools:
 
 ## 添加自定义中间件
 
-创建一个 `AgentMiddleware` 子类。可以放在任何可导入的位置。在 `config.yaml` 中通过别名注册（如果已加入 `MiddlewareRegistry`）或完整导入路径注册：
+创建一个 `AgentMiddleware` 子类。可以放在任何可导入位置。在 `config.yaml` 中通过别名注册（如果已加入 `MiddlewareRegistry`）或完整导入路径注册：
 
 ```yaml
 middleware:
@@ -208,9 +208,10 @@ middleware:
 6. `runtime/worker.py:run_worker()` 以 asyncio Task 执行 agent
 7. SSE 端点从 `StreamBridge` 消费事件，返回给客户端
 
-## 注意事项
+## 日志与调试
 
+- 结构化 JSON 日志配置在 `infra/logging/`
+- 运行日志写入项目根目录 `logs/`
 - 配置变更无需重启服务（热重载）
 - 工具和中间件支持动态加载
 - 记忆系统支持跨会话持久化
-- 流式响应使用 SSE 协议
