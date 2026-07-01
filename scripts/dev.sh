@@ -8,13 +8,19 @@ cd "$(dirname "$0")/.."
 echo "=== DeepAgents Scaffold Dev Mode ==="
 echo ""
 
+# Clean previous development logs for a focused debugging session
+if [ -d logs ]; then
+    echo "[1/3] Cleaning previous development logs..."
+    rm -f logs/*.log
+fi
+
 # Start backend in background
-echo "[1/2] Starting FastAPI backend on http://localhost:8000"
+echo "[2/3] Starting FastAPI backend on http://localhost:8000"
 PYTHONPATH=src uvicorn scaffold.api.app:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
 # Start frontend
-echo "[2/2] Starting Vite frontend on http://localhost:3000"
+echo "[3/3] Starting Vite frontend on http://localhost:3000"
 cd src/web
 npm install --silent 2>/dev/null || true
 npm run dev &
