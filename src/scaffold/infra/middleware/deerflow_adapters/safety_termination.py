@@ -146,13 +146,15 @@ def _detect_safety_termination(message: AIMessage, signals: frozenset[str]) -> d
     if finish_reason and finish_reason in signals:
         return {"reason_field": "finish_reason", "reason_value": finish_reason}
 
-    content = str(message.content or "").lower()
+    content = str(message.content or "")
+    content_lower = content.lower()
     for sig in signals:
-        if sig.lower() in content:
-            return {"reason_field": "content", "reason_value": sig}
+        idx = content_lower.find(sig.lower())
+        if idx != -1:
+            return {"reason_field": "content", "reason_value": content[idx : idx + len(sig)]}
 
     # 常见拒绝话术：同时包含 "i cannot" 和 "policy"
-    if "i cannot" in content and "policy" in content:
+    if "i cannot" in content_lower and "policy" in content_lower:
         return {"reason_field": "content", "reason_value": "refusal_pattern"}
 
     return None
