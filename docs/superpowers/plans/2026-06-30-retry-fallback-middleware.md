@@ -55,7 +55,7 @@
   - `_build_retry_predicate(status_codes: list[int]) -> Callable[[Exception], bool]`
   - `_extract_thread_id(request: ModelRequest[Any]) -> str | None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for shared retry utilities."""
@@ -110,13 +110,13 @@ class TestExtractThreadId:
         assert _extract_thread_id(FakeRequest()) is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_retry_utils.py -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'scaffold.infra.middleware.deerflow_adapters._retry_utils'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 """Shared helpers for retry and fallback middleware adapters."""
@@ -185,13 +185,13 @@ def _extract_thread_id(request: Any) -> str | None:
     return None
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_retry_utils.py -v`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 uv run ruff format src/scaffold/infra/middleware/deerflow_adapters/_retry_utils.py tests/infra/middleware/deerflow_adapters/test_retry_utils.py
@@ -215,7 +215,7 @@ git commit -m "feat: add shared retry predicate helper for resilience middleware
 - Produces:
   - `ModelRetryAdapter` class registered as `ModelRetryMiddleware` alias.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for ModelRetryAdapter."""
@@ -321,13 +321,13 @@ class TestModelRetryAdapter:
         assert "429" in caplog.text
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_model_retry.py -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'scaffold.infra.middleware.deerflow_adapters.model_retry'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/scaffold/infra/middleware/deerflow_adapters/model_retry.py`:
 
@@ -436,13 +436,13 @@ Modify `src/scaffold/infra/middleware/registry.py` to add the `ModelRetryMiddlew
     "ModelRetryMiddleware": "scaffold.infra.middleware.deerflow_adapters.model_retry:ModelRetryAdapter",
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_model_retry.py -v`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 uv run ruff format src/scaffold/infra/middleware/deerflow_adapters/model_retry.py tests/infra/middleware/deerflow_adapters/test_model_retry.py src/scaffold/infra/middleware/registry.py
@@ -466,7 +466,7 @@ git commit -m "feat: add ModelRetryAdapter with registry alias"
 - Produces:
   - `ToolRetryAdapter` class registered as `ToolRetryMiddleware` alias.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for ToolRetryAdapter."""
@@ -572,13 +572,13 @@ class TestToolRetryAdapter:
         assert "502" in caplog.text
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_tool_retry.py -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'scaffold.infra.middleware.deerflow_adapters.tool_retry'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/scaffold/infra/middleware/deerflow_adapters/tool_retry.py`:
 
@@ -687,13 +687,13 @@ Modify `src/scaffold/infra/middleware/registry.py` to add the `ToolRetryMiddlewa
     "ToolRetryMiddleware": "scaffold.infra.middleware.deerflow_adapters.tool_retry:ToolRetryAdapter",
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_tool_retry.py -v`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 uv run ruff format src/scaffold/infra/middleware/deerflow_adapters/tool_retry.py tests/infra/middleware/deerflow_adapters/test_tool_retry.py src/scaffold/infra/middleware/registry.py
@@ -718,7 +718,7 @@ git commit -m "feat: add ToolRetryAdapter with registry alias"
 - Produces:
   - `ModelFallbackAdapter` class registered as `ModelFallbackMiddleware` alias.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for ModelFallbackAdapter."""
@@ -803,13 +803,13 @@ class TestModelFallbackAdapter:
         assert result is expected
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_model_fallback.py -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'scaffold.infra.middleware.deerflow_adapters.model_fallback'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/scaffold/infra/middleware/deerflow_adapters/model_fallback.py`:
 
@@ -917,13 +917,13 @@ Modify `src/scaffold/infra/middleware/registry.py` to add the `ModelFallbackMidd
     "ModelFallbackMiddleware": "scaffold.infra.middleware.deerflow_adapters.model_fallback:ModelFallbackAdapter",
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/infra/middleware/deerflow_adapters/test_model_fallback.py -v`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 uv run ruff format src/scaffold/infra/middleware/deerflow_adapters/model_fallback.py tests/infra/middleware/deerflow_adapters/test_model_fallback.py src/scaffold/infra/middleware/registry.py
@@ -940,7 +940,7 @@ git commit -m "feat: add ModelFallbackAdapter with registry alias"
 **Interfaces:**
 - Consumes: aliases registered in `registry.py`.
 
-- [ ] **Step 1: Add commented example middleware declarations**
+- [x] **Step 1: Add commented example middleware declarations**
 
 Append the following block to the end of `middleware.items` in `config.yaml`, after `ScaffoldSummarizationMiddleware`:
 
@@ -973,13 +973,13 @@ Append the following block to the end of `middleware.items` in `config.yaml`, af
     #     retry_on_status_codes: [429, 502, 503, 504]
 ```
 
-- [ ] **Step 2: Verify config loads and existing tests still pass**
+- [x] **Step 2: Verify config loads and existing tests still pass**
 
 Run: `uv run pytest tests/test_config.py tests/test_middleware.py -v`
 
 Expected: PASS (config loads, registry aliases are resolvable).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add config.yaml
