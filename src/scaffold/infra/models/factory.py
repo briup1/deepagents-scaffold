@@ -10,6 +10,8 @@ import logging
 import os
 from typing import Any
 
+import httpx
+
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from scaffold.infra.config.model_config import ModelConfig
@@ -37,6 +39,19 @@ def _import_class(class_path: str) -> type:
     module_path, class_name = class_path.split(":")
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
+
+
+def _supports_http_client_fields(cls: type) -> bool:
+    """判断模型类是否接受 http_client / http_async_client 参数。"""
+    return hasattr(cls, "model_fields") and {
+        "http_client",
+        "http_async_client",
+    } <= set(cls.model_fields)
+
+
+def _build_proxy_free_clients() -> tuple[httpx.Client, httpx.AsyncClient]:
+    """构造显式禁用代理的同步/异步 httpx client。"""
+    return httpx.Client(proxy=None), httpx.AsyncClient(proxy=None)
 
 
 def _maybe_patch_deepseek(cls: type, config: ModelConfig) -> type:
@@ -129,6 +144,21 @@ def create_chat_model(
 
     # 解析嵌套值中剩余的 $ENV_VAR
     kwargs = _resolve_env_variables(kwargs)
+
+    # 若配置显式要求绕过代理，且模型类支持自定义 httpx client，则传入无代理 client
+    if config.bypass_proxy:
+        if _supports_http_client_fields(cls):
+            sync_client, async_client = _build_proxy_free_clients()
+            kwargs["http_client"] = sync_client
+            kwargs["http_async_client"] = async_client
+            logger.debug("Using proxy-free httpx clients for model '%s'", config.name)
+        else:
+            logger.warning(
+                "bypass_proxy=True is set for model '%s' but provider '%s' does not support "
+                "custom http_client/http_async_client; system proxy env vars may still apply",
+                config.name,
+                config.use,
+            )
 
     logger.debug("Creating chat model %s with kwargs %s", config.name, list(kwargs.keys()))
     return cls(**kwargs)

@@ -21,6 +21,8 @@ models:
     # use: langchain_deepseek:ChatDeepSeek
     api_key: $DEEPSEEK_API_KEY
     model: deepseek-v4-pro
+    # 若设为 true，模型调用将忽略 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY 等系统代理变量
+    # bypass_proxy: false
     # temperature: 0.7
     # max_tokens: 4096
     # supports_thinking: true
@@ -93,14 +95,16 @@ middleware:
       enabled: true
       kwargs:
         log_interval: 1
-    - name: ScaffoldSummarizationMiddleware
-      enabled: true
-      kwargs:
-        model_name: null
-        trigger:
-          - ["messages", 20]
-        keep: ["messages", 4]
-        trim_tokens_to_summarize: 4000
+    # DeepAgents 已自动注入 SummarizationMiddleware，此处无需重复声明，
+    # 否则会因为 middleware name 重复而触发 AssertionError。
+    # - name: ScaffoldSummarizationMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     model_name: null
+    #     trigger:
+    #       - ["messages", 20]
+    #     keep: ["messages", 4]
+    #     trim_tokens_to_summarize: 4000
     # 韧性中间件（模型重试、工具重试、模型回退）
     # 按需取消注释并调整 fallback_models 为你的实际模型名称。
     # - name: ModelFallbackMiddleware

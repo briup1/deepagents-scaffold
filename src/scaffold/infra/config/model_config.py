@@ -27,3 +27,7 @@ class ModelConfig(BaseModel):
     supports_vision: bool = Field(default=False)
     # 启用 thinking 时的 provider 专属覆盖参数
     when_thinking_enabled: dict[str, Any] | None = Field(default=None)
+    bypass_proxy: bool = Field(
+        default=False,
+        description="If True, model calls bypass HTTP(S)_PROXY env vars by using proxy-free httpx clients",
+    )

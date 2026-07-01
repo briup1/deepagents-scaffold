@@ -22,6 +22,7 @@ from scaffold.api.routers import agents, health, runs, state, threads, tools
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.logging.config import configure_logging
 from scaffold.infra.logging.middleware import LoggingMiddleware
+from scaffold.infra.proxy import configure_proxy_environment
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """应用生命周期处理器。"""
+    configure_proxy_environment()
     try:
         config = get_app_config()
         configure_logging(
