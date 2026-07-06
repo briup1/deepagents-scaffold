@@ -85,7 +85,7 @@ middleware:
         inject_date: true
         inject_memory: true
         memory_sources:
-          - ./data/memory.json
+          - ./data/memory.md
     - name: LoopDetectionMiddleware
       enabled: true
       kwargs:
