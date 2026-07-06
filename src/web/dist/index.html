@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepAgents Scaffold</title>
+  <link rel="stylesheet" crossorigin href="/assets/index-BaSrMng3.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>DeepAgents</h1>
+        <span class="badge">Scaffold</span>
+      </div>
+
+      <div class="section">
+        <label>选择 Agent</label>
+        <select id="agent-select">
+          <option value="default">default</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <label>选择模型</label>
+        <select id="model-select">
+          <option value="">默认</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <label>会话列表</label>
+        <button id="new-thread-btn" class="btn-primary">+ 新会话</button>
+        <ul id="thread-list" class="thread-list"></ul>
+      </div>
+
+      <div class="section">
+        <label>状态</label>
+        <div id="status-indicator" class="status disconnected">连接中...</div>
+      </div>
+    </aside>
+
+    <!-- Main Chat -->
+    <main class="chat-container">
+      <div class="chat-header">
+        <span id="current-thread">新会话</span>
+        <div class="header-actions">
+          <button id="clear-chat" class="btn-icon" title="清空">清空</button>
+          <button id="toggle-stream" class="btn-icon active" title="流式输出">流式</button>
+        </div>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <div class="input-area">
+        <div class="input-row">
+          <textarea id="message-input" placeholder="输入消息..." rows="1"></textarea>
+          <button id="send-btn" class="btn-send">发送</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { sendMessageStream } from '../api'
+import { useEffect, useRef } from 'react'
 
 interface Message {
   role: 'user' | 'assistant' | 'tool'
@@ -8,16 +7,10 @@ interface Message {
 
 export default function Chat({
   messages,
-  setMessages,
-  assistantId,
   isLoading,
-  setIsLoading,
 }: {
   messages: Message[]
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
-  assistantId: string
   isLoading: boolean
-  setIsLoading: (v: boolean) => void
 }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 

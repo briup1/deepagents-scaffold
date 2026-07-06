@@ -126,6 +126,7 @@ def create_chat_model(
             "supports_thinking",
             "supports_vision",
             "when_thinking_enabled",
+            "bypass_proxy",
         }
         and v is not None
     }

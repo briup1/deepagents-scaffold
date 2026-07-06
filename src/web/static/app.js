@@ -321,14 +321,25 @@ function accumulateToolCalls(data, current) {
   return current;
 }
 
+function extractLastAssistantMessage(data) {
+  if (data && data.messages && Array.isArray(data.messages)) {
+    for (let i = data.messages.length - 1; i >= 0; i--) {
+      const m = data.messages[i];
+      const t = m.type || m.role;
+      if (t === 'ai' || t === 'assistant') {
+        return m;
+      }
+    }
+  }
+  return null;
+}
+
 function extractContent(data) {
   if (typeof data === 'string') return data;
   if (data && typeof data.content === 'string') return data.content;
   if (data && typeof data.text === 'string') return data.text;
-  if (data && data.messages && Array.isArray(data.messages)) {
-    const last = data.messages[data.messages.length - 1];
-    if (last && typeof last.content === 'string') return last.content;
-  }
+  const last = extractLastAssistantMessage(data);
+  if (last && typeof last.content === 'string') return last.content;
   if (data && data.output && typeof data.output.content === 'string') {
     return data.output.content;
   }
@@ -340,11 +351,9 @@ function extractReasoning(data) {
   if (data && data.additional_kwargs && data.additional_kwargs.reasoning_content) {
     return data.additional_kwargs.reasoning_content;
   }
-  if (data && data.messages && Array.isArray(data.messages)) {
-    const last = data.messages[data.messages.length - 1];
-    if (last && last.additional_kwargs && last.additional_kwargs.reasoning_content) {
-      return last.additional_kwargs.reasoning_content;
-    }
+  const last = extractLastAssistantMessage(data);
+  if (last && last.additional_kwargs && last.additional_kwargs.reasoning_content) {
+    return last.additional_kwargs.reasoning_content;
   }
   return '';
 }
@@ -356,10 +365,8 @@ function extractToolCalls(data) {
   if (data && data.additional_kwargs && data.additional_kwargs.tool_calls) {
     return data.additional_kwargs.tool_calls;
   }
-  if (data && data.messages && Array.isArray(data.messages)) {
-    const last = data.messages[data.messages.length - 1];
-    if (last && last.tool_calls) return last.tool_calls;
-  }
+  const last = extractLastAssistantMessage(data);
+  if (last && last.tool_calls) return last.tool_calls;
   return [];
 }
 

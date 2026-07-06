@@ -26,13 +26,30 @@ export default function App() {
         [...messages, userMsg],
         (event) => {
           const ev = event as Record<string, unknown>
+
+          // Backend uses stream_mode="values": each event is a state snapshot
+          // with a "messages" array. Extract the latest assistant/ai message.
+          let content = ''
           if (typeof ev.content === 'string') {
-            assistantContent += ev.content
-            setMessages((prev) => {
-              const filtered = prev.filter((m) => m.role !== 'assistant' || m.content !== assistantContent.slice(0, -ev.content.length))
-              return [...filtered, { role: 'assistant', content: assistantContent }]
-            })
+            content = ev.content
+          } else if (Array.isArray(ev.messages)) {
+            for (let i = ev.messages.length - 1; i >= 0; i--) {
+              const m = ev.messages[i] as Record<string, unknown>
+              const t = (m.type as string) || (m.role as string)
+              if (t === 'ai' || t === 'assistant') {
+                content = typeof m.content === 'string' ? m.content : ''
+                break
+              }
+            }
           }
+
+          if (!content) return
+
+          assistantContent = content
+          setMessages((prev) => {
+            const withoutPending = prev.filter((m) => m.role !== 'assistant')
+            return [...withoutPending, { role: 'assistant', content: assistantContent }]
+          })
         },
         assistantId,
       )
@@ -58,10 +75,7 @@ export default function App() {
           <div className="flex-1 flex flex-col p-4">
             <Chat
               messages={messages}
-              setMessages={setMessages}
-              assistantId={assistantId}
               isLoading={isLoading}
-              setIsLoading={setIsLoading}
             />
             <MessageInput onSend={handleSend} disabled={isLoading} />
           </div>
