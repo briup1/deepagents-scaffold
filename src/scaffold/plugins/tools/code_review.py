@@ -239,12 +239,22 @@ async def write_file(relative_path: str, content: str, append: bool = False) -> 
 
     if path.exists() and not append:
         backup_path = path.with_suffix(path.suffix + ".bak")
-        shutil.copy2(path, backup_path)
+        try:
+            shutil.copy2(path, backup_path)
+        except OSError as exc:
+            return f"错误：备份文件失败：{relative_path}，{exc}"
 
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return f"错误：创建目录失败：{path.parent}，{exc}"
+
     mode = "a" if append else "w"
-    with path.open(mode=mode, encoding="utf-8") as handle:
-        handle.write(content)
+    try:
+        with path.open(mode=mode, encoding="utf-8") as handle:
+            handle.write(content)
+    except OSError as exc:
+        return f"错误：写入文件失败：{relative_path}，{exc}"
 
     action = "追加到" if append else "写入"
     return f"成功{action}文件：{relative_path}"

@@ -135,3 +135,62 @@ async def test_write_file_creates_backup(monkeypatch, tmp_path: Path):
     assert "成功写入" in result
     assert target.read_text(encoding="utf-8") == "new"
     assert (tmp_path / "existing.txt.bak").read_text(encoding="utf-8") == "old"
+
+
+async def test_write_file_backup_oserror(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    target = tmp_path / "existing.txt"
+    target.write_text("old", encoding="utf-8")
+    backup_dir = tmp_path / "existing.txt.bak"
+    backup_dir.mkdir()
+    backup_dir.chmod(0o000)
+    try:
+        result = await write_file(relative_path="existing.txt", content="new")
+    finally:
+        backup_dir.chmod(0o755)
+    assert result.startswith("错误：")
+    assert "existing.txt" in result
+    assert target.read_text(encoding="utf-8") == "old"
+
+
+async def test_write_file_mkdir_oserror(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    result = await write_file(relative_path="a.txt/sub.txt", content="hello")
+    assert result.startswith("错误：")
+    assert "a.txt" in result
+    assert not (tmp_path / "a.txt" / "sub.txt").exists()
+
+
+async def test_write_file_directory_collision(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    (tmp_path / "target_dir").mkdir()
+    result = await write_file(relative_path="target_dir", content="hello")
+    assert result.startswith("错误：")
+    assert "target_dir" in result
+
+
+async def test_write_file_write_oserror(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    target = tmp_path / "readonly.txt"
+    target.write_text("old", encoding="utf-8")
+    target.chmod(0o444)
+    try:
+        result = await write_file(relative_path="readonly.txt", content="new")
+    finally:
+        target.chmod(0o644)
+    assert result.startswith("错误：")
+    assert "readonly.txt" in result
+    assert target.read_text(encoding="utf-8") == "old"
