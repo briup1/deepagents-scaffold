@@ -9,6 +9,7 @@ from pathlib import Path
 
 import asyncio
 import ast
+import difflib
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -156,3 +157,33 @@ async def explain_symbol(relative_path: str, symbol_name: str) -> str:
             return f"符号 `{symbol_name}` 定义：\n{snippet}{doc}"
 
     return f"未找到符号 `{symbol_name}`。"
+
+
+async def generate_patch(original_relative_path: str, modified_relative_path: str) -> str:
+    """生成两个文件之间的统一 diff。
+
+    Args:
+        original_relative_path: 原始文件路径。
+        modified_relative_path: 修改后的文件路径。
+
+    Returns:
+        unified diff 字符串，或错误信息。
+    """
+    original_path = _resolve_project_path(original_relative_path)
+    modified_path = _resolve_project_path(modified_relative_path)
+
+    if not original_path.exists():
+        return f"错误：原始文件不存在：{original_relative_path}"
+    if not modified_path.exists():
+        return f"错误：修改后文件不存在：{modified_relative_path}"
+
+    original_lines = original_path.read_text(encoding="utf-8").splitlines()
+    modified_lines = modified_path.read_text(encoding="utf-8").splitlines()
+
+    diff = difflib.unified_diff(
+        original_lines,
+        modified_lines,
+        fromfile=original_relative_path,
+        tofile=modified_relative_path,
+    )
+    return "\n".join(diff)

@@ -8,6 +8,7 @@ import pytest
 
 from scaffold.plugins.tools.code_review import (
     explain_symbol,
+    generate_patch,
     list_files,
     read_file,
     run_pytest,
@@ -81,3 +82,22 @@ async def test_run_pytest_runs_tests(monkeypatch, tmp_path: Path):
     )
     result = await run_pytest(relative_path="test_dummy.py")
     assert "passed" in result.lower()
+
+
+async def test_generate_patch(monkeypatch, tmp_path: Path):
+    original = tmp_path / "original.py"
+    original.write_text("def foo():\n    return 1\n", encoding="utf-8")
+    modified = tmp_path / "modified.py"
+    modified.write_text("def foo():\n    return 2\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await generate_patch(
+        original_relative_path="original.py",
+        modified_relative_path="modified.py",
+    )
+    assert "--- original.py" in result
+    assert "+++ modified.py" in result
+    assert "-    return 1" in result
+    assert "+    return 2" in result
