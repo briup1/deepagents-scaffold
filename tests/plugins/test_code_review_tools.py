@@ -13,6 +13,7 @@ from scaffold.plugins.tools.code_review import (
     read_file,
     run_pytest,
     run_ruff,
+    write_file,
 )
 
 
@@ -101,3 +102,36 @@ async def test_generate_patch(monkeypatch, tmp_path: Path):
     assert "+++ modified.py" in result
     assert "-    return 1" in result
     assert "+    return 2" in result
+
+
+async def test_write_file_allowed_path(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await write_file(relative_path="allowed.txt", content="hello")
+    assert "成功写入" in result
+    assert (tmp_path / "allowed.txt").read_text(encoding="utf-8") == "hello"
+
+
+async def test_write_file_forbidden_path(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await write_file(relative_path=".env", content="secret")
+    assert "禁止写入" in result
+    assert not (tmp_path / ".env").exists()
+
+
+async def test_write_file_creates_backup(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    target = tmp_path / "existing.txt"
+    target.write_text("old", encoding="utf-8")
+    result = await write_file(relative_path="existing.txt", content="new")
+    assert "成功写入" in result
+    assert target.read_text(encoding="utf-8") == "new"
+    assert (tmp_path / "existing.txt.bak").read_text(encoding="utf-8") == "old"

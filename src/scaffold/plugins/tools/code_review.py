@@ -10,6 +10,7 @@ from pathlib import Path
 import asyncio
 import ast
 import difflib
+import shutil
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -30,6 +31,35 @@ def _resolve_project_path(relative_path: str) -> Path:
     if not target.is_relative_to(PROJECT_ROOT):
         raise ValueError(f"路径超出项目根目录：{relative_path}")
     return target
+
+
+_FORBIDDEN_FILES = {".env", "config.yaml"}
+_FORBIDDEN_SUFFIXES = {".key", ".secret", ".pem", ".p12"}
+_PROTECTED_DIRS = {"core", "infra", "api", "runtime"}
+
+
+def _validate_write_path(path: Path) -> None:
+    """检查路径是否允许写入。
+
+    Args:
+        path: 目标文件路径。
+
+    Raises:
+        ValueError: 如果路径命中禁止规则或越界。
+    """
+    if path.name in _FORBIDDEN_FILES:
+        raise ValueError(f"禁止写入文件：{path.name}")
+    if path.suffix in _FORBIDDEN_SUFFIXES:
+        raise ValueError(f"禁止写入后缀为 {path.suffix} 的文件")
+
+    resolved = path.resolve()
+    if not resolved.is_relative_to(PROJECT_ROOT):
+        raise ValueError("路径超出项目根目录")
+
+    rel_parts = resolved.relative_to(PROJECT_ROOT).parts
+    if len(rel_parts) >= 3 and rel_parts[0] == "src" and rel_parts[1] == "scaffold":
+        if rel_parts[2] in _PROTECTED_DIRS:
+            raise ValueError(f"禁止写入到 src/scaffold/{rel_parts[2]}/")
 
 
 async def read_file(relative_path: str, offset: int = 1, limit: int | None = None) -> str:
@@ -187,3 +217,34 @@ async def generate_patch(original_relative_path: str, modified_relative_path: st
         tofile=modified_relative_path,
     )
     return "\n".join(diff)
+
+
+async def write_file(relative_path: str, content: str, append: bool = False) -> str:
+    """写入或追加文件，自动备份并带安全限制。
+
+    Args:
+        relative_path: 相对于项目根目录的文件路径。
+        content: 要写入的内容。
+        append: 为 True 时追加，否则覆盖。
+
+    Returns:
+        操作结果描述，或错误信息。
+    """
+    path = _resolve_project_path(relative_path)
+
+    try:
+        _validate_write_path(path)
+    except ValueError as exc:
+        return f"错误：{exc}"
+
+    if path.exists() and not append:
+        backup_path = path.with_suffix(path.suffix + ".bak")
+        shutil.copy2(path, backup_path)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = "a" if append else "w"
+    with path.open(mode=mode, encoding="utf-8") as handle:
+        handle.write(content)
+
+    action = "追加到" if append else "写入"
+    return f"成功{action}文件：{relative_path}"
