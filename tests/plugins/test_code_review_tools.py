@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from scaffold.plugins.tools.code_review import list_files, read_file
+from scaffold.plugins.tools.code_review import list_files, read_file, run_ruff
 
 
 @pytest.fixture
@@ -38,3 +38,14 @@ async def test_list_files(monkeypatch, tmp_path: Path):
     result = await list_files(relative_path=".")
     assert "[FILE] a.txt" in result
     assert "[DIR] b_dir" in result
+
+
+async def test_run_ruff_reports_issues(monkeypatch, tmp_path: Path):
+    bad_file = tmp_path / "bad.py"
+    bad_file.write_text("import os\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await run_ruff(relative_path="bad.py")
+    assert "F401" in result or "unused" in result.lower()
