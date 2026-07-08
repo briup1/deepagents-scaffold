@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from scaffold.plugins.tools.code_review import list_files, read_file, run_ruff
+from scaffold.plugins.tools.code_review import list_files, read_file, run_pytest, run_ruff
 
 
 @pytest.fixture
@@ -49,3 +49,14 @@ async def test_run_ruff_reports_issues(monkeypatch, tmp_path: Path):
     )
     result = await run_ruff(relative_path="bad.py")
     assert "F401" in result or "unused" in result.lower()
+
+
+async def test_run_pytest_runs_tests(monkeypatch, tmp_path: Path):
+    test_file = tmp_path / "test_dummy.py"
+    test_file.write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await run_pytest(relative_path="test_dummy.py")
+    assert "passed" in result.lower()

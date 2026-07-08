@@ -97,3 +97,24 @@ async def run_ruff(relative_path: str) -> str:
     )
     stdout, stderr = await proc.communicate()
     return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
+
+
+async def run_pytest(relative_path: str) -> str:
+    """对目标运行 pytest。
+
+    Args:
+        relative_path: 相对于项目根目录的测试目标。
+
+    Returns:
+        pytest 的退出码和输出。
+    """
+    path = _resolve_project_path(relative_path)
+    proc = await asyncio.create_subprocess_exec(
+        "pytest",
+        str(path),
+        "-v",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
