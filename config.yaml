@@ -52,7 +52,21 @@ agent:
 # ---------------------------------------------------------------------------
 # 在此注册自定义工具，每个工具引用一个 Python 导入路径。
 # 工具必须是异步可调用对象，接受单个 dict 参数。
-tools: []
+tools:
+  - name: read_file
+    use: scaffold.plugins.tools.code_review:read_file
+  - name: list_files
+    use: scaffold.plugins.tools.code_review:list_files
+  - name: run_ruff
+    use: scaffold.plugins.tools.code_review:run_ruff
+  - name: run_pytest
+    use: scaffold.plugins.tools.code_review:run_pytest
+  - name: explain_symbol
+    use: scaffold.plugins.tools.code_review:explain_symbol
+  - name: generate_patch
+    use: scaffold.plugins.tools.code_review:generate_patch
+  - name: write_file
+    use: scaffold.plugins.tools.code_review:write_file
 
 # 工具分组，按类别组织工具并选择性启用。
 tool_groups: []
@@ -63,7 +77,7 @@ tool_groups: []
 # 技能是定义在 plugins/skills/ 目录下 SKILL.md 文件中的可复用行为。
 # 设置包含技能定义的目录路径。
 skills:
-  path: ./plugins/skills
+  path: src/scaffold/plugins/skills
   container_path: /mnt/skills
 
 # ---------------------------------------------------------------------------
@@ -157,7 +171,12 @@ profiles:
       system_prompt_suffix: "请始终遵循最佳实践并编写单元测试。"
       excluded_middleware: []
       excluded_tools: []
-  default_harness: coding
+    - name: code_reviewer
+      base_system_prompt: "你是一名结对代码审查员。你的目标是通过读取代码、运行静态分析和测试、委派子 Agent，帮助用户发现质量问题并生成改进方案。"
+      system_prompt_suffix: "请使用 Markdown 输出结构化的审查报告。在应用 patch 前，默认先询问用户确认；如果用户明确说'直接改'或'应用 patch'，则可以跳过确认。禁止写入 .env、config.yaml、密钥文件以及 core/infra/api/runtime/ 目录。"
+      excluded_middleware: []
+      excluded_tools: []
+  default_harness: code_reviewer
 
 # ---------------------------------------------------------------------------
 # 执行后端
@@ -208,6 +227,21 @@ subagent_definitions:
     - name: coder
       description: "编写、审查和调试代码"
       system_prompt: "你是一名资深软件工程师。编写清晰、可测试的代码。使用可用的文件工具读写代码。"
+      enabled: true
+    - name: reviewer
+      description: "检查 bug、风格和可维护性"
+      system_prompt: "你是一名严格的代码审查员。仔细阅读代码，检查 bug、风格、类型注解、异常处理、文档、测试覆盖和可维护性。用 Markdown 输出发现清单，每条包含位置、描述和建议。"
+      tools: ["read_file", "list_files", "run_ruff", "explain_symbol"]
+      enabled: true
+    - name: tester
+      description: "生成并运行测试"
+      system_prompt: "你是一名测试工程师。阅读代码后，为关键路径编写 pytest 单元测试，写入 tests/ 目录，然后运行测试并报告结果。"
+      tools: ["read_file", "run_pytest", "write_file"]
+      enabled: true
+    - name: refactorer
+      description: "提出并应用重构建议"
+      system_prompt: "你是一名重构专家。根据审查意见，编写修改后的文件版本，使用 generate_patch 生成统一 diff，并在用户确认后使用 write_file 应用修改。"
+      tools: ["read_file", "explain_symbol", "generate_patch", "write_file"]
       enabled: true
 
 # ---------------------------------------------------------------------------
