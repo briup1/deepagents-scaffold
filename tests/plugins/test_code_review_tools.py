@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from scaffold.plugins.tools.code_review import list_files, read_file, run_pytest, run_ruff
+from scaffold.plugins.tools.code_review import (
+    explain_symbol,
+    list_files,
+    read_file,
+    run_pytest,
+    run_ruff,
+)
 
 
 @pytest.fixture
@@ -49,6 +55,21 @@ async def test_run_ruff_reports_issues(monkeypatch, tmp_path: Path):
     )
     result = await run_ruff(relative_path="bad.py")
     assert "F401" in result or "unused" in result.lower()
+
+
+async def test_explain_symbol_finds_function(monkeypatch, tmp_path: Path):
+    source_file = tmp_path / "module.py"
+    source_file.write_text(
+        'def add(a: int, b: int) -> int:\n    """Return sum."""\n    return a + b\n\nclass Box:\n    pass\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await explain_symbol(relative_path="module.py", symbol_name="add")
+    assert "def add" in result
+    assert "Return sum" in result
 
 
 async def test_run_pytest_runs_tests(monkeypatch, tmp_path: Path):

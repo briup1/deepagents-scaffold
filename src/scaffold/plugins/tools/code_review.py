@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import asyncio
+import ast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -118,3 +119,40 @@ async def run_pytest(relative_path: str) -> str:
     )
     stdout, stderr = await proc.communicate()
     return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
+
+
+async def explain_symbol(relative_path: str, symbol_name: str) -> str:
+    """解析 AST，解释函数或类定义。
+
+    Args:
+        relative_path: 相对于项目根目录的文件路径。
+        symbol_name: 要查找的函数或类名称。
+
+    Returns:
+        符号定义片段和文档字符串，或错误信息。
+    """
+    path = _resolve_project_path(relative_path)
+    if not path.exists():
+        return f"错误：文件不存在：{relative_path}"
+    if not path.is_file():
+        return f"错误：路径不是文件：{relative_path}"
+
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        return f"错误：语法错误：{exc}"
+    except Exception as exc:  # noqa: BLE001
+        return f"错误：解析失败：{exc}"
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == symbol_name:
+            lines = source.splitlines()
+            start = node.lineno - 1
+            end = node.end_lineno
+            snippet = "\n".join(f"{i + 1}: {lines[i]}" for i in range(start, end))
+            docstring = ast.get_docstring(node)
+            doc = f"\n\n文档字符串：\n{docstring}" if docstring else ""
+            return f"符号 `{symbol_name}` 定义：\n{snippet}{doc}"
+
+    return f"未找到符号 `{symbol_name}`。"
