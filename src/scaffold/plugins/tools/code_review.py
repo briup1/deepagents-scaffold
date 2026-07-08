@@ -1,0 +1,77 @@
+"""结对代码审查员工具集。
+
+提供文件读取、静态分析、测试运行、符号解释、patch 生成与安全写入能力。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _resolve_project_path(relative_path: str) -> Path:
+    """将相对路径解析为项目根目录下的绝对路径，并检查越界。
+
+    Args:
+        relative_path: 相对于项目根目录的路径。
+
+    Returns:
+        解析后的绝对路径。
+
+    Raises:
+        ValueError: 如果路径解析后超出项目根目录。
+    """
+    target = (PROJECT_ROOT / relative_path).resolve()
+    if not target.is_relative_to(PROJECT_ROOT):
+        raise ValueError(f"路径超出项目根目录：{relative_path}")
+    return target
+
+
+async def read_file(relative_path: str, offset: int = 1, limit: int | None = None) -> str:
+    """读取文件内容，支持行偏移和行数限制。
+
+    Args:
+        relative_path: 相对于项目根目录的文件路径。
+        offset: 起始行号（1 开始）。
+        limit: 最多读取行数，None 表示读取到末尾。
+
+    Returns:
+        带行号的文件内容，或错误信息。
+    """
+    path = _resolve_project_path(relative_path)
+    if not path.exists():
+        return f"错误：文件不存在：{relative_path}"
+    if not path.is_file():
+        return f"错误：路径不是文件：{relative_path}"
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        return f"错误：读取文件失败：{exc}"
+
+    lines = content.splitlines()
+    start = max(0, offset - 1)
+    end = len(lines) if limit is None else start + limit
+    selected = lines[start:end]
+
+    return "\n".join(f"{i + 1}: {line}" for i, line in enumerate(selected, start=start))
+
+
+async def list_files(relative_path: str = ".") -> str:
+    """列出目录中的文件和子目录。
+
+    Args:
+        relative_path: 相对于项目根目录的目录路径。
+
+    Returns:
+        文件和目录列表，或错误信息。
+    """
+    path = _resolve_project_path(relative_path)
+    if not path.exists():
+        return f"错误：路径不存在：{relative_path}"
+    if not path.is_dir():
+        return f"错误：路径不是目录：{relative_path}"
+
+    entries = sorted(path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
+    return "\n".join(f"{'[DIR]' if entry.is_dir() else '[FILE]'} {entry.name}" for entry in entries)
