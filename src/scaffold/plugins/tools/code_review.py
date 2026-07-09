@@ -81,7 +81,7 @@ async def read_file(relative_path: str, offset: int = 1, limit: int | None = Non
         return f"错误：路径不是文件：{relative_path}"
 
     try:
-        content = path.read_text(encoding="utf-8")
+        content = await asyncio.to_thread(path.read_text, encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         return f"错误：读取文件失败：{exc}"
 
@@ -107,8 +107,12 @@ async def list_files(relative_path: str = ".") -> str:
         return f"错误：路径不存在：{relative_path}"
     if not path.is_dir():
         return f"错误：路径不是目录：{relative_path}"
-    entries = sorted(path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
-    return "\n".join(f"{'[DIR]' if entry.is_dir() else '[FILE]'} {entry.name}" for entry in entries)
+
+    def _list_entries() -> str:
+        entries = sorted(path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
+        return "\n".join(f"{'[DIR]' if entry.is_dir() else '[FILE]'} {entry.name}" for entry in entries)
+
+    return await asyncio.to_thread(_list_entries)
 
 
 async def run_ruff(relative_path: str) -> str:
@@ -131,10 +135,13 @@ async def run_ruff(relative_path: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+    except TimeoutError:
+        proc.kill()
+        return "错误：运行 ruff 超时"
     except OSError as exc:
         return f"错误：无法运行 ruff：{exc}"
-    return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
+    return f"退出码：{proc.returncode}\n\n{stdout.decode(errors='replace')}\n{stderr.decode(errors='replace')}".strip()
 
 
 async def run_pytest(relative_path: str) -> str:
@@ -157,10 +164,13 @@ async def run_pytest(relative_path: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+    except TimeoutError:
+        proc.kill()
+        return "错误：运行 pytest 超时"
     except OSError as exc:
         return f"错误：无法运行 pytest：{exc}"
-    return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
+    return f"退出码：{proc.returncode}\n\n{stdout.decode(errors='replace')}\n{stderr.decode(errors='replace')}".strip()
 
 
 async def explain_symbol(relative_path: str, symbol_name: str) -> str:
@@ -180,8 +190,8 @@ async def explain_symbol(relative_path: str, symbol_name: str) -> str:
         return f"错误：路径不是文件：{relative_path}"
 
     try:
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        source = await asyncio.to_thread(path.read_text, encoding="utf-8")
+        tree = await asyncio.to_thread(ast.parse, source)
     except SyntaxError as exc:
         return f"错误：语法错误：{exc}"
     except Exception as exc:  # noqa: BLE001
@@ -222,15 +232,20 @@ async def generate_patch(original_relative_path: str, modified_relative_path: st
     if not modified_path.is_file():
         return f"错误：修改后路径不是文件：{modified_relative_path}"
 
-    original_lines = original_path.read_text(encoding="utf-8").splitlines()
-    modified_lines = modified_path.read_text(encoding="utf-8").splitlines()
+    try:
+        original_lines = (await asyncio.to_thread(original_path.read_text, encoding="utf-8")).splitlines()
+        modified_lines = (await asyncio.to_thread(modified_path.read_text, encoding="utf-8")).splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        return f"错误：读取文件失败：{exc}"
 
-    diff = difflib.unified_diff(
+    diff = await asyncio.to_thread(
+        difflib.unified_diff,
         original_lines,
         modified_lines,
         fromfile=original_relative_path,
         tofile=modified_relative_path,
     )
+
     return "\n".join(diff)
 
 
@@ -252,22 +267,29 @@ async def write_file(relative_path: str, content: str, append: bool = False) -> 
     except ValueError as exc:
         return f"错误：{exc}"
 
+    if path.is_dir():
+        return f"错误：路径是目录，无法写入：{relative_path}"
+
     if path.exists() and not append:
         backup_path = path.with_suffix(path.suffix + ".bak")
         try:
-            shutil.copy2(path, backup_path)
+            await asyncio.to_thread(shutil.copy2, path, backup_path)
         except OSError as exc:
             return f"错误：备份文件失败：{relative_path}，{exc}"
 
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
     except OSError as exc:
         return f"错误：创建目录失败：{path.parent}，{exc}"
 
     mode = "a" if append else "w"
     try:
-        with path.open(mode=mode, encoding="utf-8") as handle:
-            handle.write(content)
+
+        def _write() -> None:
+            with path.open(mode=mode, encoding="utf-8") as handle:
+                handle.write(content)
+
+        await asyncio.to_thread(_write)
     except OSError as exc:
         return f"错误：写入文件失败：{relative_path}，{exc}"
 
