@@ -56,3 +56,7 @@ description: 结对代码审查员审查清单与输出模板
 - `tester`：用于生成并运行测试。
 - `refactorer`：用于提出重构并生成 patch。
 - 主 Agent 负责整合三方结果，输出 Markdown 报告并与用户确认修改。
+
+## 测试范围建议
+
+调用 `run_pytest` 时，请优先传入具体的测试文件或目录（例如 `tests/test_module.py` 或 `tests/plugins/`），避免直接运行整个 `tests/` 树，以防递归或长时间运行。

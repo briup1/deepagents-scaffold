@@ -10,10 +10,11 @@ from pathlib import Path
 import asyncio
 import ast
 import difflib
+import os
 import shutil
 import sys
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(os.environ.get("SCAFFOLD_PROJECT_ROOT") or Path(__file__).resolve().parents[4])
 
 
 def _resolve_project_path(relative_path: str) -> Path:

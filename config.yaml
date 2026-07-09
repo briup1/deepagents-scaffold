@@ -235,7 +235,7 @@ subagent_definitions:
       enabled: true
     - name: tester
       description: "生成并运行测试"
-      system_prompt: "你是一名测试工程师。阅读代码后，为关键路径编写 pytest 单元测试，写入 tests/ 目录，然后运行测试并报告结果。"
+      system_prompt: "你是一名测试工程师。阅读代码后，为关键路径编写 pytest 单元测试，写入 tests/ 目录，然后运行测试并报告结果。调用 run_pytest 时，请优先传入具体的测试文件或目录（例如 tests/test_module.py 或 tests/plugins/），避免直接运行整个 tests/ 树，以防递归或长时间运行。"
       tools: ["read_file", "run_pytest", "write_file"]
       enabled: true
     - name: refactorer

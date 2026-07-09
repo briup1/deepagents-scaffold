@@ -45,3 +45,7 @@ Agent 生成 patch 后，默认会询问你是否应用。你可以回复：
 - `.env`、`config.yaml`
 - 后缀为 `.key`、`.secret`、`.pem`、`.p12` 的文件
 - `src/scaffold/core/`、`src/scaffold/infra/`、`src/scaffold/api/`、`src/scaffold/runtime/`
+
+## 测试范围建议
+
+Agent 调用 `run_pytest` 时，建议传入具体的测试文件或目录（例如 `tests/test_module.py` 或 `tests/plugins/`），避免直接运行整个 `tests/` 树，以防递归或长时间运行。

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -230,11 +231,27 @@ async def test_write_file_write_oserror(monkeypatch, tmp_path: Path):
     )
     target = tmp_path / "readonly.txt"
     target.write_text("old", encoding="utf-8")
-    target.chmod(0o444)
-    try:
+
+    def _raise(*args, **kwargs):
+        raise OSError("permission denied")
+
+    with patch("pathlib.Path.open", side_effect=_raise):
         result = await write_file(relative_path="readonly.txt", content="new")
-    finally:
-        target.chmod(0o644)
     assert result.startswith("错误：")
     assert "readonly.txt" in result
-    assert target.read_text(encoding="utf-8") == "old"
+    with open(target, encoding="utf-8") as handle:
+        assert handle.read() == "old"
+
+
+async def test_project_root_from_env(monkeypatch, tmp_path: Path):
+    import importlib
+
+    import scaffold.plugins.tools.code_review as code_review
+
+    original_root = code_review.PROJECT_ROOT
+    monkeypatch.setenv("SCAFFOLD_PROJECT_ROOT", str(tmp_path))
+    try:
+        importlib.reload(code_review)
+        assert code_review.PROJECT_ROOT == tmp_path
+    finally:
+        code_review.PROJECT_ROOT = original_root
