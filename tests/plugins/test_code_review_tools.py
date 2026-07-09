@@ -104,6 +104,50 @@ async def test_generate_patch(monkeypatch, tmp_path: Path):
     assert "+    return 2" in result
 
 
+async def test_generate_patch_original_missing(monkeypatch, tmp_path: Path):
+    modified = tmp_path / "modified.py"
+    modified.write_text("def foo():\n    return 2\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await generate_patch(
+        original_relative_path="original.py",
+        modified_relative_path="modified.py",
+    )
+    assert "原始文件不存在" in result
+
+
+async def test_generate_patch_modified_missing(monkeypatch, tmp_path: Path):
+    original = tmp_path / "original.py"
+    original.write_text("def foo():\n    return 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await generate_patch(
+        original_relative_path="original.py",
+        modified_relative_path="modified.py",
+    )
+    assert "修改后文件不存在" in result
+
+
+async def test_generate_patch_directory_input(monkeypatch, tmp_path: Path):
+    original_dir = tmp_path / "original_dir"
+    original_dir.mkdir()
+    modified = tmp_path / "modified.py"
+    modified.write_text("def foo():\n    return 2\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "scaffold.plugins.tools.code_review.PROJECT_ROOT",
+        tmp_path,
+    )
+    result = await generate_patch(
+        original_relative_path="original_dir",
+        modified_relative_path="modified.py",
+    )
+    assert "原始路径不是文件" in result
+
+
 async def test_write_file_allowed_path(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         "scaffold.plugins.tools.code_review.PROJECT_ROOT",
@@ -168,7 +212,7 @@ async def test_write_file_mkdir_oserror(monkeypatch, tmp_path: Path):
     assert not (tmp_path / "a.txt" / "sub.txt").exists()
 
 
-async def test_write_file_directory_collision(monkeypatch, tmp_path: Path):
+async def test_write_file_directory_backup_collision(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         "scaffold.plugins.tools.code_review.PROJECT_ROOT",
         tmp_path,

@@ -11,6 +11,7 @@ import asyncio
 import ast
 import difflib
 import shutil
+import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -120,14 +121,19 @@ async def run_ruff(relative_path: str) -> str:
         ruff 的退出码和输出。
     """
     path = _resolve_project_path(relative_path)
-    proc = await asyncio.create_subprocess_exec(
-        "ruff",
-        "check",
-        str(path),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            str(path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+    except OSError as exc:
+        return f"错误：无法运行 ruff：{exc}"
     return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
 
 
@@ -141,14 +147,19 @@ async def run_pytest(relative_path: str) -> str:
         pytest 的退出码和输出。
     """
     path = _resolve_project_path(relative_path)
-    proc = await asyncio.create_subprocess_exec(
-        "pytest",
-        str(path),
-        "-v",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "pytest",
+            str(path),
+            "-v",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+    except OSError as exc:
+        return f"错误：无法运行 pytest：{exc}"
     return f"退出码：{proc.returncode}\n\n{stdout.decode()}\n{stderr.decode()}".strip()
 
 
@@ -176,9 +187,9 @@ async def explain_symbol(relative_path: str, symbol_name: str) -> str:
     except Exception as exc:  # noqa: BLE001
         return f"错误：解析失败：{exc}"
 
+    lines = source.splitlines()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == symbol_name:
-            lines = source.splitlines()
             start = node.lineno - 1
             end = node.end_lineno
             snippet = "\n".join(f"{i + 1}: {lines[i]}" for i in range(start, end))
@@ -204,8 +215,12 @@ async def generate_patch(original_relative_path: str, modified_relative_path: st
 
     if not original_path.exists():
         return f"错误：原始文件不存在：{original_relative_path}"
+    if not original_path.is_file():
+        return f"错误：原始路径不是文件：{original_relative_path}"
     if not modified_path.exists():
         return f"错误：修改后文件不存在：{modified_relative_path}"
+    if not modified_path.is_file():
+        return f"错误：修改后路径不是文件：{modified_relative_path}"
 
     original_lines = original_path.read_text(encoding="utf-8").splitlines()
     modified_lines = modified_path.read_text(encoding="utf-8").splitlines()
