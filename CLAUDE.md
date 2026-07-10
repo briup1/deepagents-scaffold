@@ -65,6 +65,7 @@ src/scaffold/
 ## 6. 关键约定
 
 - **配置驱动**：`config.yaml` 是唯一事实来源，支持热重载；禁止在代码里写死模型/工具/中间件配置
+- **依赖管理**：新增或更新 Python 依赖时，始终通过 `uv add <package>` 安装，禁止直接编辑 `pyproject.toml` 或 `uv.lock`
 - **工具必须异步**：所有 LLM 可调用工具必须是 `async` 并接受关键字参数
 - **类型完整**：Python 函数必须带类型注解；TypeScript 使用严格模式
 - **分层依赖**：禁止 `infra` 依赖 `core` 或 `api`，禁止 `core` 与 `api` 直接互调
