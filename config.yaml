@@ -42,10 +42,12 @@ models:
     display_name: Kimi K2.5
     use: langchain_moonshot:ChatMoonshot
     api_key: $MOONSHOT_API_KEY
-    model: kimi-k2.5
+    model: kimi-k2-5
     temperature: 0.6
     supports_thinking: true
     supports_vision: false
+
+  
 
 # ---------------------------------------------------------------------------
 # Agent 行为配置
