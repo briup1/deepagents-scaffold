@@ -1,0 +1,277 @@
+# DeepAgents Scaffold - 主配置文件
+# 复制此文件并根据项目需求编辑。
+
+config_version: 1
+
+# 日志级别：debug, info, warning, error
+log_level: info
+
+# ---------------------------------------------------------------------------
+# 模型配置
+# ---------------------------------------------------------------------------
+# 验证专用配置：使用本地 mock 模型，无需真实 LLM API Key。
+models:
+  - name: mock-default
+    display_name: Mock Model
+    use: scaffold.infra.models.mock:MockChatModel
+    model: mock
+    response_text: "你好！我是 DeepAgents Scaffold 的默认助手。这是一条来自 mock 模型的固定回复，用于端到端验证。"
+    sleep_ms: 30
+
+# ---------------------------------------------------------------------------
+# Agent 行为配置
+# ---------------------------------------------------------------------------
+agent:
+  # ReAct / LangGraph 循环的最大迭代次数，达到后会抛出 GraphRecursionError 作为兜底出口
+  max_iterations: 40
+  # 模型返回 error finish_reason 时，是否将该响应从对话历史中剔除，防止毒消息死循环
+  drop_error_from_history: true
+
+# ---------------------------------------------------------------------------
+# 工具配置
+# ---------------------------------------------------------------------------
+# 在此注册自定义工具，每个工具引用一个 Python 导入路径。
+# 工具必须是异步可调用对象，接受关键字参数。
+tools:
+  - name: read_file
+    use: scaffold.plugins.tools.code_review:read_file
+  - name: list_files
+    use: scaffold.plugins.tools.code_review:list_files
+  - name: run_ruff
+    use: scaffold.plugins.tools.code_review:run_ruff
+  - name: run_pytest
+    use: scaffold.plugins.tools.code_review:run_pytest
+  - name: explain_symbol
+    use: scaffold.plugins.tools.code_review:explain_symbol
+  - name: generate_patch
+    use: scaffold.plugins.tools.code_review:generate_patch
+  - name: write_file
+    use: scaffold.plugins.tools.code_review:write_file
+
+# 工具分组，按类别组织工具并选择性启用。
+tool_groups: []
+
+# ---------------------------------------------------------------------------
+# 技能配置
+# ---------------------------------------------------------------------------
+# 技能是定义在 plugins/skills/ 目录下 SKILL.md 文件中的可复用行为。
+# 设置包含技能定义的目录路径。
+skills:
+  path: src/scaffold/plugins/skills
+  container_path: /mnt/skills
+
+# ---------------------------------------------------------------------------
+# 中间件配置
+# ---------------------------------------------------------------------------
+# 声明注入到 DeepAgents agent 的有序中间件链。
+# 每个条目指定一个中间件类（或别名）和可选的 kwargs。
+# 内置别名：MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
+#   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
+#   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
+#   TodoMiddleware, TitleMiddleware, DeepAgentsSummarizationMiddleware
+middleware:
+  items:
+    - name: ToolErrorHandlingMiddleware
+      enabled: true
+    - name: DynamicContextMiddleware
+      enabled: true
+      kwargs:
+        inject_date: true
+        inject_memory: true
+        memory_sources:
+          - ./data/memory.md
+    - name: LoopDetectionMiddleware
+      enabled: true
+      kwargs:
+        warn_threshold: 3
+        hard_stop_threshold: 5
+    - name: TokenUsageMiddleware
+      enabled: true
+      kwargs:
+        log_interval: 1
+    # DeepAgents 已自动注入原生 SummarizationMiddleware（根据模型 profile 自动选择
+    # trigger/keep，并带 backend offload）。如果想自定义摘要参数，请：
+    #   1. 在下方 profiles.harness.<name>.excluded_middleware 中加入
+    #      "SummarizationMiddleware" 以排除默认版本；
+    #   2. 取消注释下面的 DeepAgentsSummarizationMiddleware 并调整 kwargs。
+    # - name: DeepAgentsSummarizationMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     model_name: null
+    #     trigger:
+    #       - ["messages", 30]
+    #     keep: ["messages", 5]
+    #     summary_prompt: null
+    #     trim_tokens_to_summarize: 4000
+    #     token_counter: null
+    # 韧性中间件（模型重试、工具重试、模型回退）
+    # 按需取消注释并调整 fallback_models 为你的实际模型名称。
+    # - name: ModelFallbackMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     models: $config.models
+    #     fallback_models:
+    #       - fallback-model-name
+    # - name: ModelRetryMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     max_retries: 2
+    #     backoff_factor: 2.0
+    #     initial_delay: 1.0
+    #     max_delay: 60.0
+    #     jitter: true
+    #     retry_on_status_codes: [429, 502, 503, 504]
+    # - name: ToolRetryMiddleware
+    #   enabled: true
+    #   kwargs:
+    #     max_retries: 1
+    #     backoff_factor: 2.0
+    #     initial_delay: 1.0
+    #     max_delay: 60.0
+    #     jitter: true
+    #     retry_on_status_codes: [429, 502, 503, 504]
+
+# ---------------------------------------------------------------------------
+# 配置画像
+# ---------------------------------------------------------------------------
+# Harness 画像根据使用场景自定义 agent 行为。
+#   base_system_prompt: 替换 BASE 提示词段（为空则使用默认模板）
+#   system_prompt_suffix: 追加到 BASE 之后
+#   excluded_middleware: 要跳过的中间件名称
+#   excluded_tools: 要移除的工具名称
+profiles:
+  harness:
+    - name: default
+      base_system_prompt: ""
+      system_prompt_suffix: ""
+      excluded_middleware: []
+      excluded_tools: []
+    - name: coding
+      base_system_prompt: "你是一名资深软件工程师，你叫紫云，擅长编写高质量代码。"
+      system_prompt_suffix: "请始终遵循最佳实践并编写单元测试。"
+      excluded_middleware: []
+      excluded_tools: []
+    - name: code_reviewer
+      base_system_prompt: "你是一名结对代码审查员。你的目标是通过读取代码、运行静态分析和测试、委派子 Agent，帮助用户发现质量问题并生成改进方案。"
+      system_prompt_suffix: "请使用 Markdown 输出结构化的审查报告。在应用 patch 前，默认先询问用户确认；如果用户明确说'直接改'或'应用 patch'，则可以跳过确认。禁止写入 .env、config.yaml、密钥文件以及 core/infra/api/runtime/ 目录。"
+      excluded_middleware: []
+      excluded_tools: []
+  default_harness: code_reviewer
+
+# ---------------------------------------------------------------------------
+# 执行后端
+# ---------------------------------------------------------------------------
+# DeepAgents 执行后端（filesystem: 文件系统, sandbox: 沙箱, composite: 组合）。
+backend:
+  type: filesystem
+  filesystem:
+    root_dir: /
+  sandbox:
+    provider: local
+    timeout_seconds: 60
+    mounts: []
+
+# ---------------------------------------------------------------------------
+# 记忆系统
+# ---------------------------------------------------------------------------
+# 跨会话持久化记忆，用于个性化。
+memory:
+  enabled: true
+  injection_enabled: true
+  storage_path: ./data/memory.json
+  debounce_seconds: 30
+  model_name: null  # null = 使用默认模型
+  max_facts: 100
+  fact_confidence_threshold: 0.7
+  max_injection_tokens: 2000
+
+# ---------------------------------------------------------------------------
+# 子 Agent
+# ---------------------------------------------------------------------------
+# 启用子 agent 委托，用于复杂多步骤任务。
+subagents:
+  enabled: true
+  max_concurrent: 3
+  timeout_seconds: 900
+
+# 定义主 agent 可通过 task 工具委托的子 agent。
+subagent_definitions:
+  items:
+    - name: researcher
+      description: "从各种来源搜索和综合信息"
+      system_prompt: "你是一名研究助手。查找相关信息，引用来源，并清晰地综合发现。"
+      # model: "openai:gpt-4o-mini"  # 可选的模型覆盖
+      # tools: ["search", "read_file"]  # 可选的工具白名单
+      # skills: ["./plugins/skills/research"]  # 可选的技能路径
+      enabled: true
+    - name: coder
+      description: "编写、审查和调试代码"
+      system_prompt: "你是一名资深软件工程师。编写清晰、可测试的代码。使用可用的文件工具读写代码。"
+      enabled: true
+    - name: reviewer
+      description: "检查 bug、风格和可维护性"
+      system_prompt: "你是一名严格的代码审查员。仔细阅读代码，检查 bug、风格、类型注解、异常处理、文档、测试覆盖和可维护性。用 Markdown 输出发现清单，每条包含位置、描述和建议。"
+      tools: ["read_file", "list_files", "run_ruff", "explain_symbol"]
+      enabled: true
+    - name: tester
+      description: "生成并运行测试"
+      system_prompt: "你是一名测试工程师。阅读代码后，为关键路径编写 pytest 单元测试，写入 tests/ 目录，然后运行测试并报告结果。调用 run_pytest 时，请优先传入具体的测试文件或目录（例如 tests/test_module.py 或 tests/plugins/），避免直接运行整个 tests/ 树，以防递归或长时间运行。"
+      tools: ["read_file", "run_pytest", "write_file"]
+      enabled: true
+    - name: refactorer
+      description: "提出并应用重构建议"
+      system_prompt: "你是一名重构专家。根据审查意见，编写修改后的文件版本，使用 generate_patch 生成统一 diff，并在用户确认后使用 write_file 应用修改。"
+      tools: ["read_file", "explain_symbol", "generate_patch", "write_file"]
+      enabled: true
+
+# ---------------------------------------------------------------------------
+# 通道（即时通讯平台集成）
+# ---------------------------------------------------------------------------
+# 配置外部消息平台以与 agent 交互。
+channels:
+  langgraph_url: http://localhost:8000/api
+  gateway_url: http://localhost:8000
+
+  # 飞书集成
+  feishu:
+    enabled: false
+    app_id: $FEISHU_APP_ID
+    app_secret: $FEISHU_APP_SECRET
+
+  # Slack 集成
+  slack:
+    enabled: false
+    bot_token: $SLACK_BOT_TOKEN
+    app_token: $SLACK_APP_TOKEN
+
+# ---------------------------------------------------------------------------
+# 链路追踪
+# ---------------------------------------------------------------------------
+# 通过 LangSmith 或 Langfuse 实现可观测性。
+tracing:
+  enabled: false
+  providers: []  # 例如：["langsmith", "langfuse"]
+
+# ---------------------------------------------------------------------------
+# 网关配置
+# ---------------------------------------------------------------------------
+gateway:
+  host: 0.0.0.0
+  port: 8000
+  enable_docs: true
+
+# ---------------------------------------------------------------------------
+# 数据库配置
+# ---------------------------------------------------------------------------
+# 默认使用 SQLite，生产环境可设置为 "postgres"。
+database:
+  backend: sqlite
+  sqlite_dir: ./data
+
+# ---------------------------------------------------------------------------
+# 流桥接器
+# ---------------------------------------------------------------------------
+# 桥接 agent 运行与连接客户端之间的流式事件。
+stream_bridge:
+  type: memory
+  queue_maxsize: 256

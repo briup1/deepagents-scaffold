@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 def _scan_skill_directories(skills_path: str) -> list[Path]:
     """扫描技能目录中的 SKILL.md 文件。
 
-    返回包含 SKILL.md 文件的目录列表。
+    返回包含 SKILL.md 文件的目录列表（绝对路径）。
     """
-    base = Path(skills_path)
+    base = Path(skills_path).resolve()
     if not base.exists():
         return []
 
@@ -34,15 +34,21 @@ def _scan_skill_directories(skills_path: str) -> list[Path]:
 
 
 def get_skill_names(app_config: AppConfig) -> list[str]:
-    """返回可供加载的技能目录名称列表。
+    """返回 DeepAgents SkillsMiddleware 的 source 路径列表。
 
-    这些名称将传给 DeepAgents 的 SkillsMiddleware。
+    SkillsMiddleware 期望 source 是包含 skill 子目录的父目录，
+    它会自行扫描子目录下的 SKILL.md 文件。
     """
     path = app_config.skills.path
     # 展开环境变量与 ~
     path = os.path.expandvars(os.path.expanduser(path))
-    dirs = _scan_skill_directories(path)
-    return [d.name for d in dirs]
+    resolved = Path(path).resolve()
+    if not resolved.is_dir():
+        return []
+    # 只有在存在 skill 子目录时才返回 source，避免空目录触发无意义加载
+    if not _scan_skill_directories(str(resolved)):
+        return []
+    return [str(resolved)]
 
 
 def load_skills(app_config: AppConfig) -> list[dict[str, Any]]:

@@ -205,7 +205,12 @@ def _build_backend(backend_config: BackendConfig) -> Any | None:
         try:
             from deepagents.backends.filesystem import FilesystemBackend
 
-            return FilesystemBackend(root_dir=backend_config.filesystem.root_dir)
+            # 显式指定 virtual_mode=False 以保留当前行为（允许绝对路径），
+            # 避免 deepagents>=0.6.0 默认值变更时产生 DeprecationWarning。
+            return FilesystemBackend(
+                root_dir=backend_config.filesystem.root_dir,
+                virtual_mode=False,
+            )
         except Exception:
             logger.exception("Failed to create FilesystemBackend")
             return None

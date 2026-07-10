@@ -1,0 +1,7 @@
+{
+  "name": "deepagents-scaffold-scripts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Utility scripts for DeepAgents Scaffold",
+  "type": "module"
+}

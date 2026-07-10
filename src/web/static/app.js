@@ -195,7 +195,7 @@ async function sendStream(text) {
   try {
     const body = {
       assistant_id: els.agentSelect.value || 'default',
-      input: { messages: messageHistory },
+      input: { messages: [messageHistory[messageHistory.length - 1]] },
       config: {
         configurable: { thread_id: currentThreadId },
       },
@@ -206,6 +206,7 @@ async function sendStream(text) {
     const decoder = new TextDecoder();
 
     let buffer = '';
+    let currentEvent = 'values';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -216,21 +217,33 @@ async function sendStream(text) {
 
       for (const line of lines) {
         if (!line.trim()) continue;
-        // SSE format: "data: {...}" or "event: end\ndata: {...}"
+        // SSE format: "event: xxx" / "data: {...}" / "id: ..."
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+          continue;
+        }
         if (line.startsWith('data:')) {
           const jsonStr = line.slice(5).trim();
-          if (jsonStr) {
-            try {
-              const data = JSON.parse(jsonStr);
-              processStreamEvent(data, bubble, () => {
-                fullContent = accumulateContent(data, fullContent);
-                reasoning = accumulateReasoning(data, reasoning);
-                toolCalls = accumulateToolCalls(data, toolCalls);
-              });
-            } catch {
-              // ignore parse errors for partial data
-            }
+          if (!jsonStr) continue;
+          let data;
+          try {
+            data = JSON.parse(jsonStr);
+          } catch {
+            // ignore parse errors for partial data
+            continue;
           }
+          if (currentEvent === 'error') {
+            const errorMessage = typeof data.message === 'string' ? data.message : JSON.stringify(data);
+            throw new Error(errorMessage);
+          }
+          if (currentEvent === 'heartbeat' || currentEvent === 'end') {
+            continue;
+          }
+          processStreamEvent(data, bubble, () => {
+            fullContent = accumulateContent(data, fullContent);
+            reasoning = accumulateReasoning(data, reasoning);
+            toolCalls = accumulateToolCalls(data, toolCalls);
+          });
         }
       }
     }
@@ -251,7 +264,7 @@ async function sendWait(text) {
   try {
     const body = {
       assistant_id: els.agentSelect.value || 'default',
-      input: { messages: messageHistory },
+      input: { messages: [messageHistory[messageHistory.length - 1]] },
       config: {
         configurable: { thread_id: currentThreadId },
       },

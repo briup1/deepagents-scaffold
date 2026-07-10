@@ -1,0 +1,9 @@
+{
+  "name": "deepagents-scaffold",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DeepAgents Scaffold monorepo — FastAPI backend + React/Vanilla frontend",
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}

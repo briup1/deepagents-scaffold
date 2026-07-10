@@ -19,6 +19,7 @@ from scaffold.api.middleware.error_handler import ErrorHandlerMiddleware
 from scaffold.api.middleware.request_id import RequestIdMiddleware
 from scaffold.api.middleware.rate_limit import RateLimitMiddleware
 from scaffold.api.routers import agents, health, runs, state, threads, tools
+from scaffold.core.agents import create_agent
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.logging.config import configure_logging
 from scaffold.infra.logging.middleware import LoggingMiddleware
@@ -49,6 +50,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise RuntimeError(f"Configuration error: {exc}") from exc
 
     async with scaffold_runtime(app):
+        try:
+            create_agent(name="default", checkpointer=app.state.checkpointer)
+        except Exception as exc:
+            logger.exception("Failed to create default agent: %s", exc)
+            raise RuntimeError(f"Failed to create default agent: {exc}") from exc
+
         logger.info("Scaffold runtime ready on %s:%d", config.gateway.host, config.gateway.port)
         yield
 

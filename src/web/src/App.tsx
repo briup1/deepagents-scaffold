@@ -17,7 +17,8 @@ export default function App() {
 
   const handleSend = async (text: string) => {
     const userMsg: Message = { role: 'user', content: text }
-    setMessages((prev) => [...prev, userMsg])
+    const assistantPlaceholder: Message = { role: 'assistant', content: '' }
+    setMessages((prev) => [...prev, userMsg, assistantPlaceholder])
     setIsLoading(true)
 
     let assistantContent = ''
@@ -47,17 +48,26 @@ export default function App() {
 
           assistantContent = content
           setMessages((prev) => {
-            const withoutPending = prev.filter((m) => m.role !== 'assistant')
-            return [...withoutPending, { role: 'assistant', content: assistantContent }]
+            const updated = [...prev]
+            const lastIndex = updated.length - 1
+            if (updated[lastIndex]?.role === 'assistant') {
+              updated[lastIndex] = { role: 'assistant', content: assistantContent }
+            }
+            return updated
           })
         },
         assistantId,
       )
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `Error: ${(err as Error).message}` },
-      ])
+      setMessages((prev) => {
+        const updated = [...prev]
+        const lastIndex = updated.length - 1
+        if (updated[lastIndex]?.role === 'assistant') {
+          updated[lastIndex] = { role: 'assistant', content: `Error: ${(err as Error).message}` }
+          return updated
+        }
+        return [...prev, { role: 'assistant', content: `Error: ${(err as Error).message}` }]
+      })
     } finally {
       setIsLoading(false)
     }

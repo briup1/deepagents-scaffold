@@ -33,19 +33,37 @@ export async function sendMessageStream(
     if (done) break
     buffer += decoder.decode(value, { stream: true })
 
-    const lines = buffer.split('\n\n')
-    buffer = lines.pop() || ''
+    const frames = buffer.split('\n\n')
+    buffer = frames.pop() || ''
 
-    for (const chunk of lines) {
-      const dataLine = chunk.split('\n').find((l) => l.startsWith('data:'))
+    for (const frame of frames) {
+      const eventName = frame
+        .split('\n')
+        .find((l) => l.startsWith('event:'))
+        ?.slice(6)
+        .trim()
+      const dataLine = frame.split('\n').find((l) => l.startsWith('data:'))
       if (!dataLine) continue
       const jsonStr = dataLine.slice(5).trim()
-      if (jsonStr) {
-        try {
-          onEvent(JSON.parse(jsonStr))
-        } catch {
-          // ignore malformed JSON
-        }
+      if (!jsonStr) continue
+
+      let payload: unknown
+      try {
+        payload = JSON.parse(jsonStr)
+      } catch {
+        // ignore malformed JSON
+        continue
+      }
+
+      if (eventName === 'error') {
+        const message =
+          typeof (payload as Record<string, unknown>).message === 'string'
+            ? ((payload as Record<string, unknown>).message as string)
+            : JSON.stringify(payload)
+        throw new Error(message)
+      }
+      if (eventName !== 'heartbeat' && eventName !== 'end') {
+        onEvent(payload)
       }
     }
   }

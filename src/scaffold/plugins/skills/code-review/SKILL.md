@@ -1,5 +1,5 @@
 ---
-name: code_review
+name: code-review
 description: 结对代码审查员审查清单与输出模板
 ---
 

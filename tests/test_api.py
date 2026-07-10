@@ -28,6 +28,23 @@ def test_create_thread(client):
     assert "thread_id" in data
 
 
+def test_get_thread_after_create(client):
+    response = client.post("/api/threads/", json={})
+    assert response.status_code == 200
+    data = response.json()
+    thread_id = data["thread_id"]
+
+    response = client.get(f"/api/threads/{thread_id}")
+    assert response.status_code == 200
+    assert response.json()["thread_id"] == thread_id
+
+    response = client.get(f"/api/threads/{thread_id}/state")
+    assert response.status_code == 200
+    state_data = response.json()
+    assert state_data["thread_id"] == thread_id
+    assert "state" in state_data
+
+
 def test_get_thread_not_found(client):
     response = client.get("/api/threads/nonexistent")
     assert response.status_code == 404

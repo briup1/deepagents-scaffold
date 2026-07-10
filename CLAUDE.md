@@ -21,7 +21,8 @@
 |------|------|
 | `uv pip install -e ".[dev]"` | 安装后端开发依赖 |
 | `bash scripts/dev.sh` | 同时启动后端（8000）与前端（3000） |
-| `PYTHONPATH=src uvicorn scaffold.api.app:app --reload` | 单独启动后端 |
+| `bash scripts/stop_dev.sh` | 停止后端与前端开发服务 |
+| `bash scripts/verify_dev.sh` | 使用 mock 模型启动验证模式 |
 | `pytest` | 运行全部后端测试 |
 | `pytest tests/test_api.py::test_health -v` | 运行单个测试 |
 | `ruff check src tests` | 后端代码检查 |
