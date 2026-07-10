@@ -1,4 +1,4 @@
-import os
+import logging
 from pathlib import Path
 
 import pytest
@@ -20,13 +20,24 @@ def test_config_path(project_root: Path) -> Path:
     return project_root / "config.test.yaml"
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def _reset_app_config(test_config_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """每次测试前重置配置缓存并强制使用 config.test.yaml。"""
+    """重置配置缓存并强制使用 config.test.yaml，测试后恢复日志状态。"""
     monkeypatch.setenv("SCAFFOLD_CONFIG_PATH", str(test_config_path))
+
+    scaffold_logger = logging.getLogger("scaffold")
+    old_level = scaffold_logger.level
+    old_handlers = list(scaffold_logger.handlers)
+    old_propagate = scaffold_logger.propagate
+
     reload_app_config()
     yield
     reload_app_config()
+
+    scaffold_logger.setLevel(old_level)
+    scaffold_logger.handlers.clear()
+    scaffold_logger.handlers.extend(old_handlers)
+    scaffold_logger.propagate = old_propagate
 
 
 @pytest.fixture

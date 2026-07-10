@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -33,9 +32,7 @@ def _sse_lines(response) -> list[dict[str, str]]:
 def test_stream_run_returns_end_event(client: TestClient) -> None:
     payload = {
         "assistant_id": "default",
-        "input": {
-            "messages": [{"role": "user", "content": "hello"}]
-        },
+        "input": {"messages": [{"role": "user", "content": "hello"}]},
         "stream_mode": "values",
     }
     response = client.post("/api/runs/stream", json=payload, headers={"Accept": "text/event-stream"})
@@ -54,9 +51,7 @@ def test_stream_run_returns_end_event(client: TestClient) -> None:
 def test_wait_run_returns_checkpoint(client: TestClient) -> None:
     payload = {
         "assistant_id": "default",
-        "input": {
-            "messages": [{"role": "user", "content": "hello"}]
-        },
+        "input": {"messages": [{"role": "user", "content": "hello"}]},
         "stream_mode": "values",
     }
     response = client.post("/api/runs/wait", json=payload)
@@ -75,12 +70,8 @@ def test_thread_state_after_run(client: TestClient) -> None:
 
     run_payload = {
         "assistant_id": "default",
-        "input": {
-            "messages": [{"role": "user", "content": "hello"}]
-        },
-        "config": {
-            "configurable": {"thread_id": thread_id}
-        },
+        "input": {"messages": [{"role": "user", "content": "hello"}]},
+        "config": {"configurable": {"thread_id": thread_id}},
         "stream_mode": "values",
     }
     run_resp = client.post("/api/runs/wait", json=run_payload)

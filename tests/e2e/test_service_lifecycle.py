@@ -56,7 +56,7 @@ def _parse_sse(response: httpx.Response) -> list[dict[str, str]]:
 
 
 @pytest.fixture
-def live_server(test_config_path: Path):
+def live_server(_reset_app_config, test_config_path: Path):
     """启动真实 uvicorn 服务，返回 base_url 与进程对象。"""
     port = _find_free_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -68,10 +68,14 @@ def live_server(test_config_path: Path):
 
     proc = subprocess.Popen(
         [
-            "uv", "run", "uvicorn",
+            "uv",
+            "run",
+            "uvicorn",
             "scaffold.api.app:app",
-            "--host", "127.0.0.1",
-            "--port", str(port),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
         ],
         env=env,
         stdout=subprocess.PIPE,
@@ -101,9 +105,7 @@ def test_stream_run_live_server(live_server: dict) -> None:
     base_url = live_server["base_url"]
     payload = {
         "assistant_id": "default",
-        "input": {
-            "messages": [{"role": "user", "content": "hello"}]
-        },
+        "input": {"messages": [{"role": "user", "content": "hello"}]},
         "stream_mode": "values",
     }
     response = httpx.post(
