@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
+import httpx
 from fastapi.testclient import TestClient
 
 
-def _parse_ag_ui_events(response) -> list[dict]:
+def _parse_ag_ui_events(response: httpx.Response) -> list[dict[str, Any]]:
     """解析 ag-ui SSE 响应，每条 data 线为 JSON payload。"""
     events = []
     payload = ""
@@ -25,7 +27,7 @@ def _parse_ag_ui_events(response) -> list[dict]:
     return events
 
 
-def _agent_payload(thread_id: str, run_id: str, message_id: str, content: str) -> dict:
+def _agent_payload(thread_id: str, run_id: str, message_id: str, content: str) -> dict[str, Any]:
     return {
         "threadId": thread_id,
         "runId": run_id,
