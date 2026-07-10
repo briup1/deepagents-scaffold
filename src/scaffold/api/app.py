@@ -18,8 +18,8 @@ from scaffold.api.middleware.auth import AuthMiddleware
 from scaffold.api.middleware.error_handler import ErrorHandlerMiddleware
 from scaffold.api.middleware.request_id import RequestIdMiddleware
 from scaffold.api.middleware.rate_limit import RateLimitMiddleware
-from scaffold.api.ag_ui_poc import register_ag_ui_endpoint
-from scaffold.api.routers import agents, health, runs, state, threads, tools
+from scaffold.api.ag_ui import register_ag_ui_endpoints
+from scaffold.api.routers import agents, health, state, threads, tools
 from scaffold.core.agents import create_agent
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.logging.config import configure_logging
@@ -57,8 +57,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.exception("Failed to create default agent: %s", exc)
             raise RuntimeError(f"Failed to create default agent: {exc}") from exc
 
-        # AG-UI PoC 端点：必须在 default agent 创建后注册
-        register_ag_ui_endpoint(app)
+        # AG-UI 端点：必须在 default agent 创建后注册
+        register_ag_ui_endpoints(app)
 
         logger.info("Scaffold runtime ready on %s:%d", config.gateway.host, config.gateway.port)
         yield
@@ -111,7 +111,6 @@ def create_app() -> FastAPI:
 
     # 路由
     app.include_router(agents.router)
-    app.include_router(runs.router)
     app.include_router(threads.router)
     app.include_router(state.router)
     app.include_router(tools.router)

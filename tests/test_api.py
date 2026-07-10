@@ -1,6 +1,13 @@
 """Integration tests for the FastAPI Gateway."""
 
 
+def test_ag_ui_endpoint_registered(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+    assert any(path.startswith("/agent") for path in paths), "ag-ui /agent endpoint not registered"
+
+
 def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
