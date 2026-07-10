@@ -5,7 +5,7 @@ worker 和工具实现中打断点。
 
 用法::
 
-    PYTHONPATH=src python scripts/debug_agent.py --message "hello"
+    PYTHONPATH=src uv run python scripts/debug_agent.py --message "hello"
 
 或在 VS Code 的运行与调试面板中选择 "Debug: Run Agent Directly"。
 """
