@@ -1,0 +1,112 @@
+config_version: 1
+log_level: info
+
+models:
+  - name: mock-default
+    display_name: Mock Default
+    use: scaffold.infra.models.mock:MockChatModel
+    model: mock
+    response_text: "这是一个来自 MockChatModel 的固定响应。"
+
+agent:
+  max_iterations: 10
+  drop_error_from_history: true
+
+tools:
+  - name: read_file
+    use: scaffold.plugins.tools.code_review:read_file
+  - name: list_files
+    use: scaffold.plugins.tools.code_review:list_files
+  - name: run_ruff
+    use: scaffold.plugins.tools.code_review:run_ruff
+  - name: run_pytest
+    use: scaffold.plugins.tools.code_review:run_pytest
+  - name: explain_symbol
+    use: scaffold.plugins.tools.code_review:explain_symbol
+  - name: generate_patch
+    use: scaffold.plugins.tools.code_review:generate_patch
+  - name: write_file
+    use: scaffold.plugins.tools.code_review:write_file
+
+tool_groups: []
+
+skills:
+  path: src/scaffold/plugins/skills
+  container_path: /mnt/skills
+
+middleware:
+  items:
+    - name: ToolErrorHandlingMiddleware
+      enabled: true
+    - name: DynamicContextMiddleware
+      enabled: true
+      kwargs:
+        inject_date: true
+        inject_memory: false
+        memory_sources: []
+    - name: LoopDetectionMiddleware
+      enabled: true
+      kwargs:
+        warn_threshold: 3
+        hard_stop_threshold: 5
+
+profiles:
+  harness:
+    - name: default
+      base_system_prompt: ""
+      system_prompt_suffix: ""
+      excluded_middleware: []
+      excluded_tools: []
+  default_harness: default
+
+backend:
+  type: filesystem
+  filesystem:
+    root_dir: /
+  sandbox:
+    provider: local
+    timeout_seconds: 60
+    mounts: []
+
+memory:
+  enabled: false
+  injection_enabled: false
+  storage_path: ./tmp_tests/memory.json
+  debounce_seconds: 30
+  model_name: null
+  max_facts: 100
+  fact_confidence_threshold: 0.7
+  max_injection_tokens: 2000
+
+subagents:
+  enabled: false
+  max_concurrent: 3
+  timeout_seconds: 900
+
+subagent_definitions:
+  items: []
+
+channels:
+  langgraph_url: http://localhost:8000/api
+  gateway_url: http://localhost:8000
+  feishu:
+    enabled: false
+  slack:
+    enabled: false
+
+tracing:
+  enabled: false
+  providers: []
+
+gateway:
+  host: 127.0.0.1
+  port: 8000
+  enable_docs: false
+
+database:
+  backend: sqlite
+  sqlite_dir: ./tmp_tests/data
+
+stream_bridge:
+  type: memory
+  queue_maxsize: 256
