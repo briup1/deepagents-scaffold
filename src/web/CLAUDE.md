@@ -125,13 +125,13 @@ API 通信：`src/api.ts` 封装 `fetch` + SSE Reader
 App.tsx (sendMessageStream)
     |
     v
-api.ts -> POST /api/runs/stream  (SSE)
+api.ts -> POST /agent  (SSE, ag-ui 协议)
     |
     v
-Backend runs.py:stream_run()
+Backend ag_ui.py /agent endpoint
     |
     v
-SSE events <-- api.ts:reader <-- stream_bridge <-- worker
+SSE events <-- api.ts:reader <-- ag-ui graph stream
     |
     v
 App.tsx (逐块更新 messages state)

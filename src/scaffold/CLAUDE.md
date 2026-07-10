@@ -13,8 +13,7 @@ src/scaffold/
 ├── api/           # 网关层：FastAPI 路由与 HTTP 中间件
 ├── core/          # 运行时层：DeepAgents SDK 集成
 ├── infra/         # 基础设施层：配置、模型、日志、通道、提示词
-├── plugins/       # 扩展：自定义工具和 SKILL.md
-└── runtime/       # 运行时基础设施：Worker、StreamBridge
+└── plugins/       # 扩展：自定义工具和 SKILL.md
 ```
 
 ## 常用命令
@@ -46,7 +45,6 @@ ruff check src tests
 | 运行时层 | `core/` | DeepAgents SDK 集成，Agent 工厂 |
 | 网关层 | `api/` | FastAPI 路由、认证、限流 |
 | 基础设施层 | `infra/` | 配置、模型、日志、通道（框架无关） |
-| 运行时基础设施 | `runtime/` | Worker、StreamBridge |
 
 ## 模块引用规范
 
@@ -55,7 +53,6 @@ ruff check src tests
 ```
 core → infra  ✓（允许）
 api  → infra  ✓（允许）
-runtime → core + infra  ✓（允许）
 infra → core  ✗（禁止）
 infra → api   ✗（禁止）
 core ↔ api    ✗（禁止直接调用）
@@ -137,23 +134,6 @@ HTTP 中间件（API 层）：
 - 解析 frontmatter 元数据
 - 支持热重载
 
-### runtime/worker.py — 后台 Worker
-
-执行流程：
-- 以 asyncio Task 执行 agent
-- 事件发布到 StreamBridge
-- 支持流式和阻塞模式
-
-### runtime/stream_bridge/ — 流桥接器
-
-核心类：
-- `StreamBridge`: 抽象基类
-- `MemoryStreamBridge`: 按 run 划分的有界事件日志
-
-职责：
-- 生产者-消费者解耦
-- SSE 事件流管理
-
 ## 测试约定
 
 - 使用 `TestClient` 作为上下文管理器（lifespan 依赖）
@@ -202,11 +182,10 @@ middleware:
 请求生命周期：
 1. HTTP 请求到达 `api/app.py`
 2. 中间件链依次处理
-3. 路由匹配到对应 handler
-4. handler 通过 `deps.py` 获取 `checkpointer` 和 `stream_bridge`
+3. 路由匹配到 ag-ui `/agent` 端点
+4. handler 通过 `deps.py` 获取 `checkpointer`
 5. `core/agents.py:create_agent()` 构建完整的 DeepAgents agent
-6. `runtime/worker.py:run_worker()` 以 asyncio Task 执行 agent
-7. SSE 端点从 `StreamBridge` 消费事件，返回给客户端
+6. ag-ui 协议直接驱动 graph 执行并流式输出 SSE 事件，返回给客户端
 
 ## 日志与调试
 
