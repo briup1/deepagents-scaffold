@@ -14,17 +14,26 @@ function PocApp() {
       threadId,
     })
     agent.addMessage({ id: `msg-${Date.now()}`, role: 'user', content: input })
-    agent.runAgent({ runId: `poc-run-${Date.now()}` }).subscribe({
-      next: (event: any) => {
-        setLogs((prev) => [...prev, `EVENT: ${event.type} ${JSON.stringify(event).slice(0, 200)}`])
+    await agent.runAgent(
+      { runId: `poc-run-${Date.now()}` },
+      {
+        onRunStartedEvent: ({ event }: any) => {
+          setLogs((prev) => [...prev, `EVENT: ${event.type}`])
+        },
+        onTextMessageContentEvent: ({ event }: any) => {
+          setLogs((prev) => [...prev, `TEXT: ${event.delta}`])
+        },
+        onToolCallStartEvent: ({ event }: any) => {
+          setLogs((prev) => [...prev, `TOOL: ${event.toolCallName}`])
+        },
+        onRunFinishedEvent: () => {
+          setLogs((prev) => [...prev, 'COMPLETE'])
+        },
+        onRunErrorEvent: ({ event }: any) => {
+          setLogs((prev) => [...prev, `ERROR: ${JSON.stringify(event)}`])
+        },
       },
-      error: (err: any) => {
-        setLogs((prev) => [...prev, `ERROR: ${err.message || err}`])
-      },
-      complete: () => {
-        setLogs((prev) => [...prev, 'COMPLETE'])
-      },
-    })
+    )
   }
 
   return (
