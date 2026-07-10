@@ -57,6 +57,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.exception("Failed to create default agent: %s", exc)
             raise RuntimeError(f"Failed to create default agent: {exc}") from exc
 
+        # AG-UI PoC 端点：必须在 default agent 创建后注册
+        register_ag_ui_endpoint(app)
+
         logger.info("Scaffold runtime ready on %s:%d", config.gateway.host, config.gateway.port)
         yield
 
@@ -113,9 +116,6 @@ def create_app() -> FastAPI:
     app.include_router(state.router)
     app.include_router(tools.router)
     app.include_router(health.router)
-
-    # AG-UI PoC 端点
-    register_ag_ui_endpoint(app)
 
     # 静态前端
     _web_dir = os.path.join(os.path.dirname(__file__), "..", "..", "web")
