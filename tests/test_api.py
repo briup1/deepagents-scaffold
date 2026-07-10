@@ -1,7 +1,9 @@
 """Integration tests for the FastAPI Gateway."""
 
+from fastapi.testclient import TestClient
 
-def test_ag_ui_endpoint_registered(client):
+
+def test_ag_ui_endpoint_registered(client: TestClient) -> None:
     response = client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
@@ -28,7 +30,7 @@ def test_list_tools(client):
     assert "tools" in data
 
 
-def test_runs_stream_removed(client):
+def test_runs_stream_removed(client: TestClient) -> None:
     response = client.post(
         "/api/runs/stream",
         json={"assistant_id": "default", "input": {"messages": []}},
