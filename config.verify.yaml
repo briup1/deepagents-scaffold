@@ -23,7 +23,7 @@ models:
 # ---------------------------------------------------------------------------
 agent:
   # ReAct / LangGraph 循环的最大迭代次数，达到后会抛出 GraphRecursionError 作为兜底出口
-  max_iterations: 40
+  max_iterations: 500
   # 模型返回 error finish_reason 时，是否将该响应从对话历史中剔除，防止毒消息死循环
   drop_error_from_history: true
 
