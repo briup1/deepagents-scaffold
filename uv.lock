@@ -323,6 +323,7 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-deepseek" },
+    { name = "langchain-moonshot" },
     { name = "langchain-openai" },
     { name = "langfuse" },
     { name = "langgraph" },
@@ -360,6 +361,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-deepseek", specifier = ">=1.0.1" },
+    { name = "langchain-moonshot", specifier = ">=0.1.0" },
     { name = "langchain-openai", specifier = ">=1.2.1" },
     { name = "langfuse", specifier = ">=3.4.1" },
     { name = "langgraph", specifier = ">=0.2.0" },
@@ -733,6 +735,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/54/52/de168715eb092c920531d418b8b9aafdff9e37ee80e5fc88106211ccbd47/langchain_google_genai-4.2.4.tar.gz", hash = "sha256:2f5de7a8a6552ffb64b907aca7503fd5e34d1a3240e280abcdc5f7eef480edd5", size = 270054, upload-time = "2026-05-28T21:23:00.503Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/a2/5feaf21cfe6fac80eae944f3ac5348d9e5e986813256f74f8dd104617474/langchain_google_genai-4.2.4-py3-none-any.whl", hash = "sha256:0e2c1021a15c91e60b68d813bb3e793bd1d9396b3f8639b943ab4e56e5652e04", size = 68832, upload-time = "2026-05-28T21:22:59.291Z" },
+]
+
+[[package]]
+name = "langchain-moonshot"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7e/dc/4fbcb89c06259a18eb04f9d9229e6fc938011c060b82791e6e45d85f60e1/langchain_moonshot-0.1.0.tar.gz", hash = "sha256:0d98b5ca0f707b631a138008087815990b8fc7e2cbc369205724ed5d322d056a", size = 39140, upload-time = "2026-04-07T12:34:53.261Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/2f/cfab3472126a3532ddd3f68bf37205971d3fce1a7ec5aec2194b19bf3a40/langchain_moonshot-0.1.0-py3-none-any.whl", hash = "sha256:1f62d84ae7b0dcdd544c643778149437a632acd034c7f0e9e148f55285bf5796", size = 11386, upload-time = "2026-04-07T12:34:54.207Z" },
 ]
 
 [[package]]
