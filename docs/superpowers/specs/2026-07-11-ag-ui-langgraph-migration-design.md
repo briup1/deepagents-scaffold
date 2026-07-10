@@ -22,7 +22,7 @@
 - **重要 PoC 发现**：`ag-ui-langgraph` 已发布至 PyPI（当前 0.0.42），`LangGraphAgent` 可成功包装 DeepAgents 编译后的 graph；但 `/agent` 端点必须在 `create_agent("default", checkpointer=...)` 完成后注册，因此注册逻辑需放在 lifespan 内，而非 `create_app()` 中。
 - **替换范围**：
   - 后端：移除 `/api/runs/stream` 自定义 SSE 端点及 `StreamBridge`、`run_worker` 相关发布逻辑。
-  - 前端：同时替换 React 版本（`src/web/src/`）与 Vanilla JS 版本（`src/web/static/`）。
+  - 前端：保留并迁移 React 版本（`src/web/src/`），彻底移除 Vanilla JS 版本（`src/web/static/`）。
 - **保留内容**：健康检查、Agent/Tool 元数据端点、配置系统、模型工厂、工具注册、中间件链。
 
 ## 3. 架构设计
@@ -57,9 +57,7 @@
 
 `add_langgraph_fastapi_endpoint` 需要 `LangGraphAgent` 实例，而后者依赖已完成编译的 graph。由于 `create_agent("default", checkpointer=app.state.checkpointer)` 在 lifespan 的 `scaffold_runtime` 上下文中执行，ag-ui 端点注册必须放在 `create_agent` 之后、 lifespan `yield` 之前。
 
-### 3.2 前端架构
-
-#### React 版本
+### 3.2 前端架构（仅保留 React 版本）
 
 ```
 App.tsx
@@ -77,12 +75,8 @@ api.ts
 
 - `src/web/src/api.ts`：封装 `HttpAgent`，提供 `sendMessageStream`。
 - `src/web/src/App.tsx`：通过 ag-ui 事件回调驱动 UI 状态。
-- `src/web/src/components/`：新增/改造 `ToolCallCard` 等组件。
-
-#### Vanilla JS 版本
-
-- `src/web/static/app.js`：使用原生 `EventSource` 消费 `/agent`（`@ag-ui/client` 未提供 UMD/IIFE 构建，无法直接通过 `<script>` 标签引入）。
-- `src/web/static/style.css`：保持现有暗色主题，适配新的事件驱动渲染。
+- `src/web/src/components/`：新增/改造 `ToolCallCard`、reasoning 展示等组件。
+- Vanilla JS 方案（`src/web/static/`）在本次迁移中彻底移除，后端也不再挂载静态目录作为聊天入口。
 
 ## 4. 数据流与事件映射
 
@@ -186,12 +180,11 @@ cd src/web && npm install @ag-ui/client
 
 ### 修改
 
-- `src/scaffold/api/app.py`：在 lifespan 内 `create_agent` 之后注册 ag-ui 端点；正式迁移时移除 `runs` router。
+- `src/scaffold/api/app.py`：在 lifespan 内 `create_agent` 之后注册 ag-ui 端点；移除 `runs` router；移除对 `src/web/static/` 的挂载，改为由 Vite/React 负责前端入口。
 - `src/scaffold/api/deps.py`：清理 `stream_bridge` 依赖（若不再使用）。
 - `src/web/src/api.ts`：改为 `HttpAgent`。
 - `src/web/src/App.tsx`：改为 ag-ui 事件驱动。
 - `src/web/src/components/Chat.tsx`：支持 reasoning、工具调用卡片。
-- `src/web/static/app.js`：改为原生 `EventSource` 消费 `/agent`。
 - `src/web/package.json`：添加 `@ag-ui/client`。
 - `src/web/vite.config.ts`：添加 `/agent` 代理。
 - `pyproject.toml` / `uv.lock`：添加并锁定 `ag-ui-langgraph`。
@@ -208,6 +201,9 @@ cd src/web && npm install @ag-ui/client
 - `src/scaffold/runtime/stream_bridge/base.py`
 - `src/scaffold/runtime/stream_bridge/memory.py`（若存在）
 - `src/scaffold/runtime/worker.py` 中与 StreamBridge 相关的发布逻辑
+- `src/web/static/app.js`
+- `src/web/static/style.css`
+- `src/web/static/` 目录（在确认无其他静态资源后移除）
 
 ### 测试
 
@@ -286,7 +282,7 @@ cd src/web && npm install @ag-ui/client
 | 请求体验证 | 通过 | `messages` 数组中每条消息必须带 `id`，否则 FastAPI 报 `Field required` |
 | 事件流完整性 | 通过 | 除文本/工具事件外，还收到 `RAW`、`STEP_*`、`REASONING_*`、`MESSAGES_SNAPSHOT` 等 |
 | 多轮连续性 | 通过 | 复用同一 `threadId` 时，后端 checkpointer 能恢复上下文 |
-| Vanilla JS 集成 | 可行 | `@ag-ui/client` 无 UMD/IIFE 构建，建议使用原生 `EventSource` 直接消费 `/agent` |
+| Vanilla JS 方案 | 可行但决定弃用 | `@ag-ui/client` 无 UMD/IIFE 构建；经确认，本次迁移只保留 React，彻底移除 Vanilla JS |
 
 **关键代码片段（PoC 后端）**：
 
