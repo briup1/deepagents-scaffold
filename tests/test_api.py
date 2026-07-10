@@ -28,6 +28,14 @@ def test_list_tools(client):
     assert "tools" in data
 
 
+def test_runs_stream_removed(client):
+    response = client.post(
+        "/api/runs/stream",
+        json={"assistant_id": "default", "input": {"messages": []}},
+    )
+    assert response.status_code == 404
+
+
 def test_create_thread(client):
     response = client.post("/api/threads/", json={})
     assert response.status_code == 200

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import socket
 import subprocess
 import time
@@ -99,27 +98,3 @@ def test_health_check_live_server(live_server: dict) -> None:
     response = httpx.get(f"{base_url}/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
-
-
-def test_stream_run_live_server(live_server: dict) -> None:
-    base_url = live_server["base_url"]
-    payload = {
-        "assistant_id": "default",
-        "input": {"messages": [{"role": "user", "content": "hello"}]},
-        "stream_mode": "values",
-    }
-    response = httpx.post(
-        f"{base_url}/api/runs/stream",
-        json=payload,
-        headers={"Accept": "text/event-stream"},
-        timeout=30.0,
-    )
-    assert response.status_code == 200
-
-    events = _parse_sse(response)
-    event_names = [e.get("event") for e in events]
-    assert "end" in event_names
-
-    end_event = next(e for e in events if e.get("event") == "end")
-    data = json.loads(end_event["data"])
-    assert "run_id" in data

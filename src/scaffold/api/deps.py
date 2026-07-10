@@ -16,7 +16,6 @@ from fastapi import FastAPI, HTTPException, Request
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from scaffold.infra.config.app_config import AppConfig, get_app_config
-from scaffold.runtime.stream_bridge.async_provider import make_stream_bridge
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -52,10 +51,6 @@ async def scaffold_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.checkpointer = checkpointer
         logger.info("Checkpointer initialized at %s", db_path)
 
-        bridge = await stack.enter_async_context(make_stream_bridge(config.stream_bridge.model_dump()))
-        app.state.stream_bridge = bridge
-        logger.info("Stream bridge initialized (type=%s)", config.stream_bridge.type)
-
         yield
 
         # 清理
@@ -67,10 +62,3 @@ def get_checkpointer(request: Request) -> BaseCheckpointSaver:
     if cp is None:
         raise HTTPException(status_code=503, detail="Checkpointer not initialized")
     return cp
-
-
-def get_stream_bridge(request: Request):
-    bridge = getattr(request.app.state, "stream_bridge", None)
-    if bridge is None:
-        raise HTTPException(status_code=503, detail="Stream bridge not initialized")
-    return bridge
