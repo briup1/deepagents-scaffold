@@ -9,7 +9,7 @@ import logging
 import os
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Self
 
 import yaml
 from dotenv import load_dotenv
@@ -31,11 +31,6 @@ class DatabaseConfig(BaseModel):
     backend: str = Field(default="sqlite", description="sqlite or postgres")
     sqlite_dir: str = Field(default="./data", description="Directory for SQLite files")
     # Postgres 字段已省略，按需添加 host/port/user/password/dbname
-
-
-class StreamBridgeConfig(BaseModel):
-    type: Literal["memory"] = Field(default="memory", description="Stream bridge backend type")
-    queue_maxsize: int = Field(default=256, description="Maximum size of the internal event queue")
 
 
 class MemoryConfig(BaseModel):
@@ -116,7 +111,6 @@ class AppConfig(BaseModel):
     profiles: ProfilesConfig = Field(default_factory=ProfilesConfig)
     backend: BackendConfig = Field(default_factory=BackendConfig)
     subagent_definitions: SubAgentsDefinitionsConfig = Field(default_factory=SubAgentsDefinitionsConfig)
-    stream_bridge: StreamBridgeConfig = Field(default_factory=StreamBridgeConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
 
     def get_model_config(self, name: str) -> ModelConfig | None:

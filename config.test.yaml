@@ -106,7 +106,3 @@ gateway:
 database:
   backend: sqlite
   sqlite_dir: ./tmp_tests/data
-
-stream_bridge:
-  type: memory
-  queue_maxsize: 256
