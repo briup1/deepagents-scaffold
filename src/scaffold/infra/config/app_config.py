@@ -167,9 +167,11 @@ class AppConfig(BaseModel):
     @classmethod
     def _resolve_env_variables(cls, config: Any) -> Any:
         if isinstance(config, str) and config.startswith("$"):
-            env_value = os.getenv(config[1:])
+            env_name = config[1:]
+            env_value = os.getenv(env_name)
             if env_value is None:
-                raise ValueError(f"Environment variable {config[1:]} not found")
+                logger.warning("Environment variable %s not found, using empty string", env_name)
+                return ""
             return env_value
         if isinstance(config, dict):
             return {k: cls._resolve_env_variables(v) for k, v in config.items()}
