@@ -11,6 +11,7 @@ dependencies = [
     "langchain>=0.3.0",
     "langchain-openai>=1.2.1",
     "langchain-deepseek>=1.0.1",
+    "langchain-moonshot>=0.1.0",
     "langgraph-checkpoint-sqlite>=2.0.0",
     "pydantic>=2.12.5",
     "pyyaml>=6.0.3",
