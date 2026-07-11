@@ -55,7 +55,7 @@ models:
     response_text: "这是一个来自 MockChatModel 的固定响应。"
 
 agent:
-  max_iterations: 10
+  max_iterations: 500
   drop_error_from_history: true
 
 tools:
