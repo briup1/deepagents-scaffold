@@ -115,16 +115,13 @@ App.tsx (sendAgentMessage)
 api.ts -> HttpAgent -> POST /agent (SSE)
     |
     v
-Backend /agent endpoint
+Backend ag-ui-langgraph /agent endpoint
     |
     v
-SSE events <- @ag-ui/client callbacks <- ag-ui graph stream
+ag-ui events <-- @ag-ui/client callbacks <-- App.tsx state updates
     |
     v
-App.tsx (逐块更新 messages state)
-    |
-    v
-Chat.tsx (渲染消息列表)
+Chat.tsx (渲染消息 / reasoning / 工具调用)
 ```
 
 ## 开发指南

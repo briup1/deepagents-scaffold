@@ -13,7 +13,8 @@ src/scaffold/
 ├── api/           # 网关层：FastAPI 路由与 HTTP 中间件
 ├── core/          # 运行时层：DeepAgents SDK 集成
 ├── infra/         # 基础设施层：配置、模型、日志、通道、提示词
-└── plugins/       # 扩展：自定义工具和 SKILL.md
+├── plugins/       # 扩展：自定义工具和 SKILL.md
+└── runtime/       # 空包（原 StreamBridge/Worker 已移除，保留目录占位）
 ```
 
 ## 常用命令
@@ -183,9 +184,10 @@ middleware:
 1. HTTP 请求到达 `api/app.py`
 2. 中间件链依次处理
 3. 路由匹配到 ag-ui `/agent` 端点
-4. handler 通过 `deps.py` 获取 `checkpointer`
-5. `core/agents.py:create_agent()` 构建完整的 DeepAgents agent
-6. ag-ui 协议直接驱动 graph 执行并流式输出 SSE 事件，返回给客户端
+4. handler 解析 ag-ui 请求体并提取 `threadId`、`runId`、`messages` 等参数
+5. handler 通过 `deps.py` 获取 `checkpointer`
+6. `core/agents.py:create_agent()` 构建 DeepAgents agent
+7. ag-ui-langgraph 将 graph 包装为 LangGraphAgent 并暴露 `/agent` SSE 端点
 
 ## 日志与调试
 
