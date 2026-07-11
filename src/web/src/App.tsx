@@ -1,27 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Chat from './components/Chat'
 import MessageInput from './components/MessageInput'
 import Sidebar from './components/Sidebar'
 import ConfigPanel from './components/ConfigPanel'
-import { createAgent, sendAgentMessage, listAgents, type DisplayItem } from './api'
+import { createAgent, sendAgentMessage, type DisplayItem } from './api'
 
 export default function App() {
   const [threadId] = useState(() => `thread-${Date.now()}`)
-  const [assistantId, setAssistantId] = useState('default')
-  const [agents, setAgents] = useState<Array<{ name: string; type: string }>>([])
+  const agent = useMemo(() => createAgent(threadId), [threadId])
   const [items, setItems] = useState<DisplayItem[]>([])
+  const [assistantId, setAssistantId] = useState('default')
   const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    listAgents()
-      .then((data) => setAgents(data.agents))
-      .catch(() => setAgents([]))
-  }, [])
-
-  const agent = useMemo(() => {
-    const url = agents.length <= 1 ? '/agent' : `/agent/${assistantId}`
-    return createAgent(threadId, url)
-  }, [threadId, agents.length, assistantId])
 
   const handleSend = async (text: string) => {
     const userItem: DisplayItem = {

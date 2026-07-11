@@ -11,3 +11,4 @@ data/
 data/checkpoints.db
 logs/
 src/web/node_modules/
+src/web/dist
