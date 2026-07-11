@@ -13,7 +13,7 @@ from pydantic import PrivateAttr
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 
 
@@ -29,7 +29,16 @@ class MockChatModel(BaseChatModel):
     model: str = "mock"
     response_text: str = "你好！我是 DeepAgents Scaffold 的默认助手。很高兴为你服务。"
     sleep_ms: float = 30.0
+    echo_user_messages: bool = False
     _tools_bound: bool = PrivateAttr(default=False)
+
+    def _response_content(self, messages: list[BaseMessage]) -> str:
+        """返回本次调用的响应文本。"""
+        if self.echo_user_messages:
+            user_contents = [str(m.content) for m in messages if isinstance(m, HumanMessage)]
+            if user_contents:
+                return "Echo: " + " | ".join(user_contents)
+        return self.response_text
 
     @property
     def _llm_type(self) -> str:
@@ -46,7 +55,7 @@ class MockChatModel(BaseChatModel):
         run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
-        message = AIMessage(content=self.response_text)
+        message = AIMessage(content=self._response_content(messages))
         return ChatResult(generations=[ChatGeneration(message=message)])
 
     def _stream(
@@ -56,10 +65,11 @@ class MockChatModel(BaseChatModel):
         run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
+        text = self._response_content(messages)
         chunk_size = 4
-        for i in range(0, len(self.response_text), chunk_size):
-            text = self.response_text[i : i + chunk_size]
-            yield ChatGenerationChunk(message=AIMessageChunk(content=text))
+        for i in range(0, len(text), chunk_size):
+            chunk = text[i : i + chunk_size]
+            yield ChatGenerationChunk(message=AIMessageChunk(content=chunk))
 
     async def _astream(
         self,
@@ -70,12 +80,13 @@ class MockChatModel(BaseChatModel):
     ) -> AsyncIterator[ChatGenerationChunk]:
         import asyncio
 
+        text = self._response_content(messages)
         chunk_size = 4
-        for i in range(0, len(self.response_text), chunk_size):
-            text = self.response_text[i : i + chunk_size]
+        for i in range(0, len(text), chunk_size):
+            chunk = text[i : i + chunk_size]
             if self.sleep_ms > 0:
                 await asyncio.sleep(self.sleep_ms / 1000.0)
-            yield ChatGenerationChunk(message=AIMessageChunk(content=text))
+            yield ChatGenerationChunk(message=AIMessageChunk(content=chunk))
 
     def bind_tools(self, tools: Any, **kwargs: Any) -> "MockChatModel":
         """模拟工具绑定，返回自身以兼容需要 bind_tools 的 agent 构建流程。"""

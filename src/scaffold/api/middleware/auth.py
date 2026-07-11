@@ -25,9 +25,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not self.enabled or not self.api_key:
             return await call_next(request)
 
-        # 对 health、docs 和 openapi 跳过认证
+        # 对 health、docs、openapi 以及 ag-ui SSE 端点跳过认证
         path = request.url.path
-        if path in ("/health", "/docs", "/redoc", "/openapi.json"):
+        if path in ("/health", "/docs", "/redoc", "/openapi.json", "/agent"):
             return await call_next(request)
 
         provided = request.headers.get("X-API-Key")

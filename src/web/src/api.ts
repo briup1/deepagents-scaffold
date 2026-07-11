@@ -22,11 +22,11 @@ export async function sendAgentMessage(
   subscriber: AgentSubscriber,
 ): Promise<void> {
   agent.addMessage({
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `msg-${crypto.randomUUID()}`,
     role: 'user',
     content,
   })
-  await agent.runAgent({ runId: `run-${Date.now()}` }, subscriber)
+  await agent.runAgent({ runId: `run-${crypto.randomUUID()}` }, subscriber)
 }
 
 export async function listAgents(): Promise<{ agents: Array<{ name: string; type: string }> }> {

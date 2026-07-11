@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 
 def _parse_ag_ui_events(response: httpx.Response) -> list[dict[str, Any]]:
-    """解析 ag-ui SSE 响应，每条 data 线为 JSON payload。"""
+    """解析 ag-ui SSE 响应，仅收集 data: 行作为 JSON payload。"""
     events = []
     payload = ""
     for raw in response.iter_lines():
@@ -73,3 +73,20 @@ def test_agent_stream_continues_thread(client: TestClient) -> None:
     types = [e.get("type") for e in events]
     assert "RUN_STARTED" in types
     assert "RUN_FINISHED" in types
+
+    # 验证线程状态确实延续：助手回复中应提到之前说过的 "hello"
+    assistant_text = ""
+    current_message_id: str | None = None
+    for event in events:
+        event_type = event.get("type")
+        if event_type == "TEXT_MESSAGE_START":
+            current_message_id = event.get("messageId")
+            assistant_text = ""
+        elif event_type == "TEXT_MESSAGE_CONTENT" and current_message_id:
+            assistant_text += event.get("delta", "")
+        elif event_type == "TEXT_MESSAGE_END":
+            current_message_id = None
+
+    assert any(keyword in assistant_text.lower() for keyword in ("hello", "你刚才说", "said")), (
+        f"assistant response did not reference prior message: {assistant_text!r}"
+    )

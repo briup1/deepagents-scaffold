@@ -156,7 +156,7 @@ Chat.tsx (渲染消息 / reasoning / 工具调用)
 
 - 开发时需要同时启动后端服务（端口 8000）
 - Vite 开发服务器会自动代理 `/api` 请求到后端
-- 生产构建会生成静态文件，由后端服务提供
+- 生产部署应通过 Nginx、CDN 或 `npm run preview` 等方式提供 `dist/` 产物；FastAPI 不再挂载 `/static` 或服务 `/`
 - 支持热模块替换（HMR）
 - 使用 TypeScript 严格模式
 - 使用浏览器开发者工具查看网络请求与 Console 日志

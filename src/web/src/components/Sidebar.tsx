@@ -9,13 +9,35 @@ export default function Sidebar({
   setAssistantId: (id: string) => void
 }) {
   const [agents, setAgents] = useState<Array<{ name: string; type: string }>>([])
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
-    listAgents().then((data) => setAgents(data.agents)).catch(() => {})
-    const interval = setInterval(() => {
-      listAgents().then((data) => setAgents(data.agents)).catch(() => {})
-    }, 5000)
-    return () => clearInterval(interval)
+    let interval: number | undefined
+
+    const load = () => {
+      listAgents()
+        .then((data) => {
+          setAgents(data.agents)
+          setLoadError(false)
+          if (interval === undefined) {
+            interval = window.setInterval(load, 5000)
+          }
+        })
+        .catch(() => {
+          setLoadError(true)
+          if (interval !== undefined) {
+            clearInterval(interval)
+            interval = undefined
+          }
+        })
+    }
+
+    load()
+    return () => {
+      if (interval !== undefined) {
+        clearInterval(interval)
+      }
+    }
   }, [])
 
   return (
@@ -24,7 +46,10 @@ export default function Sidebar({
         <h2 className="font-semibold text-gray-800">Agents</h2>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {agents.length === 0 && (
+        {loadError && (
+          <div className="text-sm text-red-600 p-2">加载失败</div>
+        )}
+        {!loadError && agents.length === 0 && (
           <div className="text-sm text-gray-400 p-2">No agents registered yet</div>
         )}
         {agents.map((agent) => (

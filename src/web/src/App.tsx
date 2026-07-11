@@ -7,9 +7,12 @@ import { createAgent, sendAgentMessage, type DisplayItem } from './api'
 
 export default function App() {
   const [threadId] = useState(() => `thread-${Date.now()}`)
-  const agent = useMemo(() => createAgent(threadId), [threadId])
-  const [items, setItems] = useState<DisplayItem[]>([])
   const [assistantId, setAssistantId] = useState('default')
+  const agent = useMemo(
+    () => createAgent(threadId, assistantId === 'default' ? '/agent' : `/agent/${assistantId}`),
+    [threadId, assistantId],
+  )
+  const [items, setItems] = useState<DisplayItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSend = async (text: string) => {

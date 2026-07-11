@@ -7,6 +7,7 @@ models:
     use: scaffold.infra.models.mock:MockChatModel
     model: mock
     response_text: "这是一个来自 MockChatModel 的固定响应。"
+    echo_user_messages: true
 
 agent:
   max_iterations: 10
