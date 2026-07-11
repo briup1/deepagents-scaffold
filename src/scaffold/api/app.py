@@ -10,8 +10,6 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from scaffold.api.deps import scaffold_runtime
 from scaffold.api.middleware.auth import AuthMiddleware
@@ -115,18 +113,6 @@ def create_app() -> FastAPI:
     app.include_router(state.router)
     app.include_router(tools.router)
     app.include_router(health.router)
-
-    # 静态前端
-    _web_dir = os.path.join(os.path.dirname(__file__), "..", "..", "web")
-    _web_dir = os.path.abspath(_web_dir)
-    if os.path.isdir(_web_dir):
-        app.mount("/static", StaticFiles(directory=os.path.join(_web_dir, "static")), name="static")
-
-        @app.get("/")
-        async def root() -> FileResponse:
-            return FileResponse(os.path.join(_web_dir, "index.html"))
-    else:
-        logger.warning("Frontend web directory not found at %s", _web_dir)
 
     return app
 
