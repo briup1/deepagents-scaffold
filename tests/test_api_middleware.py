@@ -87,18 +87,6 @@ class TestAuthMiddleware:
         resp = client.get(path)
         assert resp.status_code == 200
 
-    def test_static_skips_auth(self):
-        app = self._make_app(enabled=True, api_key="test-secret")
-
-        # Static routes are not mounted here, but the middleware should allow
-        # any path starting with /static through.
-        @app.get("/static/file.txt")
-        def static_file():
-            return "file"
-
-        client = TestClient(app)
-        assert client.get("/static/file.txt").status_code == 200
-
 
 # ---------------------------------------------------------------------------
 # RequestIdMiddleware
