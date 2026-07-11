@@ -1,3 +1,4 @@
+import { HttpAgent } from '@ag-ui/client'
 import { useRef, useState } from 'react'
 import Chat from './components/Chat'
 import MessageInput from './components/MessageInput'
@@ -5,28 +6,34 @@ import Sidebar from './components/Sidebar'
 import ConfigPanel from './components/ConfigPanel'
 import { createAgent, sendAgentMessage } from './api'
 
-interface Message {
-  role: 'user' | 'assistant' | 'tool'
-  content: string
-}
+type UIMessage = { role: 'user' | 'assistant' | 'tool'; content: string }
 
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<UIMessage[]>([])
   const [assistantId, setAssistantId] = useState('default')
   const [threadId] = useState(() => `thread-${Date.now()}`)
   const [isLoading, setIsLoading] = useState(false)
-  const agentRef = useRef(createAgent(threadId))
+  const agentRef = useRef<HttpAgent | null>(null)
+  const lastAssistantIdRef = useRef(assistantId)
+
+  if (!agentRef.current || lastAssistantIdRef.current !== assistantId) {
+    agentRef.current = createAgent(
+      threadId,
+      assistantId === 'default' ? '/agent' : `/agent/${assistantId}`,
+    )
+    lastAssistantIdRef.current = assistantId
+  }
   const assistantContentRef = useRef('')
 
   const handleSend = async (text: string) => {
-    const userMsg: Message = { role: 'user', content: text }
-    const assistantPlaceholder: Message = { role: 'assistant', content: '' }
+    const userMsg: { role: 'user'; content: string } = { role: 'user', content: text }
+    const assistantPlaceholder: UIMessage = { role: 'assistant', content: '' }
     setMessages((prev) => [...prev, userMsg, assistantPlaceholder])
     setIsLoading(true)
     assistantContentRef.current = ''
 
     try {
-      await sendAgentMessage(agentRef.current, text, {
+      await sendAgentMessage(agentRef.current!, text, {
         onTextMessageContentEvent: ({ event }) => {
           assistantContentRef.current += event.delta
           setMessages((prev) => {
