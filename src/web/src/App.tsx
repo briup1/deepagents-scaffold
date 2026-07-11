@@ -1,72 +1,129 @@
-import { HttpAgent } from '@ag-ui/client'
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Chat from './components/Chat'
 import MessageInput from './components/MessageInput'
 import Sidebar from './components/Sidebar'
 import ConfigPanel from './components/ConfigPanel'
-import { createAgent, sendAgentMessage } from './api'
-
-type UIMessage = { role: 'user' | 'assistant' | 'tool'; content: string }
+import { createAgent, sendAgentMessage, listAgents, type DisplayItem } from './api'
 
 export default function App() {
-  const [messages, setMessages] = useState<UIMessage[]>([])
-  const [assistantId, setAssistantId] = useState('default')
   const [threadId] = useState(() => `thread-${Date.now()}`)
+  const [assistantId, setAssistantId] = useState('default')
+  const [agents, setAgents] = useState<Array<{ name: string; type: string }>>([])
+  const [items, setItems] = useState<DisplayItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const agentRef = useRef<HttpAgent | null>(null)
-  const lastAssistantIdRef = useRef(assistantId)
 
-  if (!agentRef.current || lastAssistantIdRef.current !== assistantId) {
-    agentRef.current = createAgent(
-      threadId,
-      assistantId === 'default' ? '/agent' : `/agent/${assistantId}`,
-    )
-    lastAssistantIdRef.current = assistantId
-  }
-  const assistantContentRef = useRef('')
+  useEffect(() => {
+    listAgents()
+      .then((data) => setAgents(data.agents))
+      .catch(() => setAgents([]))
+  }, [])
+
+  const agent = useMemo(() => {
+    const url = agents.length <= 1 ? '/agent' : `/agent/${assistantId}`
+    return createAgent(threadId, url)
+  }, [threadId, agents.length, assistantId])
 
   const handleSend = async (text: string) => {
-    const userMsg: { role: 'user'; content: string } = { role: 'user', content: text }
-    const assistantPlaceholder: UIMessage = { role: 'assistant', content: '' }
-    setMessages((prev) => [...prev, userMsg, assistantPlaceholder])
+    const userItem: DisplayItem = {
+      id: `msg-${Date.now()}`,
+      type: 'text',
+      role: 'user',
+      content: text,
+    }
+    setItems((prev) => [...prev, userItem])
     setIsLoading(true)
-    assistantContentRef.current = ''
+
+    let currentAssistantId: string | null = null
+    let currentReasoningId: string | null = null
+    let currentToolId: string | null = null
 
     try {
-      await sendAgentMessage(agentRef.current!, text, {
+      await sendAgentMessage(agent, text, {
+        onTextMessageStartEvent: ({ event }) => {
+          currentAssistantId = event.messageId
+          setItems((prev) => [
+            ...prev,
+            { id: event.messageId, type: 'text', role: 'assistant', content: '' },
+          ])
+        },
         onTextMessageContentEvent: ({ event }) => {
-          assistantContentRef.current += event.delta
-          setMessages((prev) => {
-            const updated = [...prev]
-            const lastIndex = updated.length - 1
-            if (updated[lastIndex]?.role === 'assistant') {
-              updated[lastIndex] = { role: 'assistant', content: assistantContentRef.current }
-            }
-            return updated
-          })
+          if (!currentAssistantId) return
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === currentAssistantId && item.type === 'text'
+                ? { ...item, content: item.content + event.delta }
+                : item,
+            ),
+          )
+        },
+        onTextMessageEndEvent: () => {
+          currentAssistantId = null
+        },
+        onReasoningStartEvent: ({ event }) => {
+          currentReasoningId = event.messageId
+          setItems((prev) => [
+            ...prev,
+            { id: event.messageId, type: 'reasoning', content: '' },
+          ])
+        },
+        onReasoningMessageContentEvent: ({ event }) => {
+          if (!currentReasoningId) return
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === currentReasoningId && item.type === 'reasoning'
+                ? { ...item, content: item.content + event.delta }
+                : item,
+            ),
+          )
+        },
+        onReasoningEndEvent: () => {
+          currentReasoningId = null
+        },
+        onToolCallStartEvent: ({ event }) => {
+          currentToolId = event.toolCallId
+          setItems((prev) => [
+            ...prev,
+            {
+              id: event.toolCallId,
+              type: 'tool',
+              toolName: event.toolCallName,
+              args: '',
+            },
+          ])
+        },
+        onToolCallArgsEvent: ({ toolCallBuffer }) => {
+          if (!currentToolId) return
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === currentToolId && item.type === 'tool'
+                ? { ...item, args: toolCallBuffer }
+                : item,
+            ),
+          )
+        },
+        onToolCallResultEvent: ({ event }) => {
+          if (!currentToolId) return
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === currentToolId && item.type === 'tool'
+                ? { ...item, result: String(event.result) }
+                : item,
+            ),
+          )
+          currentToolId = null
         },
         onRunErrorEvent: ({ event }) => {
-          assistantContentRef.current = `Error: ${event.message}`
-          setMessages((prev) => {
-            const updated = [...prev]
-            const lastIndex = updated.length - 1
-            if (updated[lastIndex]?.role === 'assistant') {
-              updated[lastIndex] = { role: 'assistant', content: assistantContentRef.current }
-            }
-            return updated
-          })
+          setItems((prev) => [
+            ...prev,
+            { id: `err-${Date.now()}`, type: 'error', content: event.message },
+          ])
         },
       })
     } catch (err) {
-      setMessages((prev) => {
-        const updated = [...prev]
-        const lastIndex = updated.length - 1
-        if (updated[lastIndex]?.role === 'assistant') {
-          updated[lastIndex] = { role: 'assistant', content: `Error: ${(err as Error).message}` }
-          return updated
-        }
-        return [...prev, { role: 'assistant', content: `Error: ${(err as Error).message}` }]
-      })
+      setItems((prev) => [
+        ...prev,
+        { id: `err-${Date.now()}`, type: 'error', content: (err as Error).message },
+      ])
     } finally {
       setIsLoading(false)
     }
@@ -82,10 +139,7 @@ export default function App() {
         </header>
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 flex flex-col p-4">
-            <Chat
-              messages={messages}
-              isLoading={isLoading}
-            />
+            <Chat items={items} isLoading={isLoading} />
             <MessageInput onSend={handleSend} disabled={isLoading} />
           </div>
           <ConfigPanel />
