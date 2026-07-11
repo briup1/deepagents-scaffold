@@ -16,19 +16,16 @@ src/web/
 ├── tsconfig.json                 # TypeScript 编译选项
 ├── tailwind.config.js            # Tailwind CSS 配置
 ├── postcss.config.js             # PostCSS 配置
-├── src/                          # React 应用源码
-│   ├── main.tsx                  # React 应用挂载入口
-│   ├── App.tsx                   # 根组件
-│   ├── api.ts                    # API 客户端
-│   ├── index.css                 # Tailwind CSS 入口
-│   └── components/               # React 组件
-│       ├── Chat.tsx              # 聊天消息列表
-│       ├── MessageInput.tsx      # 消息输入框
-│       ├── Sidebar.tsx           # 左侧边栏（Agent 列表）
-│       └── ConfigPanel.tsx       # 右侧配置面板
-└── static/                       # Vanilla JS 版本（无需构建）
-    ├── style.css                 # 暗色主题 CSS
-    └── app.js                    # 完整 vanilla JS 聊天前端
+└── src/                          # React 应用源码
+    ├── main.tsx                  # React 应用挂载入口
+    ├── App.tsx                   # 根组件
+    ├── api.ts                    # API 客户端
+    ├── index.css                 # Tailwind CSS 入口
+    └── components/               # React 组件
+        ├── Chat.tsx              # 聊天消息列表
+        ├── MessageInput.tsx      # 消息输入框
+        ├── Sidebar.tsx           # 左侧边栏（Agent 列表）
+        └── ConfigPanel.tsx       # 右侧配置面板
 ```
 
 ## 常用命令
@@ -57,22 +54,11 @@ npm run preview
 
 ## 架构说明
 
-项目有 **两套并行的前端实现**：
-
-### A. React + TypeScript + Tailwind（现代化方案）
-
 构建工具：Vite
 入口：`src/main.tsx` → `App.tsx`
 组件层次：`App` → `Sidebar` + `Chat` + `MessageInput` + `ConfigPanel`
-API 通信：`src/api.ts` 封装 `fetch` + SSE Reader
+API 通信：`src/api.ts` 基于 `@ag-ui/client` 的 `HttpAgent` 与 `/agent` SSE 端点通信
 样式：Tailwind CSS utility-first
-
-### B. Vanilla JS + 原生 CSS（零构建方案）
-
-无需 npm install / 构建
-入口：`index.html` 加载 `static/app.js`
-功能更完整：线程管理、流式/非流式切换、工具调用渲染、推理过程展示、暗色主题
-直接被 FastAPI 的 `app.py` 挂载到 `/static` 和 `/`
 
 ## 核心模块说明
 
@@ -91,7 +77,8 @@ API 通信：`src/api.ts` 封装 `fetch` + SSE Reader
 ### src/api.ts — API 客户端
 
 核心函数：
-- `sendMessageStream()`: SSE 流式发送消息
+- `createAgent()`: 创建 ag-ui Agent 实例（基于 `HttpAgent`）
+- `sendAgentMessage()`: 通过 SSE 向 `/agent` 发送消息并接收流式事件
 - `listAgents()`: 获取已注册 Agent 列表
 - `listTools()`: 获取可用工具列表
 
@@ -122,16 +109,16 @@ API 通信：`src/api.ts` 封装 `fetch` + SSE Reader
 用户输入 (MessageInput)
     |
     v
-App.tsx (sendMessageStream)
+App.tsx (sendAgentMessage)
     |
     v
-api.ts -> POST /agent  (SSE, ag-ui 协议)
+api.ts -> HttpAgent -> POST /agent (SSE)
     |
     v
-Backend ag_ui.py /agent endpoint
+Backend /agent endpoint
     |
     v
-SSE events <-- api.ts:reader <-- ag-ui graph stream
+SSE events <- @ag-ui/client callbacks <- ag-ui graph stream
     |
     v
 App.tsx (逐块更新 messages state)

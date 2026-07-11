@@ -4,7 +4,7 @@
 
 ## 1. 项目概述
 
-基于 DeepAgents SDK + Deer-Flow 基础设施的生产级多 Agent 脚手架，聚合后端（FastAPI）与前端（React/Vanilla）的 monorepo。后端提供 Agent 工厂、可插拔中间件链、记忆与通道；前端提供 SSE 流式聊天界面。仓库以 `config.yaml` 为唯一配置来源并支持热重载。
+基于 DeepAgents SDK + Deer-Flow 基础设施的生产级多 Agent 脚手架，聚合后端（FastAPI）与前端（React）的 monorepo。后端提供 Agent 工厂、可插拔中间件链、记忆与通道；前端提供 SSE 流式聊天界面。仓库以 `config.yaml` 为唯一配置来源并支持热重载。
 
 ## 2. AI 协作原则
 
@@ -45,7 +45,7 @@ src/scaffold/
 ├── core/          # DeepAgents SDK 集成：Agent 工厂、工具、技能
 ├── infra/         # 基础设施：配置、模型、日志、通道、提示词、中间件
 ├── plugins/       # 自定义工具与 SKILL.md
-└── runtime/       # Worker、StreamBridge
+└── runtime/
 ```
 
 - 分层依赖方向：`core → infra`、`api → infra`、`runtime → core + infra` 允许；反向与 `core ↔ api` 禁止
@@ -56,10 +56,8 @@ src/scaffold/
 ## 5. 前端架构
 
 - **技术栈**：React 18.3 + TypeScript 5.6 + Vite 5.4 + Tailwind CSS 3.4
-- **两套实现**：
-  - React + TypeScript：入口 `src/main.tsx`，开发服务器端口 3000，`/api` 代理到 `localhost:8000`
-  - Vanilla JS：入口 `static/app.js`，由后端直接挂载到 `/` 和 `/static`
-- API 客户端：`src/api.ts` 封装 `fetch` + SSE Reader
+- 入口：`src/main.tsx`，开发服务器端口 3000，`/api` 代理到 `localhost:8000`
+- API 客户端：`src/api.ts` 基于 `@ag-ui/client` 的 `HttpAgent` 与 `/agent` SSE 端点通信
 - 详见 `src/web/CLAUDE.md`
 
 ## 6. 关键约定
@@ -92,7 +90,14 @@ src/scaffold/
    - 后端健康检查：`curl -s http://localhost:8000/health`
    - API 文档：`http://localhost:8000/docs`
    - 前端页面：`http://localhost:3000`
-   - 流式接口测试：`curl -N -X POST http://localhost:8000/api/runs/stream -H "Content-Type: application/json" -d '{"agent_id":"default","message":"hello"}'`
+   - ag-ui 流式接口测试：
+
+     ```bash
+     curl -N -X POST http://localhost:8000/agent \
+       -H "Content-Type: application/json" \
+       -H "Accept: text/event-stream" \
+       -d '{"threadId":"thread-verify-001","runId":"run-verify-001","messages":[{"id":"msg-001","role":"user","content":"hello"}],"state":{},"tools":[],"context":[],"forwardedProps":{}}'
+     ```
 
 ### 日志与排查
 
