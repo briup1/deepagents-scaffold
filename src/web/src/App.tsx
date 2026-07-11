@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Chat from './components/Chat'
 import MessageInput from './components/MessageInput'
 import Sidebar from './components/Sidebar'
 import ConfigPanel from './components/ConfigPanel'
-import { sendMessageStream } from './api'
+import { createAgent, sendAgentMessage } from './api'
 
 interface Message {
   role: 'user' | 'assistant' | 'tool'
@@ -13,51 +13,43 @@ interface Message {
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [assistantId, setAssistantId] = useState('default')
+  const [threadId] = useState(() => `thread-${Date.now()}`)
   const [isLoading, setIsLoading] = useState(false)
+  const agentRef = useRef(createAgent(threadId))
+  const assistantContentRef = useRef('')
 
   const handleSend = async (text: string) => {
     const userMsg: Message = { role: 'user', content: text }
     const assistantPlaceholder: Message = { role: 'assistant', content: '' }
     setMessages((prev) => [...prev, userMsg, assistantPlaceholder])
     setIsLoading(true)
+    assistantContentRef.current = ''
 
-    let assistantContent = ''
     try {
-      await sendMessageStream(
-        [...messages, userMsg],
-        (event) => {
-          const ev = event as Record<string, unknown>
-
-          // Backend uses stream_mode="values": each event is a state snapshot
-          // with a "messages" array. Extract the latest assistant/ai message.
-          let content = ''
-          if (typeof ev.content === 'string') {
-            content = ev.content
-          } else if (Array.isArray(ev.messages)) {
-            for (let i = ev.messages.length - 1; i >= 0; i--) {
-              const m = ev.messages[i] as Record<string, unknown>
-              const t = (m.type as string) || (m.role as string)
-              if (t === 'ai' || t === 'assistant') {
-                content = typeof m.content === 'string' ? m.content : ''
-                break
-              }
-            }
-          }
-
-          if (!content) return
-
-          assistantContent = content
+      await sendAgentMessage(agentRef.current, text, {
+        onTextMessageContentEvent: ({ event }) => {
+          assistantContentRef.current += event.delta
           setMessages((prev) => {
             const updated = [...prev]
             const lastIndex = updated.length - 1
             if (updated[lastIndex]?.role === 'assistant') {
-              updated[lastIndex] = { role: 'assistant', content: assistantContent }
+              updated[lastIndex] = { role: 'assistant', content: assistantContentRef.current }
             }
             return updated
           })
         },
-        assistantId,
-      )
+        onRunErrorEvent: ({ event }) => {
+          assistantContentRef.current = `Error: ${event.message}`
+          setMessages((prev) => {
+            const updated = [...prev]
+            const lastIndex = updated.length - 1
+            if (updated[lastIndex]?.role === 'assistant') {
+              updated[lastIndex] = { role: 'assistant', content: assistantContentRef.current }
+            }
+            return updated
+          })
+        },
+      })
     } catch (err) {
       setMessages((prev) => {
         const updated = [...prev]
