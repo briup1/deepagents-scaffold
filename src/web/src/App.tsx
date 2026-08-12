@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { CopilotKit } from '@copilotkit/react-core'
 import { CopilotSidebar, CopilotChat } from '@copilotkit/react-ui'
 import { AgentSelector } from './components/AgentSelector'
+import { SAMPLE_MARKDOWN_CARD, useGenerativeUI } from './hooks/useGenerativeUI'
 import '@copilotkit/react-ui/styles.css'
 
 export default function App() {
   const [threadId] = useState(() => `thread-${crypto.randomUUID()}`)
   const [agentId, setAgentId] = useState('default')
+  const { renderMessage } = useGenerativeUI({ mockMetadata: SAMPLE_MARKDOWN_CARD })
 
   const runtimeUrl = useMemo(() => {
     return agentId === 'default' ? '/agent' : `/agent/${agentId}`
@@ -30,6 +32,7 @@ export default function App() {
                   initial: '有什么可以帮你的？',
                   placeholder: '输入消息...',
                 }}
+                RenderMessage={renderMessage}
               />
             </div>
           </div>

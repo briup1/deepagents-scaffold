@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { RenderMessageProps } from '@copilotkit/react-ui'
+import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -19,7 +21,7 @@ vi.mock('@copilotkit/react-ui', () => ({
     copilotSidebarMock(props)
     return <div data-testid="copilot-sidebar">{props.children}</div>
   },
-  CopilotChat: (props: { className: string; labels: Record<string, string> }) => {
+  CopilotChat: (props: { className: string; labels: Record<string, string>; RenderMessage?: React.ComponentType<RenderMessageProps> }) => {
     copilotChatMock(props)
     return <div data-testid="copilot-chat">{props.labels.title}</div>
   },
@@ -68,6 +70,7 @@ describe('App', () => {
           initial: '有什么可以帮你的？',
           placeholder: '输入消息...',
         },
+        RenderMessage: expect.any(Function),
       }),
     )
   })

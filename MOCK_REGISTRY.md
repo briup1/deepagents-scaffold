@@ -18,3 +18,10 @@
 - **Mock 字段/方法**: 复用 Task 5 的 mock 数据，测试中 mock 的 `global.fetch` 返回 `{ agents: [{ name: 'default' }, { name: 'code_reviewer' }] }`。
 - **当前假数据逻辑**: 单元测试使用该硬编码 Agent 列表验证 `AgentSelector` 与 `CopilotKit` 的集成，以及 `runtimeUrl` 随 agent 切换的逻辑。
 - **未来需替换的真实业务逻辑**: 当 `App.tsx` 通过 `AgentSelector` 调用真实 `/api/agents/` 端点时，mock 数据替换为后端实际返回的 `{ name, type }` 对象。
+
+## Task 7: CopilotKit 消息流中的 Generative UI
+
+- **模块路径**: `src/web/src/App.tsx` / `src/web/src/hooks/useGenerativeUI.ts`
+- **Mock 字段/方法**: `useGenerativeUI` 提供 `mockMetadata` 选项；默认传入 `SAMPLE_MARKDOWN_CARD`。
+- **当前假数据逻辑**: 若后端 Agent 尚未输出 `metadata.generative_ui`，`renderMessage` 回退到 `mockMetadata`，在 `CopilotChat` 中渲染 `MarkdownCard`/`DataTable`，以验证 UI 组件工作正常。
+- **未来需替换的真实业务逻辑**: 后端 Agent 在 AG-UI 文本事件中真实携带 `metadata.generative_ui`，前端直接从事件 metadata 读取；移除 `mockMetadata` 后 `CopilotChat` 仅在真实 metadata 存在时渲染 Generative UI。
