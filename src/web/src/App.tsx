@@ -8,7 +8,10 @@ import '@copilotkit/react-ui/styles.css'
 export default function App() {
   const [threadId] = useState(() => `thread-${crypto.randomUUID()}`)
   const [agentId, setAgentId] = useState('default')
-  const { renderMessage } = useGenerativeUI({ mockMetadata: SAMPLE_MARKDOWN_CARD })
+  const { renderMessage } = useGenerativeUI({
+    enableMock: import.meta.env.DEV,
+    mockMetadata: SAMPLE_MARKDOWN_CARD,
+  })
 
   const runtimeUrl = useMemo(() => {
     return agentId === 'default' ? '/agent' : `/agent/${agentId}`

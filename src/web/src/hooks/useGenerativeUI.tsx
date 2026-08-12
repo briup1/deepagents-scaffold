@@ -1,5 +1,10 @@
+import type { AIMessage, UserMessage } from '@copilotkit/shared'
 import { useCallback } from 'react'
-import type { RenderMessageProps } from '@copilotkit/react-ui'
+import type {
+  AssistantMessageProps,
+  RenderMessageProps,
+  UserMessageProps,
+} from '@copilotkit/react-ui'
 import { GenerativeUIRenderer } from '../components/GenerativeUIRenderer'
 import type {
   DataTableMetadata,
@@ -26,6 +31,14 @@ export const SAMPLE_DATA_TABLE: DataTableMetadata = {
   ],
 }
 
+const VALID_GENERATIVE_UI_TYPES = ['markdown_card', 'data_table'] as const
+
+type ValidGenerativeUIType = (typeof VALID_GENERATIVE_UI_TYPES)[number]
+
+function isValidGenerativeUIType(type: unknown): type is ValidGenerativeUIType {
+  return typeof type === 'string' && VALID_GENERATIVE_UI_TYPES.includes(type as ValidGenerativeUIType)
+}
+
 export function extractGenerativeUIMetadata(message: unknown): GenerativeUIMetadata | undefined {
   if (!message || typeof message !== 'object') {
     return undefined
@@ -45,28 +58,102 @@ export function extractGenerativeUIMetadata(message: unknown): GenerativeUIMetad
     return undefined
   }
 
+  const ui = generativeUI as Record<string, unknown>
+
+  if (!isValidGenerativeUIType(ui.type)) {
+    return undefined
+  }
+
   return generativeUI as GenerativeUIMetadata
 }
 
 interface UseGenerativeUIOptions {
+  enableMock?: boolean
   mockMetadata?: GenerativeUIMetadata
 }
 
+function isAssistantMessage(message: RenderMessageProps['message']): message is AIMessage {
+  return message.role === 'assistant'
+}
+
+function isUserMessage(message: RenderMessageProps['message']): message is UserMessage {
+  return message.role === 'user'
+}
+
 export function useGenerativeUI(options: UseGenerativeUIOptions = {}) {
-  const { mockMetadata } = options
+  const { enableMock = false, mockMetadata = SAMPLE_MARKDOWN_CARD } = options
 
   const renderMessage = useCallback(
     (props: RenderMessageProps) => {
-      const metadata = extractGenerativeUIMetadata(props.message) ?? mockMetadata
+      const { message } = props
+      const realMetadata = extractGenerativeUIMetadata(message)
+
+      // Mock 仅作用于当前 assistant 消息，避免影响用户消息与历史消息。
+      const shouldUseMock =
+        enableMock &&
+        !realMetadata &&
+        isAssistantMessage(message) &&
+        props.isCurrentMessage
+
+      const metadata = realMetadata ?? (shouldUseMock ? mockMetadata : undefined)
 
       if (metadata) {
         return <GenerativeUIRenderer metadata={metadata} />
       }
 
-      return undefined
+      return renderDefaultMessage(props)
     },
-    [mockMetadata],
+    [enableMock, mockMetadata],
   )
 
   return { renderMessage }
+}
+
+function renderDefaultMessage(props: RenderMessageProps) {
+  const {
+    message,
+    messages,
+    inProgress,
+    index,
+    isCurrentMessage,
+    onRegenerate,
+    onCopy,
+    onThumbsUp,
+    onThumbsDown,
+    messageFeedback,
+    markdownTagRenderers,
+    AssistantMessage,
+    UserMessage,
+    ImageRenderer,
+  } = props
+
+  if (isUserMessage(message) && UserMessage) {
+    const userProps: UserMessageProps = {
+      rawData: message,
+      message,
+      ImageRenderer: ImageRenderer!,
+    }
+    return <UserMessage key={index} {...userProps} />
+  }
+
+  if (isAssistantMessage(message) && AssistantMessage) {
+    const assistantProps: AssistantMessageProps = {
+      rawData: message,
+      message,
+      messages,
+      isLoading: inProgress && isCurrentMessage && !message.content,
+      isGenerating: inProgress && isCurrentMessage && !!message.content,
+      isCurrentMessage,
+      onRegenerate: () => onRegenerate?.(message.id),
+      onCopy,
+      onThumbsUp,
+      onThumbsDown,
+      feedback: messageFeedback?.[message.id] ?? null,
+      markdownTagRenderers,
+      ImageRenderer,
+    }
+    return <AssistantMessage key={index} {...assistantProps} />
+  }
+
+  return null
 }

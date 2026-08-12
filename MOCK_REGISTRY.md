@@ -21,7 +21,7 @@
 
 ## Task 7: CopilotKit 消息流中的 Generative UI
 
-- **模块路径**: `src/web/src/App.tsx` / `src/web/src/hooks/useGenerativeUI.ts`
-- **Mock 字段/方法**: `useGenerativeUI` 提供 `mockMetadata` 选项；默认传入 `SAMPLE_MARKDOWN_CARD`。
-- **当前假数据逻辑**: 若后端 Agent 尚未输出 `metadata.generative_ui`，`renderMessage` 回退到 `mockMetadata`，在 `CopilotChat` 中渲染 `MarkdownCard`/`DataTable`，以验证 UI 组件工作正常。
-- **未来需替换的真实业务逻辑**: 后端 Agent 在 AG-UI 文本事件中真实携带 `metadata.generative_ui`，前端直接从事件 metadata 读取；移除 `mockMetadata` 后 `CopilotChat` 仅在真实 metadata 存在时渲染 Generative UI。
+- **模块路径**: `src/web/src/App.tsx` / `src/web/src/hooks/useGenerativeUI.tsx`
+- **Mock 字段/方法**: `useGenerativeUI` 提供 `enableMock` 与 `mockMetadata` 选项；`App.tsx` 在 `import.meta.env.DEV` 下启用 `SAMPLE_MARKDOWN_CARD`。
+- **当前假数据逻辑**: 若后端 Agent 尚未输出 `metadata.generative_ui`，`renderMessage` 仅对当前 assistant 消息回退到 `mockMetadata`，在 `CopilotChat` 中渲染 `MarkdownCard`/`DataTable`，用户消息与历史 assistant 消息仍走默认气泡渲染。
+- **未来需替换的真实业务逻辑**: 后端 Agent 在 AG-UI 文本事件中真实携带 `metadata.generative_ui`，前端直接从事件 metadata 读取；移除 `enableMock`/`mockMetadata` 后 `CopilotChat` 仅在真实 metadata 存在时渲染 Generative UI。
