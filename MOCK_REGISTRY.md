@@ -11,3 +11,10 @@
 - **Mock 字段/方法**: 单元测试中 mock 的 `global.fetch` 返回 `{ agents: [{ name: 'default' }, { name: 'code_reviewer' }] }`。
 - **当前假数据逻辑**: 测试使用硬编码 Agent 列表验证下拉框加载与选择事件。
 - **未来需替换的真实业务逻辑**: 组件通过 `listAgents()` 调用真实的 `/api/agents/` 端点；测试数据替换为后端实际返回的 `{ name, type }` 对象。
+
+## Task 6: App.tsx
+
+- **模块路径**: `src/web/src/App.test.tsx`
+- **Mock 字段/方法**: 复用 Task 5 的 mock 数据，测试中 mock 的 `global.fetch` 返回 `{ agents: [{ name: 'default' }, { name: 'code_reviewer' }] }`。
+- **当前假数据逻辑**: 单元测试使用该硬编码 Agent 列表验证 `AgentSelector` 与 `CopilotKit` 的集成，以及 `runtimeUrl` 随 agent 切换的逻辑。
+- **未来需替换的真实业务逻辑**: 当 `App.tsx` 通过 `AgentSelector` 调用真实 `/api/agents/` 端点时，mock 数据替换为后端实际返回的 `{ name, type }` 对象。

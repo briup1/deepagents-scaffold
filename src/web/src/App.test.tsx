@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
 const copilotKitMock = vi.fn()
@@ -26,9 +26,17 @@ vi.mock('@copilotkit/react-ui', () => ({
 }))
 
 const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
 
 describe('App', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
   it('renders CopilotKit with default runtime url', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -70,11 +78,12 @@ describe('App', () => {
       json: async () => ({ agents: [{ name: 'default' }, { name: 'code_reviewer' }] }),
     })
 
+    const user = userEvent.setup()
     render(<App />)
 
     await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument())
 
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'code_reviewer')
+    await user.selectOptions(screen.getByRole('combobox'), 'code_reviewer')
 
     await waitFor(() =>
       expect(copilotKitMock).toHaveBeenLastCalledWith(
