@@ -17,6 +17,11 @@ export function GenerativeUIRenderer({ metadata }: GenerativeUIRendererProps) {
 
   const meta = metadata as GenerativeUIMetadata
 
+  if (!meta.type) {
+    console.warn('[GenerativeUIRenderer] generative_ui metadata 缺少 type 字段')
+    return null
+  }
+
   if (isMarkdownCard(meta)) {
     return <MarkdownCard metadata={meta} />
   }
@@ -25,6 +30,6 @@ export function GenerativeUIRenderer({ metadata }: GenerativeUIRendererProps) {
     return <DataTable metadata={meta} />
   }
 
-  console.warn('[GenerativeUIRenderer] unsupported generative_ui type:', meta.type)
+  console.warn('[GenerativeUIRenderer] 不支持的 generative_ui type:', meta.type)
   return null
 }

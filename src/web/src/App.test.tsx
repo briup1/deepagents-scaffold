@@ -51,7 +51,7 @@ describe('App', () => {
 
     expect(copilotKitMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        runtimeUrl: '/agent',
+        runtimeUrl: '/agent/default',
         threadId: expect.stringMatching(/^thread-/),
       }),
     )

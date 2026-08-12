@@ -5,7 +5,13 @@ interface DataTableProps {
 }
 
 export function DataTable({ metadata }: DataTableProps) {
-  const { columns, rows, title } = metadata
+  const { title } = metadata
+  const columns = Array.isArray(metadata.columns) ? metadata.columns : []
+  const rows = Array.isArray(metadata.rows) ? metadata.rows : []
+
+  if (!Array.isArray(metadata.columns) || !Array.isArray(metadata.rows)) {
+    console.warn('[DataTable] data_table metadata 缺少 columns 或 rows 字段，将使用空数组')
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm my-2">

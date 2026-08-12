@@ -1,12 +1,17 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentSelector } from '../AgentSelector'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
 describe('AgentSelector', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
   it('loads and selects agents', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

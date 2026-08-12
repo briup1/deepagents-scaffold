@@ -32,6 +32,7 @@ describe('GenerativeUIRenderer', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { container } = render(<GenerativeUIRenderer metadata={{ type: 'unknown' }} />)
     expect(container.firstChild).toBeNull()
+    expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 })

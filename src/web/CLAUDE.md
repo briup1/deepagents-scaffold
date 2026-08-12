@@ -140,7 +140,7 @@ CopilotKit Provider (runtimeUrl=/agent/{agentId})
 POST /agent/{agentId} (SSE)
     |
     v
-Backend ag-ui-langgraph /agent endpoint
+后端 `/agent/{agentId}` SSE 端点
     |
     v
 SSE events -> CopilotKit react-core -> CopilotChat

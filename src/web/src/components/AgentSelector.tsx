@@ -4,14 +4,23 @@ import { listAgents, type AgentInfo } from '../api/copilotkit'
 interface AgentSelectorProps {
   value: string
   onChange: (agentId: string) => void
+  agents?: AgentInfo[]
 }
 
-export function AgentSelector({ value, onChange }: AgentSelectorProps) {
-  const [agents, setAgents] = useState<AgentInfo[]>([])
-  const [loading, setLoading] = useState(true)
+export function AgentSelector({ value, onChange, agents: agentsProp }: AgentSelectorProps) {
+  const [agents, setAgents] = useState<AgentInfo[]>(agentsProp ?? [])
+  const [loading, setLoading] = useState(!agentsProp)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (agentsProp) {
+      setAgents(agentsProp)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    setLoading(true)
     listAgents()
       .then((data) => {
         setAgents(data.agents)
@@ -21,7 +30,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
         setError(err instanceof Error ? err.message : String(err))
         setLoading(false)
       })
-  }, [])
+  }, [agentsProp])
 
   if (loading) return <div className="p-2 text-sm text-gray-500">加载中...</div>
   if (error) return <div className="p-2 text-sm text-red-500">{error}</div>
