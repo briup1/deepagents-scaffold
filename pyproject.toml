@@ -54,3 +54,8 @@ target-version = "py312"
 dev = [
     "ruff>=0.15.20",
 ]
+
+[[tool.uv.index]]
+    name = "tuna"
+    url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+    default = true

@@ -12,6 +12,19 @@ log_level: info
 # 配置一个或多个 LLM 提供商，第一个模型为默认模型。
 # 使用 $ENV_VAR 语法引用环境变量。
 models:
+  - name: deepseek-v4-flash
+    display_name: deepseek-v4-flash
+    # 方式 B：原生 DeepSeek 适配器（需要 langchain-deepseek，自动补丁推理功能）
+    use: langchain_deepseek:ChatDeepSeek
+    base_url: https://api.deepseek.com
+    api_key: $DEEPSEEK_API_KEY
+    model: deepseek-v4-flash
+    supports_thinking: true
+    # 若设为 true，模型调用将忽略 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY 等系统代理变量
+    # bypass_proxy: false
+    # temperature: 0.7
+    # max_tokens: 4096
+  
   - name: kimi-for-coding
     display_name: Kimi for Coding
     use: langchain_moonshot:ChatMoonshot
@@ -21,22 +34,6 @@ models:
     temperature: 1.0
     supports_thinking: true
     supports_vision: false
-
-  - name: deepseek-v4-pro
-    display_name: deepseek-v4-pro
-    # 方式 A：OpenAI 兼容端点（更简单，无需 reasoning_content 补丁）
-    use: langchain_openai:ChatOpenAI
-    base_url: https://api.deepseek.com
-    # 方式 B：原生 DeepSeek 适配器（需要 langchain-deepseek，自动补丁推理功能）
-    # use: langchain_deepseek:ChatDeepSeek
-    api_key: $DEEPSEEK_API_KEY
-    model: deepseek-v4-pro
-    # 若设为 true，模型调用将忽略 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY 等系统代理变量
-    # bypass_proxy: false
-    # temperature: 0.7
-    # max_tokens: 4096
-    # supports_thinking: true
-    # supports_vision: false
 
   - name: anthropic-claude-3-5-sonnet
     display_name: Claude 3.5 Sonnet
