@@ -10,11 +10,16 @@ reasoning_content 出现在多轮对话的**所有** assistant 消息中。
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.outputs import ChatResult
 from langchain_deepseek import ChatDeepSeek
+
+logger = logging.getLogger(__name__)
 
 
 class PatchedChatDeepSeek(ChatDeepSeek):
@@ -27,6 +32,63 @@ class PatchedChatDeepSeek(ChatDeepSeek):
     @property
     def lc_secrets(self) -> dict[str, str]:
         return {"api_key": "DEEPSEEK_API_KEY", "openai_api_key": "DEEPSEEK_API_KEY"}
+
+    def _generate(
+        self,
+        messages: list[Any],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """同步生成，完成后记录 finish_reason 与内容长度供诊断。"""
+        result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        self._log_completion(result, streaming=False)
+        return result
+
+    async def _astream(
+        self,
+        messages: list[Any],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[Any]:
+        """异步流式生成，累计内容长度并在流结束时记录诊断信息。"""
+        accumulated_content = ""
+        accumulated_reasoning = ""
+        finish_reason: str | None = None
+
+        async for chunk in super()._astream(messages, stop=stop, run_manager=run_manager, **kwargs):
+            msg = chunk.message
+            if isinstance(msg, AIMessageChunk):
+                accumulated_content += msg.content if isinstance(msg.content, str) else ""
+                accumulated_reasoning += msg.additional_kwargs.get("reasoning_content") or ""
+                finish_reason = msg.response_metadata.get("finish_reason") or finish_reason
+            yield chunk
+
+        logger.info(
+            "DeepSeek streaming finished | streaming=True finish_reason=%s content_len=%d reasoning_len=%d",
+            finish_reason,
+            len(accumulated_content),
+            len(accumulated_reasoning),
+        )
+
+    def _log_completion(self, result: ChatResult, *, streaming: bool) -> None:
+        """记录模型完成信息，用于判断回复是否因 token 限制被截断。"""
+        if not result.generations:
+            return
+        gen = result.generations[0]
+        msg = getattr(gen, "message", None)
+        generation_info = getattr(gen, "generation_info", None) or {}
+        finish_reason = generation_info.get("finish_reason")
+        content = msg.content if isinstance(msg, AIMessage) and isinstance(msg.content, str) else ""
+        reasoning = msg.additional_kwargs.get("reasoning_content") or "" if isinstance(msg, AIMessage) else ""
+        logger.info(
+            "DeepSeek completion finished | streaming=%s finish_reason=%s content_len=%d reasoning_len=%d",
+            streaming,
+            finish_reason,
+            len(content),
+            len(reasoning),
+        )
 
     def _get_request_payload(
         self,

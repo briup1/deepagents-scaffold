@@ -40,15 +40,23 @@ export default function App() {
         },
         onTextMessageContentEvent: ({ event }) => {
           if (!currentAssistantId) return
-          setItems((prev) =>
-            prev.map((item) =>
+          setItems((prev) => {
+            const next = prev.map((item) =>
               item.id === currentAssistantId && item.type === 'text'
                 ? { ...item, content: item.content + event.delta }
                 : item,
-            ),
-          )
+            )
+            const updated = next.find((item) => item.id === currentAssistantId && item.type === 'text')
+            console.debug(
+              `[ag-ui] text content appended: messageId=${currentAssistantId} ` +
+                `deltaLen=${event.delta?.length ?? 0} ` +
+                `totalLen=${updated?.content?.length ?? 0}`,
+            )
+            return next
+          })
         },
-        onTextMessageEndEvent: () => {
+        onTextMessageEndEvent: ({ event }) => {
+          console.debug(`[ag-ui] text message ended: messageId=${event.messageId}`)
           currentAssistantId = null
         },
         onReasoningStartEvent: ({ event }) => {

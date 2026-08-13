@@ -44,12 +44,123 @@ QUEUE_BACKPRESSURE_SAMPLE_INTERVAL = 100
 # 队列深度告警阈值。超过该值说明客户端消费明显落后，需要关注。
 QUEUE_BACKPRESSURE_WARNING_THRESHOLD = 500
 
+# 为诊断“回复看起来不完整”而保留的最近 CONTENT 事件数。
+TAIL_CONTENT_EVENTS_TO_LOG = 3
+
 
 class _StreamSentinel:
     """用于标识事件流结束的唯一哨兵对象。"""
 
 
 _SENTINEL = _StreamSentinel()
+
+
+def _get_event_type(event: Any) -> str | None:
+    """安全地获取 AG-UI 事件类型。"""
+    if isinstance(event, dict):
+        return event.get("type")
+    return getattr(event, "type", None)
+
+
+def _get_event_field(event: Any, field: str) -> Any:
+    """安全地获取 AG-UI 事件字段。"""
+    if isinstance(event, dict):
+        return event.get(field)
+    return getattr(event, field, None)
+
+
+def _extract_finish_reason(event: Any) -> str | None:
+    """从 TEXT_MESSAGE_END 的 raw_event 中提取模型 finish_reason。"""
+    raw_event = _get_event_field(event, "raw_event")
+    if raw_event is None:
+        return None
+
+    # 支持 dict 与 pydantic model 两种形式
+    if isinstance(raw_event, dict):
+        data = raw_event.get("data", {})
+        output = data.get("output", {})
+        response_metadata = output.get("response_metadata", {})
+    else:
+        data = getattr(raw_event, "data", None) or {}
+        output = getattr(data, "output", None) or {}
+        response_metadata = getattr(output, "response_metadata", None) or {}
+
+    if isinstance(response_metadata, dict):
+        return response_metadata.get("finish_reason")
+    return getattr(response_metadata, "finish_reason", None)
+
+
+def _log_stream_event(
+    event: Any,
+    *,
+    ctx: dict[str, Any],
+    text_buffers: dict[str, list[str]],
+    tail_content_buffer: list[dict[str, Any]],
+) -> None:
+    """记录关键 AG-UI 事件，用于后续定位“回复不完整”问题。
+
+    不记录完整消息内容，只记录长度、ID、事件类型等元信息。
+    """
+    etype = _get_event_type(event)
+    if etype is None:
+        return
+
+    if etype == "TEXT_MESSAGE_START":
+        message_id = _get_event_field(event, "message_id")
+        text_buffers[message_id] = []
+        logger.debug(
+            "ag-ui text message start | %s message_id=%s",
+            _ctx_str(ctx),
+            message_id,
+            extra=_stream_extra({**ctx, "message_id": message_id}),
+        )
+
+    elif etype == "TEXT_MESSAGE_CONTENT":
+        message_id = _get_event_field(event, "message_id")
+        delta = _get_event_field(event, "delta") or ""
+        text_buffers.setdefault(message_id, []).append(delta)
+        tail_content_buffer.append({"message_id": message_id, "delta_len": len(delta)})
+        if len(tail_content_buffer) > TAIL_CONTENT_EVENTS_TO_LOG:
+            tail_content_buffer.pop(0)
+
+    elif etype == "TEXT_MESSAGE_END":
+        message_id = _get_event_field(event, "message_id")
+        finish_reason = _extract_finish_reason(event)
+        full_text = "".join(text_buffers.pop(message_id, []))
+        logger.info(
+            "ag-ui text message finished | %s message_id=%s finish_reason=%s content_len=%d tail_lens=%s",
+            _ctx_str(ctx),
+            message_id,
+            finish_reason,
+            len(full_text),
+            [t["delta_len"] for t in tail_content_buffer],
+            extra=_stream_extra(
+                {
+                    **ctx,
+                    "message_id": message_id,
+                    "finish_reason": finish_reason,
+                    "content_len": len(full_text),
+                    "tail_delta_lens": [t["delta_len"] for t in tail_content_buffer],
+                }
+            ),
+        )
+        tail_content_buffer.clear()
+
+    elif etype == "RUN_FINISHED":
+        logger.info(
+            "ag-ui run finished | %s",
+            _ctx_str(ctx),
+            extra=_stream_extra(ctx),
+        )
+
+    elif etype == "RUN_ERROR":
+        message = _get_event_field(event, "message")
+        logger.error(
+            "ag-ui run error | %s error=%s",
+            _ctx_str(ctx),
+            message,
+            extra=_stream_extra({**ctx, "error": message}),
+        )
 
 
 def _stream_ctx(input_data: RunAgentInput, **kwargs: Any) -> dict[str, Any]:
@@ -85,6 +196,9 @@ async def _produce_events_to_queue(
     event_count = 0
     sample_count = 0
     ctx = _stream_ctx(input_data, agent_name=agent.name)
+    # 用于累计 TEXT_MESSAGE_CONTENT 内容，仅在 TEXT_MESSAGE_END 时记录长度
+    text_buffers: dict[str, list[str]] = {}
+    tail_content_buffer: list[dict[str, Any]] = []
 
     logger.info(
         "ag-ui stream producer started | %s",
@@ -97,6 +211,13 @@ async def _produce_events_to_queue(
             await queue.put(event)
             event_count += 1
             sample_count += 1
+
+            _log_stream_event(
+                event,
+                ctx=ctx,
+                text_buffers=text_buffers,
+                tail_content_buffer=tail_content_buffer,
+            )
 
             # 采样检查队列深度，避免每条事件都检查
             if sample_count >= QUEUE_BACKPRESSURE_SAMPLE_INTERVAL:

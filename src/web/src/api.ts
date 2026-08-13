@@ -34,11 +34,19 @@ function _wrapSubscriber(
       return function (this: unknown, ...args: unknown[]) {
         const payload = args[0] as any
         const event = payload?.event ?? {}
+        const delta =
+          event?.delta ??
+          (typeof payload?.toolCallBuffer === 'string' ? payload.toolCallBuffer : '') ??
+          ''
+        const message = payload?.message ?? {}
+        const content = typeof message?.content === 'string' ? message.content : ''
         console.debug(
           `[ag-ui] ${String(prop)}: threadId=${context.threadId} runId=${context.runId} ` +
             `type=${event.type ?? '-'} ` +
             `messageId=${event.messageId ?? '-'} ` +
-            `toolCallId=${event.toolCallId ?? '-'}`,
+            `toolCallId=${event.toolCallId ?? '-'} ` +
+            `deltaLen=${typeof delta === 'string' ? delta.length : 0} ` +
+            `contentLen=${content.length}`,
         )
         return value.apply(this, args)
       }
