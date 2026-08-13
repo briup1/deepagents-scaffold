@@ -1,7 +1,11 @@
 .env
+.env.copy
+.env copy
+.env copy.*
 
 # Claude Code local workspace state
 .claude/
+.agents/
 
 # Python
 __pycache__/
