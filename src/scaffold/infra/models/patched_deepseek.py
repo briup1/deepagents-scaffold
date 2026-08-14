@@ -102,6 +102,32 @@ class PatchedChatDeepSeek(ChatDeepSeek):
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         payload_messages = payload.get("messages", [])
 
+        # Diagnostic: log the message roles/ids/tool-call pairing right before
+        # the request is sent to the DeepSeek API. This helps locate where a
+        # dangling assistant tool_call loses its matching ToolMessage.
+        try:
+            logger.debug(
+                "DeepSeek request messages | count=%d",
+                len(payload_messages),
+            )
+            for i, msg in enumerate(payload_messages):
+                tool_info: Any = None
+                if msg.get("role") == "assistant":
+                    tool_calls = msg.get("tool_calls") or []
+                    tool_info = [tc.get("id") for tc in tool_calls]
+                elif msg.get("role") == "tool":
+                    tool_info = msg.get("tool_call_id")
+                logger.debug(
+                    "DeepSeek request message[%d] | role=%s id=%s tool_info=%s content_len=%s",
+                    i,
+                    msg.get("role"),
+                    msg.get("id"),
+                    tool_info,
+                    len(msg.get("content", "")) if isinstance(msg.get("content"), (str, list)) else "?",
+                )
+        except Exception:
+            logger.exception("Failed to log DeepSeek request messages")
+
         if len(payload_messages) == len(original_messages):
             for payload_msg, orig_msg in zip(payload_messages, original_messages):
                 if payload_msg.get("role") == "assistant" and isinstance(orig_msg, AIMessage):

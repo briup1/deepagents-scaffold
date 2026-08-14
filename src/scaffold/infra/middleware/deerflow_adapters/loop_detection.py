@@ -13,9 +13,45 @@ from collections import deque
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
+from langchain_core.messages import AIMessage
 from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)
+
+
+_HARD_STOP_WARNING = (
+    "WARNING: You appear to be in a loop. Stop repeating the same tool calls "
+    "and provide a final answer or ask the user for clarification."
+)
+
+
+_PER_TOOL_WARNING_TEMPLATE = (
+    "WARNING: You have called '{tool}' {count} times. Avoid redundant calls and summarize your findings."
+)
+
+
+def _append_to_content(content: object, text: str) -> str | list[Any]:
+    """向消息 content 追加文本，保持列表/字符串结构。"""
+    if content is None or content == "":
+        return text
+    if isinstance(content, list):
+        return [*content, {"type": "text", "text": f"\n\n{text}"}]
+    if isinstance(content, str):
+        return content + f"\n\n{text}"
+    return str(content) + f"\n\n{text}"
+
+
+def _patch_ai_message(message: AIMessage, *, warning: str) -> AIMessage:
+    """构造一条 tool_calls 已清空并附加警告文本的 AIMessage。"""
+    copier = getattr(message, "model_copy", None) or getattr(message, "copy", None)
+    if copier is None:
+        raise TypeError("AIMessage does not support model_copy/copy")
+    return copier(
+        update={
+            "tool_calls": [],
+            "content": _append_to_content(message.content, warning),
+        }
+    )
 
 
 class LoopDetectionMiddleware(AgentMiddleware):
@@ -86,17 +122,12 @@ class LoopDetectionMiddleware(AgentMiddleware):
                 "Loop detected: identical call set repeated %d times. Stopping agent.",
                 identical_count,
             )
-            # 注入警告消息
-            from langchain_core.messages import SystemMessage
-
+            # 清空最后 AI 消息的 tool_calls，避免 assistant tool_calls 与后续 ToolMessage
+            # 之间被非 tool 消息隔断，导致 OpenAI/DeepSeek 400 错误。
+            patched_last = _patch_ai_message(last_msg, warning=_HARD_STOP_WARNING)
             return {
                 **updates,
-                "messages": [
-                    *messages,
-                    SystemMessage(
-                        content="WARNING: You appear to be in a loop. Stop repeating the same tool calls and provide a final answer or ask the user for clarification."
-                    ),
-                ],
+                "messages": [*messages[:-1], patched_last],
             }
 
         if identical_count >= self.warn_threshold:
@@ -109,16 +140,13 @@ class LoopDetectionMiddleware(AgentMiddleware):
         for key, count in loop_counts.items():
             if count >= self.per_tool_hard:
                 logger.warning("Tool '%s' called %d times — possible loop.", key, count)
-                from langchain_core.messages import SystemMessage
-
+                patched_last = _patch_ai_message(
+                    last_msg,
+                    warning=_PER_TOOL_WARNING_TEMPLATE.format(tool=key, count=count),
+                )
                 return {
                     **updates,
-                    "messages": [
-                        *messages,
-                        SystemMessage(
-                            content=f"WARNING: You have called '{key}' {count} times. Avoid redundant calls and summarize your findings."
-                        ),
-                    ],
+                    "messages": [*messages[:-1], patched_last],
                 }
             elif count >= self.per_tool_warn:
                 logger.warning("Tool '%s' called %d times.", key, count)
