@@ -177,7 +177,7 @@ profiles:
         - markdown_card: title（可选）, content
         - data_table: title（可选）, columns: [{key, label}], rows: [{列名: 值}]
         - form: title（可选）, fields: [{name, label, type?: "text" | "number"}], submitLabel（可选）
-        - button_group: title（可选）, buttons: [{id, label}]
+        - button_group: title（可选）, buttons: [{id, label}]，例如 {"title":"操作","buttons":[{"id":"view_details","label":"查看详细报告"}]}
         - metric_card: title（可选）, value, unit（可选）, change（可选）
         - chart: title（可选）, kind: "bar" | "line", data: [{label, value}], width（可选）, height（可选）
         当需要展示结构化数据、收集用户输入或提供可点击选项时，优先调用 render_ui 而不是纯文本。

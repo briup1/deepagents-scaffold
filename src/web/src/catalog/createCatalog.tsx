@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type {
   ZodArray,
   ZodDefault,
+  ZodEffects,
   ZodEnum,
   ZodObject,
   ZodOptional,
@@ -40,6 +41,10 @@ function zodToJsonSchema(schema: ZodType): JSONSchema {
       return {}
     case ZodFirstPartyTypeKind.ZodOptional: {
       const inner = (def as unknown as ZodOptional<ZodType>['_def']).innerType
+      return zodToJsonSchema(inner)
+    }
+    case ZodFirstPartyTypeKind.ZodEffects: {
+      const inner = (def as unknown as ZodEffects<ZodType>['_def']).schema
       return zodToJsonSchema(inner)
     }
     case ZodFirstPartyTypeKind.ZodDefault: {

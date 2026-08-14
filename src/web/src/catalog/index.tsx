@@ -35,15 +35,29 @@ const formSchema = z.object({
   submitLabel: z.string().optional(),
 })
 
-const buttonGroupSchema = z.object({
-  title: z.string().optional(),
-  buttons: z.array(
-    z.object({
-      id: z.string(),
-      label: z.string(),
-    }),
-  ),
-})
+const buttonGroupSchema = z.preprocess(
+  (val) => {
+    if (
+      val &&
+      typeof val === 'object' &&
+      'options' in val &&
+      !('buttons' in val)
+    ) {
+      const { options, ...rest } = val as Record<string, unknown>
+      return { ...rest, buttons: options }
+    }
+    return val
+  },
+  z.object({
+    title: z.string().optional(),
+    buttons: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+      }),
+    ),
+  }),
+)
 
 const metricCardSchema = z.object({
   title: z.string().optional(),
