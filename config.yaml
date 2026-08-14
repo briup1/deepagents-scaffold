@@ -70,6 +70,8 @@ tools:
     use: scaffold.plugins.tools.code_review:run_pytest
   - name: explain_symbol
     use: scaffold.plugins.tools.code_review:explain_symbol
+  - name: render_ui
+    use: scaffold.plugins.tools.generative_ui:render_ui
   - name: generate_patch
     use: scaffold.plugins.tools.code_review:generate_patch
   - name: write_file
@@ -170,7 +172,20 @@ profiles:
   harness:
     - name: default
       base_system_prompt: ""
-      system_prompt_suffix: ""
+      system_prompt_suffix: |
+        你可以调用 render_ui(type, props, surface_id) 工具向前端渲染交互式组件。可用组件：
+        - markdown_card: title（可选）, content
+        - data_table: title（可选）, columns: [{key, label}], rows: [{列名: 值}]
+        - form: title（可选）, fields: [{name, label, type?: "text" | "number"}], submitLabel（可选）
+        - button_group: title（可选）, buttons: [{id, label}]
+        - metric_card: title（可选）, value, unit（可选）, change（可选）
+        - chart: title（可选）, kind: "bar" | "line", data: [{label, value}], width（可选）, height（可选）
+        当需要展示结构化数据、收集用户输入或提供可点击选项时，优先调用 render_ui 而不是纯文本。
+        如需更新已有组件，请复用相同的 surface_id。
+        用户通过可交互组件发回的动作格式为：
+        - form_submit: { type: "form_submit", surfaceId?, values: {字段名: 输入值} }
+        - button_click: { type: "button_click", surfaceId?, id: 按钮ID }
+        收到动作后，根据上下文再次调用 render_ui 更新界面。
       excluded_middleware: []
       excluded_tools: []
     - name: coding
