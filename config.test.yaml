@@ -1,5 +1,7 @@
 config_version: 1
 log_level: info
+log_format: text
+middleware_telemetry: true
 
 models:
   - name: mock-default
@@ -37,14 +39,23 @@ skills:
 
 middleware:
   items:
+    - name: InputGuardrailMiddleware
+      enabled: true
+      kwargs:
+        action: block
+        patterns:
+          - name: malware_creation
+            pattern: "\\b(create|write|make|build|develop|generate|code)\\b[\\s\\S]{0,50}\\b(malware|virus|trojan|worm|ransomware|spyware|keylogger|rootkit)\\b"
+          - name: credential_theft
+            pattern: "\\b(steal|phish|harvest|extract|dump|skim|grab)\\b[\\s\\S]{0,50}\\b(password|credential|login|token|api key|secret|cookie|session)\\b"
+        allow_list:
+          - "\\bhow\\b[\\s\\S]{0,10}\\bdetect\\b"
     - name: ToolErrorHandlingMiddleware
       enabled: true
     - name: DynamicContextMiddleware
       enabled: true
       kwargs:
         inject_date: true
-        inject_memory: false
-        memory_sources: []
     - name: LoopDetectionMiddleware
       enabled: true
       kwargs:
@@ -71,13 +82,7 @@ backend:
 
 memory:
   enabled: false
-  injection_enabled: false
-  storage_path: ./tmp_tests/memory.json
-  debounce_seconds: 30
-  model_name: null
-  max_facts: 100
-  fact_confidence_threshold: 0.7
-  max_injection_tokens: 2000
+  storage_path: ./tmp_tests/AGENTS.md
 
 subagents:
   enabled: false

@@ -11,6 +11,7 @@ from scaffold.infra.middleware.deerflow_adapters.safety_termination import Safet
 from scaffold.infra.middleware.deerflow_adapters.tool_error_handling import ToolErrorHandlingMiddleware
 from scaffold.infra.middleware.factory import build_middleware_chain
 from scaffold.infra.middleware.registry import get_middleware_registry
+from scaffold.infra.middleware.telemetry import StateTelemetryWrapper
 
 
 class TestMiddlewareRegistry:
@@ -37,6 +38,11 @@ class TestMiddlewareRegistry:
         assert "LoopDetectionMiddleware" in names
         assert "ToolErrorHandlingMiddleware" in names
 
+    def test_resolve_input_guardrail_alias(self):
+        registry = get_middleware_registry()
+        cls = registry.resolve("InputGuardrailMiddleware")
+        assert cls.__name__ == "InputGuardrailMiddleware"
+
 
 class TestMiddlewareFactory:
     def test_empty_chain(self):
@@ -45,6 +51,48 @@ class TestMiddlewareFactory:
         chain = MiddlewareChainConfig(items=[])
         result = build_middleware_chain(chain)
         assert result == []
+
+    def test_factory_wraps_middleware_when_telemetry_enabled(self):
+        from scaffold.infra.config import middleware_config as middleware_config_module
+        from scaffold.infra.config.app_config import AppConfig
+
+        app_config = AppConfig(middleware_telemetry=True)
+        chain = build_middleware_chain(
+            config=middleware_config_module.MiddlewareChainConfig(
+                items=[
+                    middleware_config_module.MiddlewareConfig(
+                        name="ToolErrorHandlingMiddleware",
+                        enabled=True,
+                    )
+                ]
+            ),
+            app_config=app_config,
+        )
+
+        assert len(chain) == 1
+        assert isinstance(chain[0], StateTelemetryWrapper)
+        assert isinstance(chain[0]._wrapped, ToolErrorHandlingMiddleware)
+
+    def test_factory_does_not_wrap_when_telemetry_disabled(self):
+        from scaffold.infra.config import middleware_config as middleware_config_module
+        from scaffold.infra.config.app_config import AppConfig
+
+        app_config = AppConfig(middleware_telemetry=False)
+        chain = build_middleware_chain(
+            config=middleware_config_module.MiddlewareChainConfig(
+                items=[
+                    middleware_config_module.MiddlewareConfig(
+                        name="ToolErrorHandlingMiddleware",
+                        enabled=True,
+                    )
+                ]
+            ),
+            app_config=app_config,
+        )
+
+        assert len(chain) == 1
+        assert isinstance(chain[0], ToolErrorHandlingMiddleware)
+        assert not isinstance(chain[0], StateTelemetryWrapper)
 
 
 class TestToolErrorHandlingMiddleware:
@@ -125,6 +173,7 @@ class TestToolErrorHandlingMiddleware:
 
         app_config = AppConfig(
             agent=AgentConfig(max_iterations=40, drop_error_from_history=False),
+            middleware_telemetry=False,
         )
 
         chain = build_middleware_chain(
@@ -149,6 +198,7 @@ class TestToolErrorHandlingMiddleware:
 
         app_config = AppConfig(
             agent=AgentConfig(max_iterations=40, drop_error_from_history=False),
+            middleware_telemetry=False,
         )
 
         chain = build_middleware_chain(

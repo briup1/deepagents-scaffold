@@ -29,6 +29,7 @@ _DEFAULT_MIDDLEWARE_MAP: dict[str, str] = {
     "DynamicContextMiddleware": "scaffold.infra.middleware.deerflow_adapters.dynamic_context:DynamicContextMiddleware",
     "TokenUsageMiddleware": "scaffold.infra.middleware.deerflow_adapters.token_usage:TokenUsageMiddleware",
     "SafetyTerminationMiddleware": "scaffold.infra.middleware.deerflow_adapters.safety_termination:SafetyTerminationMiddleware",
+    "InputGuardrailMiddleware": "scaffold.infra.middleware.deerflow_adapters.input_guardrail:InputGuardrailMiddleware",
     "TodoMiddleware": "scaffold.infra.middleware.deerflow_adapters.todo:TodoMiddleware",
     "TitleMiddleware": "scaffold.infra.middleware.deerflow_adapters.title:TitleMiddleware",
     "DeepAgentsSummarizationMiddleware": "scaffold.infra.middleware.deerflow_adapters.deepagents_summarization:DeepAgentsSummarizationMiddleware",

@@ -4,7 +4,11 @@
 config_version: 1
 
 # 日志级别：debug, info, warning, error
-log_level: info
+log_level: debug
+# 日志格式：text 或 json
+log_format: json
+# 是否开启中间件可观测性（自动记录每个中间件 hook 进入/退出）
+middleware_telemetry: true
 
 # ---------------------------------------------------------------------------
 # 模型配置
@@ -94,21 +98,43 @@ skills:
 # ---------------------------------------------------------------------------
 # 声明注入到 DeepAgents agent 的有序中间件链。
 # 每个条目指定一个中间件类（或别名）和可选的 kwargs。
-# 内置别名：MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
-#   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
+# 内置别名：MemoryMiddleware（由 DeepAgents 根据 memory.storage_path 自动注入，无需在此声明）、
+#   FilesystemMiddleware, SubAgentMiddleware, SkillsMiddleware,
+#   LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
 #   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
-#   TodoMiddleware, TitleMiddleware, DeepAgentsSummarizationMiddleware
+#   InputGuardrailMiddleware, TodoMiddleware, TitleMiddleware, DeepAgentsSummarizationMiddleware
 middleware:
   items:
+    - name: InputGuardrailMiddleware
+      enabled: true
+      kwargs:
+        action: block
+        strip_claimed_intent: true
+        patterns:
+          - name: malware_creation
+            pattern: "\\b(create|write|make|build|develop|generate|code)\\b[\\s\\S]{0,50}\\b(malware|virus|trojan|worm|ransomware|spyware|keylogger|rootkit)\\b"
+          - name: credential_theft
+            pattern: "\\b(steal|phish|harvest|extract|dump|skim|grab)\\b[\\s\\S]{0,50}\\b(password|credential|login|token|api key|secret|cookie|session)\\b"
+          - name: social_engineering
+            pattern: "\\b(write|craft|create|draft|compose)\\b[\\s\\S]{0,50}\\b(phishing|spear.phishing|social.engineering|scam|pretexting|bait|hook)\\b"
+          - name: exploit_development
+            pattern: "\\b(write|create|build|develop|generate|code)\\b[\\s\\S]{0,50}\\b(exploit|payload|shellcode|reverse.shell|0day|zero.day|buffer.overflow|sql.injection)\\b"
+          - name: harmful_instructions
+            pattern: "\\b(how.to|steps.to|guide.for|tutorial.on)\\b[\\s\\S]{0,30}\\b(make|build|create)\\b[\\s\\S]{0,30}\\b(bomb|weapon|poison|drug|meth|explosive)\\b"
+        allow_list:
+          - "\\bdefend\\b[\\s\\S]{0,30}\\b(against|from)\\b"
+          - "\\bhow\\b[\\s\\S]{0,10}\\bdetect\\b"
+          - "\\bsecurity\\s+awareness\\b"
+          - "\\bincident\\s+response\\b"
+          - "\\bmitigate\\b"
+        keywords: []
+        message_template: "I can't help with requests that involve {matched_pattern}. If you're working on legitimate security research or defense, please rephrase your request to focus on protective or defensive measures."
     - name: ToolErrorHandlingMiddleware
       enabled: true
     - name: DynamicContextMiddleware
       enabled: true
       kwargs:
         inject_date: true
-        inject_memory: true
-        memory_sources:
-          - ./data/memory.md
     - name: LoopDetectionMiddleware
       enabled: true
       kwargs:
@@ -217,15 +243,11 @@ backend:
 # 记忆系统
 # ---------------------------------------------------------------------------
 # 跨会话持久化记忆，用于个性化。
+# DeepAgents 原生 MemoryMiddleware 会加载 storage_path 指向的 AGENTS.md 文件，
+# 并将其内容注入到 system prompt 中。Agent 可以通过 edit_file 工具更新该文件。
 memory:
   enabled: true
-  injection_enabled: true
-  storage_path: ./data/memory.json
-  debounce_seconds: 30
-  model_name: null  # null = 使用默认模型
-  max_facts: 100
-  fact_confidence_threshold: 0.7
-  max_injection_tokens: 2000
+  storage_path: ./data/AGENTS.md
 
 # ---------------------------------------------------------------------------
 # 子 Agent
