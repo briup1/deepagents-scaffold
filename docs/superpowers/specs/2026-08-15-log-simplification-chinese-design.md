@@ -122,13 +122,13 @@ class LogEvent:
 新增中文文本格式化器，输出形如：
 
 ```text
-[2026-08-15 14:56:41] [INFO] [middleware_effect] 输入护栏已阻断：pattern=malware_creation action=block | request_id=ca8eb526
+[2026-08-15 14:56:41] [INFO] [中间件效果] 输入护栏已阻断：pattern=malware_creation action=block | request_id=ca8eb526
 ```
 
 实现要点：
 
 - 时间戳使用本地时区或 UTC（与现有 JSON formatter 一致）。
-- `category` 使用中文类别名或保留英文代码（配置可选）。
+- `category` 使用中文类别名。
 - `fields` 按 `key=value` 拼接，字符串过长时截断并加 `...`。
 - 敏感字段（如 API key、token、用户隐私数据）必须脱敏，禁止明文输出。
 
@@ -224,10 +224,10 @@ middleware hook exit
 根据被包装中间件的行为，输出类似：
 
 ```text
-[middleware_effect] 输入护栏已阻断：pattern=malware_creation action=block
-[middleware_effect] 动态上下文已注入：memory_keys=[user_profile] date=2026-08-15
-[middleware_effect] 循环检测已触发：tool_name=read_file loop_count=5
-[middleware_effect] Token 使用已统计：input_tokens=120 output_tokens=80
+[中间件效果] 输入护栏已阻断：pattern=malware_creation action=block
+[中间件效果] 动态上下文已注入：memory_keys=[user_profile] date=2026-08-15
+[中间件效果] 循环检测已触发：tool_name=read_file loop_count=5
+[中间件效果] Token 使用已统计：input_tokens=120 output_tokens=80
 ```
 
 实现策略：
@@ -247,7 +247,7 @@ middleware hook exit
 保留一条精简的流式请求完成日志：
 
 ```text
-[ag_ui_lifecycle] 请求完成：thread_id=xxx run_id=xxx events=76 duration_ms=197
+[AG UI 生命周期] 请求完成：thread_id=xxx run_id=xxx events=76 duration_ms=197
 ```
 
 #### API 请求日志
@@ -255,10 +255,10 @@ middleware hook exit
 将 `Request | POST /agent | 200 | 2.95ms` 汉化并归类为 `user_input`：
 
 ```text
-[user_input] 用户请求：method=POST path=/agent status=200 duration_ms=2.95
+[用户输入] 用户请求：method=POST path=/agent status=200 duration_ms=2.95
 ```
 
-同时可选项：在 `user_input` 开启时，记录用户最新消息摘要（角色、内容长度，不记录完整内容）。
+同时：在 `user_input` 开启时，记录用户最新消息完整内容（`content` 全部输出）。
 
 ### 6.6 类别过滤机制
 
@@ -283,8 +283,8 @@ class CategoryFilter(logging.Filter):
 在工具执行前后记录 `LogCategory.TOOL_CALL`：
 
 ```text
-[tool_call] 工具调用：name=read_file path=src/main.py
-[tool_call] 工具返回：name=read_file status=success content_length=512
+[工具调用] 工具调用：name=read_file path=src/main.py
+[工具调用] 工具返回：name=read_file status=success content=...（完整结果）
 ```
 
 实现方式：
@@ -394,22 +394,22 @@ class CategoryFilter(logging.Filter):
 改造后，同一次 `/agent` 请求的日志将从 23 行缩减为约 5-8 行，例如：
 
 ```text
-[2026-08-15 14:56:41] [INFO] [user_input] 用户请求：method=POST path=/agent status=200 duration_ms=2.95 request_id=ca8eb526
-[2026-08-15 14:56:41] [INFO] [user_input] 用户消息：role=user content_length=5
-[2026-08-15 14:56:41] [WARNING] [middleware_effect] 输入护栏已阻断：pattern=malware_creation action=block request_id=ca8eb526
-[2026-08-15 14:56:41] [INFO] [middleware_effect] 动态上下文已注入：memory_keys=[user_profile] date=2026-08-15 request_id=ca8eb526
-[2026-08-15 14:56:41] [INFO] [ag_ui_lifecycle] 请求完成：thread_id=thread-xxx run_id=run-xxx events=76 duration_ms=197 request_id=ca8eb526
+[2026-08-15 14:56:41] [INFO] [用户输入] 用户请求：method=POST path=/agent status=200 duration_ms=2.95 request_id=ca8eb526
+[2026-08-15 14:56:41] [INFO] [用户输入] 用户消息：role=user content=hello
+[2026-08-15 14:56:41] [WARNING] [中间件效果] 输入护栏已阻断：pattern=malware_creation action=block request_id=ca8eb526
+[2026-08-15 14:56:41] [INFO] [中间件效果] 动态上下文已注入：memory_keys=[user_profile] date=2026-08-15 request_id=ca8eb526
+[2026-08-15 14:56:41] [INFO] [AG UI 生命周期] 请求完成：thread_id=thread-xxx run_id=run-xxx events=76 duration_ms=197 request_id=ca8eb526
 ```
 
 相比原日志，信息密度显著提高，中间件生效证据清晰，且默认不再输出 ag-ui 生命周期噪音。
 
 ---
 
-## 11. 待决策事项
+## 11. 决策结论
 
-1. `ChineseTextFormatter` 中的 `category` 是否显示中文（如 `[中间件效果]`）还是保留英文代码（`[middleware_effect]`）？
-2. 用户输入是否需要记录内容前 N 个字符预览，还是仅记录长度？
-3. 工具调用参数是否全部记录，还是需要按参数名黑名单脱敏？
-4. 是否需要为 `chinese_text` 提供可选的彩色输出（如 ERROR 红色、WARNING 黄色）？
+经确认，以下事项已确定：
 
-这些问题可在实现计划阶段或代码评审时进一步确认。
+1. `ChineseTextFormatter` 中的 `category` 显示中文，例如 `[中间件效果]`、`[工具调用]`、`[记忆]`、`[用户输入]`。
+2. 用户输入记录完整内容（`content` 全部输出），不截断为长度或前 N 字符预览。
+3. 工具调用参数全部记录，便于本地调试；若未来出现敏感参数，可通过参数名黑名单在 formatter 层统一脱敏。
+4. `chinese_text` 格式不引入彩色输出，保持简洁。
