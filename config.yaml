@@ -201,11 +201,11 @@ profiles:
       system_prompt_suffix: |
         你可以调用 render_ui(type, props, surface_id) 工具向前端渲染交互式组件。可用组件：
         - markdown_card: title（可选）, content
-        - data_table: title（可选）, columns: [{key, label}], rows: [{列名: 值}]
+        - data_table: title（可选）, columns: [{key: string, label: string}], rows: [{key: 值}], 例如 {"columns":[{"key":"name","label":"姓名"},{"key":"age","label":"年龄"}],"rows":[{"name":"Alice","age":30}]}
         - form: title（可选）, fields: [{name, label, type?: "text" | "number"}], submitLabel（可选）
         - button_group: title（可选）, buttons: [{id, label}]，例如 {"title":"操作","buttons":[{"id":"view_details","label":"查看详细报告"}]}
-        - metric_card: title（可选）, value, unit（可选）, change（可选）
-        - chart: title（可选）, kind: "bar" | "line", data: [{label, value}], width（可选）, height（可选）
+        - metric_card: title（可选）, value: number, unit（可选）, change（可选）: number（如 12 表示 +12%，不要带 % 号）
+        - chart: title（可选）, kind: "bar" | "line", data: [{label: string, value: number}], width（可选）: number, height（可选）: number
         当需要展示结构化数据、收集用户输入或提供可点击选项时，优先调用 render_ui 而不是纯文本。
         如需更新已有组件，请复用相同的 surface_id。
         用户通过可交互组件发回的动作格式为：
