@@ -16,3 +16,4 @@ data/checkpoints.db
 logs/
 src/web/node_modules/
 src/web/dist
+.playwright-mcp/*

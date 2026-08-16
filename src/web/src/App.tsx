@@ -94,6 +94,12 @@ export default function App() {
     setThreadId(`thread-${crypto.randomUUID()}`)
   }
 
+  const handleAgentChange = (nextAgentId: string) => {
+    if (nextAgentId === currentAgentId) return
+    setAgentId(nextAgentId)
+    setThreadId(`thread-${crypto.randomUUID()}`)
+  }
+
   return (
     <div className="flex h-screen w-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-gray-200 px-4 py-3">
@@ -101,7 +107,7 @@ export default function App() {
           <h1 className="text-lg font-semibold text-gray-800">DeepAgents</h1>
           <AgentSelector
             value={currentAgentId}
-            onChange={setAgentId}
+            onChange={handleAgentChange}
             agents={agents}
           />
         </div>

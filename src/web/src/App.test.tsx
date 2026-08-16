@@ -59,14 +59,17 @@ describe('App', () => {
     )
   })
 
-  it('切换 Agent 时更新 agentId 和 agentUrl', async () => {
+  it('切换 Agent 时重置 threadId 以隔离不同 Agent 的历史消息', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument())
+    const firstThreadId = latestCopilotKitProps.threadId as string
+
     await user.selectOptions(screen.getByRole('combobox'), 'code_reviewer')
 
     await waitFor(() => expect(latestCopilotChatProps.agentId).toBe('code_reviewer'))
+    await waitFor(() => expect(latestCopilotKitProps.threadId).not.toBe(firstThreadId))
   })
 
   it('点击新建会话重置 threadId', async () => {
