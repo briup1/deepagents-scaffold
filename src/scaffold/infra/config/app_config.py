@@ -34,14 +34,18 @@ class DatabaseConfig(BaseModel):
 
 
 class MemoryConfig(BaseModel):
+    """DeepAgents 原生 MemoryMiddleware 配置。
+
+    仅保留启用开关与 AGENTS.md 文件路径。旧版自动提取 facts 相关字段
+    （injection_enabled、debounce_seconds、model_name、max_facts、
+    fact_confidence_threshold、max_injection_tokens）已移除。
+    """
+
     enabled: bool = True
-    injection_enabled: bool = True
-    storage_path: str = "./data/memory.json"
-    debounce_seconds: int = 30
-    model_name: str | None = None
-    max_facts: int = 100
-    fact_confidence_threshold: float = 0.7
-    max_injection_tokens: int = 2000
+    storage_path: str = Field(
+        default="./data/AGENTS.md",
+        description="DeepAgents MemoryMiddleware 加载的 AGENTS.md 路径",
+    )
 
 
 class SubagentConfig(BaseModel):
@@ -97,6 +101,11 @@ class AppConfig(BaseModel):
 
     config_version: int = 1
     log_level: str = Field(default="info", description="debug/info/warning/error")
+    log_format: str = Field(default="text", description="text or json")
+    middleware_telemetry: bool = Field(
+        default=True,
+        description="是否在中间件工厂中自动包装每个中间件以记录结构化可观测日志",
+    )
     models: list[ModelConfig] = Field(default_factory=list)
     tools: list[ToolConfig] = Field(default_factory=list)
     tool_groups: list[ToolGroupConfig] = Field(default_factory=list)

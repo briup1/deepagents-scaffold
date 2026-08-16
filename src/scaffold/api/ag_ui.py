@@ -26,6 +26,7 @@ from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 
 from scaffold.core.agents import get_agent, list_agents
+from scaffold.infra.context import request_id_ctx, trace_id_ctx
 from scaffold.infra.config.app_config import get_app_config
 
 logger = logging.getLogger(__name__)
@@ -344,14 +345,21 @@ def _build_ag_ui_agent(name: str) -> LangGraphAgent:
     return LangGraphAgent(name=name, graph=graph, config=config)
 
 
-def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str) -> None:
+def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, op_id_suffix: str = "") -> None:
     """注册单个 agent 的 POST /agent 与 GET /agent/health 端点。"""
+    suffix = op_id_suffix or base_agent.name
 
-    @app.post(path, operation_id=f"run_agent_{base_agent.name}")
+    @app.post(path, operation_id=f"run_agent_{suffix}")
     async def langgraph_agent_endpoint(
         input_data: RunAgentInput,
         request: Request,
     ) -> StreamingResponse:
+        # 把 HTTP request_id 透传到 Agent 执行上下文，供中间件可观测性使用
+        req_id = getattr(request.state, "request_id", None)
+        if req_id:
+            request_id_ctx.set(req_id)
+            trace_id_ctx.set(req_id)
+
         # 每个请求克隆一个独立 agent，避免并发请求间 per-request 状态互相污染
         request_agent = base_agent.clone()
         accept_header = request.headers.get("accept")
@@ -375,7 +383,7 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str) -> N
             media_type=encoder.get_content_type(),
         )
 
-    @app.get(f"{path}/health", operation_id=f"agent_health_{base_agent.name}")
+    @app.get(f"{path}/health", operation_id=f"agent_health_{suffix}")
     def health() -> dict[str, Any]:
         return {
             "status": "ok",
@@ -384,15 +392,26 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str) -> N
 
 
 def register_ag_ui_endpoints(app: FastAPI) -> None:
-    """为每个已注册 agent 在 FastAPI app 上注册 ag-ui 端点。"""
+    """为每个已注册 agent 在 FastAPI app 上注册 ag-ui 端点。
+
+    同时为默认 agent 注册 /agent，保持单 Agent 场景的向后兼容。
+    """
     agents = list_agents()
     if not agents:
         logger.warning("No agents registered; skipping ag-ui endpoint registration")
         return
 
+    app_config = get_app_config()
+    default_profile = app_config.get_default_harness_profile()
+    default_name = default_profile.name if default_profile else agents[0]["name"]
+
     for info in agents:
         name = info["name"]
-        path = f"/agent/{name}" if len(agents) > 1 else "/agent"
         base_agent = _build_ag_ui_agent(name)
-        _register_endpoint(app, base_agent, path)
-        logger.info("AG-UI endpoint registered: %s -> agent=%s", path, name)
+        _register_endpoint(app, base_agent, f"/agent/{name}")
+        logger.info("AG-UI endpoint registered: /agent/%s -> agent=%s", name, name)
+
+    # 注册 /agent 作为默认 agent 的别名，兼容旧客户端和测试
+    default_agent = _build_ag_ui_agent(default_name)
+    _register_endpoint(app, default_agent, "/agent", op_id_suffix=f"{default_name}_alias")
+    logger.info("AG-UI endpoint registered: /agent -> agent=%s", default_name)

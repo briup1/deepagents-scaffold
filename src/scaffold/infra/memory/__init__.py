@@ -1,15 +1,5 @@
-"""Memory system.
+"""Memory system package marker.
 
-持久化记忆，支持 LLM 驱动的事实提取、置信度评分与异步更新。
+DeepAgents 原生 MemoryMiddleware 通过 create_deep_agent(memory=...) 自动加载 AGENTS.md，
+本包不再维护自定义记忆实现，仅保留目录占位。
 """
-
-from __future__ import annotations
-
-from scaffold.infra.memory.storage import MemoryStorage, FileMemoryStorage
-from scaffold.infra.memory.updater import MemoryUpdater
-
-__all__ = [
-    "MemoryStorage",
-    "FileMemoryStorage",
-    "MemoryUpdater",
-]

@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         config = get_app_config()
         configure_logging(
             level=config.log_level,
-            format_type="text",
+            format_type=config.log_format,
             log_dir="logs",
         )
         logger.info(
@@ -50,12 +50,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     async with scaffold_runtime(app):
         try:
-            create_agent(name="default", checkpointer=app.state.checkpointer)
+            # 为每个 harness profile 注册一个独立 Agent，名称与 profile 名一致
+            config = get_app_config()
+            profiles = config.profiles.harness
+            if not profiles:
+                create_agent(name="default", checkpointer=app.state.checkpointer)
+            else:
+                for profile in profiles:
+                    create_agent(
+                        name=profile.name,
+                        harness_profile=profile.name,
+                        checkpointer=app.state.checkpointer,
+                    )
         except Exception as exc:
-            logger.exception("Failed to create default agent: %s", exc)
-            raise RuntimeError(f"Failed to create default agent: {exc}") from exc
+            logger.exception("Failed to create agents: %s", exc)
+            raise RuntimeError(f"Failed to create agents: {exc}") from exc
 
-        # AG-UI 端点：必须在 default agent 创建后注册
+        # AG-UI 端点：必须在 agent 创建后注册
         register_ag_ui_endpoints(app)
 
         logger.info("Scaffold runtime ready on %s:%d", config.gateway.host, config.gateway.port)

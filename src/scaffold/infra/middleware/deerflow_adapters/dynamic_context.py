@@ -1,6 +1,6 @@
 """动态上下文中间件。
 
-在每次模型调用前把当前日期/时间和记忆上下文注入 system message，
+在每次模型调用前把当前日期/时间注入 system message，
 让模型看到但不写回 state.messages，避免 AG-UI/CopilotKit 把提醒渲染成聊天消息。
 
 改编自 deerflow.agents.middlewares.dynamic_context_middleware。
@@ -20,37 +20,24 @@ logger = logging.getLogger(__name__)
 
 
 class DynamicContextMiddleware(AgentMiddleware):
-    """在每次 LLM 调用前注入动态上下文（日期、记忆摘要）。"""
+    """在每次 LLM 调用前注入动态上下文（当前日期/时间）。"""
 
     def __init__(
         self,
         *,
         inject_date: bool = True,
-        inject_memory: bool = True,
-        memory_sources: list[str] | None = None,
         timezone_str: str = "UTC",
     ) -> None:
         self.inject_date = inject_date
-        self.inject_memory = inject_memory
-        self.memory_sources = memory_sources or []
         self.timezone_str = timezone_str
 
     def _build_reminder_text(self, state: Any) -> str:
-        """构造日期/记忆提醒文本。"""
+        """构造日期提醒文本。"""
         reminders: list[str] = []
 
         if self.inject_date:
             now = datetime.now(timezone.utc)
             reminders.append(f"Current date and time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-
-        if self.inject_memory and self.memory_sources:
-            for source in self.memory_sources:
-                try:
-                    content = _load_memory_source(source)
-                    if content:
-                        reminders.append(f"Memory context ({source}):\n{content}")
-                except Exception:
-                    logger.debug("Could not load memory source: %s", source)
 
         return "\n\n".join(reminders)
 
@@ -83,19 +70,4 @@ class DynamicContextMiddleware(AgentMiddleware):
         return None
 
     async def abefore_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
-        return None
-
-
-def _load_memory_source(source: str) -> str | None:
-    """加载记忆源文件。"""
-    import os
-
-    # 展开 ~ 和环境变量
-    path = os.path.expandvars(os.path.expanduser(source))
-    if not os.path.isfile(path):
-        return None
-    try:
-        with open(path, encoding="utf-8") as f:
-            return f.read().strip()
-    except Exception:
         return None

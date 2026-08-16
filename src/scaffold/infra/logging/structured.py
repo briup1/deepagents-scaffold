@@ -9,6 +9,18 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+from scaffold.infra.context import get_request_id
+
+
+class RequestIdFilter(logging.Filter):
+    """自动从 ContextVar 读取 request_id 并注入 LogRecord。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "request_id"):
+            record.request_id = get_request_id()
+        return True
+
+
 class JSONFormatter(logging.Formatter):
     """将日志记录格式化为 JSON 行。"""
 

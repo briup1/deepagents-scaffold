@@ -67,9 +67,7 @@ class RegexModerator:
             re.IGNORECASE,
         )
 
-    def _compile_patterns(
-        self, patterns: list[dict[str, str]] | list[str]
-    ) -> list[tuple[str, re.Pattern[str]]]:
+    def _compile_patterns(self, patterns: list[dict[str, str]] | list[str]) -> list[tuple[str, re.Pattern[str]]]:
         """编译正则模式列表；支持字典（含 name/pattern）或纯字符串形式。"""
         flags = 0 if self._case_sensitive else re.IGNORECASE
         compiled: list[tuple[str, re.Pattern[str]]] = []

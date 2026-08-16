@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import time
-import types
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
@@ -17,15 +16,11 @@ from scaffold.infra.logging.structured import get_logger
 logger = get_logger("infra.middleware.telemetry")
 
 # 总是包装的简单生命周期 hook（基类默认返回 None，不会破坏 SDK 调用路径）
-_STATE_HOOKS = [
-    "before_agent",
-    "abefore_agent",
-    "before_model",
-    "abefore_model",
-    "after_model",
-    "aafter_model",
-    "after_agent",
-    "aafter_agent",
+_STATE_HOOK_PAIRS = [
+    ("before_agent", "abefore_agent"),
+    ("before_model", "abefore_model"),
+    ("after_model", "aafter_model"),
+    ("after_agent", "aafter_agent"),
 ]
 
 # 只有被包装者实际覆盖时才包装的回调式 hook（避免把 before_model 路径强制改走 wrap 路径）
@@ -33,6 +28,9 @@ _WRAP_HOOK_PAIRS = [
     ("wrap_model_call", "awrap_model_call"),
     ("wrap_tool_call", "awrap_tool_call"),
 ]
+
+# 动态子类缓存：被包装中间件类 -> 对应 TelemetryWrapper 子类
+_telemetry_wrapper_cls_cache: dict[type, type] = {}
 
 
 def _is_overridden(cls: type[Any], method_name: str) -> bool:
@@ -43,6 +41,39 @@ def _is_overridden(cls: type[Any], method_name: str) -> bool:
         if method_name in klass.__dict__:
             return True
     return False
+
+
+def _make_telemetry_wrapper_cls(wrapped_cls: type[Any]) -> type:
+    """为被包装中间件动态创建 TelemetryWrapper 子类。
+
+    ``langchain.agents.create_agent`` 通过 class-level 方法判断中间件是否实现了某个 hook。
+    仅把方法绑定到实例上无法被 SDK 发现，因此需要动态子类把真正覆写的 hook 暴露到类层面。
+    """
+    if wrapped_cls in _telemetry_wrapper_cls_cache:
+        return _telemetry_wrapper_cls_cache[wrapped_cls]
+
+    methods: dict[str, Any] = {}
+
+    # 生命周期 hook 仅在被子类覆写 sync 或 async 时暴露，避免产生无意义空节点
+    for sync_hook, async_hook in _STATE_HOOK_PAIRS:
+        if _is_overridden(wrapped_cls, sync_hook):
+            methods[sync_hook] = getattr(StateTelemetryWrapper, f"_{sync_hook}_impl")
+        if _is_overridden(wrapped_cls, async_hook):
+            methods[async_hook] = getattr(StateTelemetryWrapper, f"_{async_hook}_impl")
+
+    # 回调式 hook 仅在被子类覆写时暴露，避免不必要的 wrap 链开销
+    for sync_hook, async_hook in _WRAP_HOOK_PAIRS:
+        if _is_overridden(wrapped_cls, sync_hook) or _is_overridden(wrapped_cls, async_hook):
+            methods[sync_hook] = getattr(StateTelemetryWrapper, f"_{sync_hook}_impl")
+            methods[async_hook] = getattr(StateTelemetryWrapper, f"_{async_hook}_impl")
+
+    wrapper_cls = type(
+        f"StateTelemetryWrapper_{wrapped_cls.__name__}",
+        (StateTelemetryWrapper,),
+        methods,
+    )
+    _telemetry_wrapper_cls_cache[wrapped_cls] = wrapper_cls
+    return wrapper_cls
 
 
 def _summarize_message(msg: Any) -> dict[str, Any]:
@@ -243,23 +274,26 @@ def summarize_tool_response(response: Any) -> dict[str, Any]:
 class StateTelemetryWrapper(AgentMiddleware):
     """透明包装中间件实例，记录其 hook 进入/退出时的状态变化。"""
 
-    def __init__(self, wrapped: AgentMiddleware[Any, Any, Any], index: int) -> None:
+    def __new__(
+        cls,
+        wrapped: AgentMiddleware[Any, Any, Any],
+        index: int,
+    ) -> "StateTelemetryWrapper":
+        # 基类被直接实例化时，返回被包装类对应的动态子类实例，
+        # 使 class-level hook 可被 langchain.agents.create_agent 识别。
+        if cls is StateTelemetryWrapper:
+            wrapper_cls = _make_telemetry_wrapper_cls(type(wrapped))
+            return super().__new__(wrapper_cls)
+        return super().__new__(cls)
+
+    def __init__(
+        self,
+        wrapped: AgentMiddleware[Any, Any, Any],
+        index: int,
+    ) -> None:
         self._wrapped = wrapped
         self._index = index
         self._logger = logger
-
-        # 绑定简单生命周期 hook
-        for hook in _STATE_HOOKS:
-            impl = getattr(StateTelemetryWrapper, f"_{hook}_impl")
-            setattr(self, hook, types.MethodType(impl, self))
-
-        # 仅在被子类实际覆写时才绑定 wrap hook，避免破坏 SDK 的路径选择
-        for sync_hook, async_hook in _WRAP_HOOK_PAIRS:
-            if _is_overridden(type(wrapped), sync_hook) or _is_overridden(type(wrapped), async_hook):
-                sync_impl = getattr(StateTelemetryWrapper, f"_{sync_hook}_impl")
-                async_impl = getattr(StateTelemetryWrapper, f"_{async_hook}_impl")
-                setattr(self, sync_hook, types.MethodType(sync_impl, self))
-                setattr(self, async_hook, types.MethodType(async_impl, self))
 
     @property
     def name(self) -> str:
@@ -374,10 +408,26 @@ class StateTelemetryWrapper(AgentMiddleware):
     # 简单生命周期 hook 实现
     # ------------------------------------------------------------------
 
+    def _call_wrapped_lifecycle(self, hook: str, state: Any, runtime: Any) -> dict[str, Any] | None:
+        """调用被包装中间件的同步生命周期 hook；未覆盖时返回 None。"""
+        if _is_overridden(type(self._wrapped), hook):
+            return getattr(self._wrapped, hook)(state, runtime)
+        return None
+
+    async def _acall_wrapped_lifecycle(self, hook: str, state: Any, runtime: Any) -> dict[str, Any] | None:
+        """调用被包装中间件的异步生命周期 hook；无 async 实现时回退到同步。"""
+        async_hook = f"a{hook}"
+        wrapped_cls = type(self._wrapped)
+        if _is_overridden(wrapped_cls, async_hook):
+            return await getattr(self._wrapped, async_hook)(state, runtime)
+        if _is_overridden(wrapped_cls, hook):
+            return getattr(self._wrapped, hook)(state, runtime)
+        return None
+
     def _before_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("before_agent", summarize_state(state))
-        update = self._wrapped.before_agent(state, runtime)
+        update = self._call_wrapped_lifecycle("before_agent", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("before_agent", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -385,7 +435,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     async def _abefore_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("abefore_agent", summarize_state(state))
-        update = await self._wrapped.abefore_agent(state, runtime)
+        update = await self._acall_wrapped_lifecycle("before_agent", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("abefore_agent", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -393,7 +443,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     def _before_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("before_model", summarize_state(state))
-        update = self._wrapped.before_model(state, runtime)
+        update = self._call_wrapped_lifecycle("before_model", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("before_model", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -401,7 +451,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     async def _abefore_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("abefore_model", summarize_state(state))
-        update = await self._wrapped.abefore_model(state, runtime)
+        update = await self._acall_wrapped_lifecycle("before_model", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("abefore_model", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -409,7 +459,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     def _after_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("after_model", summarize_state(state))
-        update = self._wrapped.after_model(state, runtime)
+        update = self._call_wrapped_lifecycle("after_model", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("after_model", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -417,7 +467,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     async def _aafter_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("after_model", summarize_state(state))
-        update = await self._wrapped.after_model(state, runtime)
+        update = await self._acall_wrapped_lifecycle("after_model", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("after_model", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -425,7 +475,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     def _after_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("after_agent", summarize_state(state))
-        update = self._wrapped.after_agent(state, runtime)
+        update = self._call_wrapped_lifecycle("after_agent", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("after_agent", summarize_state(state), summarize_update(update), duration_ms)
         return update
@@ -433,7 +483,7 @@ class StateTelemetryWrapper(AgentMiddleware):
     async def _aafter_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         start = time.perf_counter()
         self._log_hook_enter("after_agent", summarize_state(state))
-        update = await self._wrapped.after_agent(state, runtime)
+        update = await self._acall_wrapped_lifecycle("after_agent", state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
         self._log_hook_exit("after_agent", summarize_state(state), summarize_update(update), duration_ms)
         return update

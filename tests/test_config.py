@@ -17,6 +17,11 @@ class TestAppConfig:
         assert config.models == []
         assert config.tools == []
 
+    def test_default_memory_config(self):
+        config = AppConfig()
+        assert config.memory.enabled is True
+        assert config.memory.storage_path == "./data/AGENTS.md"
+
     def test_hot_reload(self, tmp_path):
         yaml_path = tmp_path / "config.yaml"
         yaml_path.write_text("config_version: 42\nlog_level: debug\n")

@@ -10,7 +10,7 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-from scaffold.infra.logging.structured import JSONFormatter
+from scaffold.infra.logging.structured import JSONFormatter, RequestIdFilter
 
 
 def configure_logging(
@@ -66,6 +66,7 @@ def configure_logging(
 
     for handler in handlers:
         handler.setLevel(log_level)
+        handler.addFilter(RequestIdFilter())
         if format_type == "json":
             handler.setFormatter(JSONFormatter(indent=json_indent))
         else:

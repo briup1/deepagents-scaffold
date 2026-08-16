@@ -69,6 +69,16 @@ profiles:
       system_prompt_suffix: ""
       excluded_middleware: []
       excluded_tools: []
+    - name: coding
+      base_system_prompt: "You are a coding assistant."
+      system_prompt_suffix: "Write tests."
+      excluded_middleware: []
+      excluded_tools: []
+    - name: code_reviewer
+      base_system_prompt: "You are a code reviewer."
+      system_prompt_suffix: "Review carefully."
+      excluded_middleware: []
+      excluded_tools: []
   default_harness: default
 
 backend:

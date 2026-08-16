@@ -39,6 +39,7 @@ _agent_registry: dict[str, Any] = {}
 def create_agent(
     name: str = "default",
     *,
+    harness_profile: str | None = None,
     model_name: str | None = None,
     system_prompt: str | SystemMessage | None = None,
     tools: list[Any] | None = None,
@@ -50,6 +51,7 @@ def create_agent(
 
     Args:
         name: agent 在注册表中的标识名称。
+        harness_profile: 使用的 harness profile 名称；省略时使用配置中的 default_harness。
         model_name: 使用的模型配置名称（默认取第一个已配置的模型）。
         system_prompt: 覆盖默认系统提示词（字符串或 SystemMessage）。
         tools: 除 config.yaml 中配置之外额外附加的工具列表。
@@ -63,6 +65,10 @@ def create_agent(
     if app_config is None:
         app_config = get_app_config()
 
+    # 解析 harness profile：显式指定 > default_harness > 第一个
+    profile = _resolve_harness_profile(app_config, harness_profile)
+    profile_name = profile.name if profile else (harness_profile or "default")
+
     # 解析模型配置
     model_cfg = _resolve_model_config(app_config, model_name)
     chat_model = create_chat_model(model_cfg)
@@ -72,7 +78,7 @@ def create_agent(
     all_tools = configured_tools + (tools or [])
 
     # 解析系统提示词
-    prompt = _build_system_prompt(system_prompt, app_config)
+    prompt = _build_system_prompt(system_prompt, app_config, profile)
 
     # 根据配置构建中间件链
     middleware = build_middleware_chain(app_config=app_config)
@@ -100,8 +106,9 @@ def create_agent(
     state_schema = kwargs.pop("state_schema", None) or DeepAgentState
 
     logger.info(
-        "Creating agent '%s' — model=%s tools=%d middleware=%d subagents=%d skills=%d",
+        "Creating agent '%s' harness='%s' — model=%s tools=%d middleware=%d subagents=%d skills=%d",
         name,
+        profile_name,
         model_cfg.name,
         len(all_tools),
         len(middleware),
@@ -128,7 +135,7 @@ def create_agent(
         agent._scaffold_tracing_callbacks = callbacks  # type: ignore[attr-defined]
 
     _agent_registry[name] = agent
-    logger.info("Agent '%s' 已创建并注册", name)
+    logger.info("Agent '%s' harness='%s' 已创建并注册", name, profile_name)
     return agent
 
 
@@ -161,9 +168,24 @@ def _resolve_model_config(app_config: AppConfig, model_name: str | None) -> Mode
     raise ValueError("No models configured. Add at least one model to config.yaml.")
 
 
+def _resolve_harness_profile(
+    app_config: AppConfig,
+    harness_profile: str | None,
+) -> HarnessProfileConfig | None:
+    """解析 harness profile：显式指定 > default_harness > 第一个。"""
+    if harness_profile:
+        profile = app_config.get_harness_profile(harness_profile)
+        if profile is None:
+            logger.warning("Harness profile '%s' not found, falling back to default", harness_profile)
+        else:
+            return profile
+    return app_config.get_default_harness_profile()
+
+
 def _build_system_prompt(
     override: str | SystemMessage | None,
     app_config: AppConfig,
+    profile: HarnessProfileConfig | None = None,
 ) -> str | SystemMessage | None:
     """构建最终系统提示词。
 
@@ -174,7 +196,8 @@ def _build_system_prompt(
         return override
 
     # 优先级 2: harness profile 配置
-    profile = app_config.get_default_harness_profile()
+    if profile is None:
+        profile = app_config.get_default_harness_profile()
     if isinstance(profile, HarnessProfileConfig):
         assembler = PromptAssembler()
 

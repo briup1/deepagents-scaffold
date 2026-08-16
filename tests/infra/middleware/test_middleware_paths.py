@@ -1,7 +1,7 @@
 """中间件核心路径触发测试。
 
 针对 config.yaml 中实际启用的四条中间件，验证其关键行为路径：
-- DynamicContextMiddleware: 注入日期/记忆上下文
+- DynamicContextMiddleware: 注入日期上下文
 - ToolErrorHandlingMiddleware: 捕获工具异常并返回错误 ToolMessage
 - LoopDetectionMiddleware: 检测重复工具调用并强制停止
 - TokenUsageMiddleware: 聚合模型调用的 token 用量
@@ -50,7 +50,7 @@ class TestDynamicContextMiddleware:
 
     def test_injects_current_date_when_enabled(self):
         """启用 inject_date 时，system_message 应包含当前日期。"""
-        mw = DynamicContextMiddleware(inject_date=True, inject_memory=False, memory_sources=[])
+        mw = DynamicContextMiddleware(inject_date=True)
         request = self._make_request()
         handler = MagicMock(return_value="model_response")
 
@@ -66,7 +66,7 @@ class TestDynamicContextMiddleware:
 
     def test_preserves_existing_system_message(self):
         """注入上下文时不应覆盖原有 system message，而是追加。"""
-        mw = DynamicContextMiddleware(inject_date=True, inject_memory=False, memory_sources=[])
+        mw = DynamicContextMiddleware(inject_date=True)
         request = self._make_request("Original system prompt.")
         handler = MagicMock(return_value="model_response")
 
@@ -78,8 +78,8 @@ class TestDynamicContextMiddleware:
         assert "[系统上下文]" in new_system.text
 
     def test_skips_injection_when_disabled(self):
-        """inject_date 和 inject_memory 都关闭时，请求原样传递。"""
-        mw = DynamicContextMiddleware(inject_date=False, inject_memory=False, memory_sources=[])
+        """inject_date 关闭时，请求原样传递。"""
+        mw = DynamicContextMiddleware(inject_date=False)
         request = self._make_request()
         handler = MagicMock(return_value="model_response")
 
@@ -88,28 +88,9 @@ class TestDynamicContextMiddleware:
         called_request = handler.call_args[0][0]
         assert called_request is request
 
-    def test_injects_memory_source_content(self, tmp_path):
-        """inject_memory 时，应读取 memory_sources 文件并注入。"""
-        memory_file = tmp_path / "memory.md"
-        memory_file.write_text("用户喜欢简洁回答。", encoding="utf-8")
-
-        mw = DynamicContextMiddleware(
-            inject_date=False,
-            inject_memory=True,
-            memory_sources=[str(memory_file)],
-        )
-        request = self._make_request()
-        handler = MagicMock(return_value="model_response")
-
-        mw.wrap_model_call(request, handler)
-
-        called_request = handler.call_args[0][0]
-        new_system = called_request.system_message
-        assert "用户喜欢简洁回答。" in new_system.text
-
     async def test_async_path_also_injects(self):
         """异步路径 awrap_model_call 同样应注入上下文。"""
-        mw = DynamicContextMiddleware(inject_date=True, inject_memory=False, memory_sources=[])
+        mw = DynamicContextMiddleware(inject_date=True)
         request = self._make_request()
 
         async def handler(req):

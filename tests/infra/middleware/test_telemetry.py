@@ -162,26 +162,51 @@ class TestStateTelemetryWrapper:
         # 最终传给 handler 的 request 摘要应体现修改
         assert extra["request_summary"]["system_message"]["type"] == "MagicMock"
 
-    def test_only_binds_overridden_wrap_hooks(self):
-        """未覆盖 wrap_model_call 的中间件，包装后实例不应动态绑定 wrap_model_call。"""
+    def test_only_binds_overridden_hooks(self):
+        """仅在被包装类覆写对应 hook 时，动态子类才暴露 class-level 方法。"""
         wrapped = FakeBeforeModelMiddleware()
         wrapper = StateTelemetryWrapper(wrapped, index=0)
 
-        assert "before_model" in wrapper.__dict__
-        assert "wrap_model_call" not in wrapper.__dict__
-        assert "awrap_model_call" not in wrapper.__dict__
+        # 覆写了 before_model，应暴露
+        assert wrapper.__class__.before_model is not AgentMiddleware.before_model
+        # 未覆写 wrap_model_call，不应暴露
+        assert wrapper.__class__.wrap_model_call is AgentMiddleware.wrap_model_call
+        assert wrapper.__class__.awrap_model_call is AgentMiddleware.awrap_model_call
 
-    def test_noop_middleware_still_logs_state_hooks(self):
+    def test_overridden_wrap_hooks_exposed_at_class_level(self):
+        """覆盖 wrap_model_call 的中间件，包装后 class-level 应暴露对应 hook。"""
+        wrapped = FakeWrapModelMiddleware()
+        wrapper = StateTelemetryWrapper(wrapped, index=0)
+
+        assert wrapper.__class__.wrap_model_call is not AgentMiddleware.wrap_model_call
+        assert wrapper.__class__.awrap_model_call is not AgentMiddleware.awrap_model_call
+        # FakeWrapModelMiddleware 未覆盖生命周期 hook，动态子类不应暴露
+        assert wrapper.__class__.before_model is AgentMiddleware.before_model
+        assert wrapper.__class__.after_model is AgentMiddleware.after_model
+
+    def test_noop_middleware_does_not_expose_lifecycle_hooks(self):
+        """未覆盖任何生命周期 hook 的中间件，包装后 class-level 不应暴露空实现。"""
         wrapped = FakeNoopMiddleware()
         wrapper = StateTelemetryWrapper(wrapped, index=0)
 
-        with (
-            patch.object(wrapper._logger, "debug"),
-            patch.object(wrapper._logger, "info") as mock_info,
-        ):
-            wrapper.before_model({"messages": []}, MagicMock())
+        assert wrapper.__class__.before_model is AgentMiddleware.before_model
+        assert wrapper.__class__.after_model is AgentMiddleware.after_model
 
-        assert mock_info.called
+    def test_async_impl_falls_back_to_sync_lifecycle(self):
+        """仅覆盖同步生命周期 hook 时，异步 impl 回退到同步方法。"""
+
+        class SyncOnlyMiddleware(AgentMiddleware):
+            def before_model(self, state, runtime):
+                return {"_test_key": "sync-only"}
+
+        wrapped = SyncOnlyMiddleware()
+        wrapper = StateTelemetryWrapper(wrapped, index=0)
+
+        assert wrapper.__class__.before_model is not AgentMiddleware.before_model
+        assert wrapper.__class__.abefore_model is AgentMiddleware.abefore_model
+
+        result = wrapper.before_model({"messages": []}, MagicMock())
+        assert result == {"_test_key": "sync-only"}
 
     def test_name_tools_state_schema_pass_through(self):
         wrapped = FakeBeforeModelMiddleware()

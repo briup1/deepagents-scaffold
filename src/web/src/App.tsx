@@ -9,9 +9,9 @@ import { useGenerativeUITool } from './hooks/useGenerativeUITool'
 import { useGenerativeUIAction } from './hooks/useGenerativeUIAction'
 
 interface ChatShellProps {
-  agentId: string
+  agents: AgentInfo[]
+  currentAgentId: string
   threadId: string
-  agentUrl: string
 }
 
 interface ChatInnerProps {
@@ -39,15 +39,21 @@ function ChatInner({ agentId }: ChatInnerProps) {
   )
 }
 
-function ChatShell({ agentId, threadId, agentUrl }: ChatShellProps) {
-  const agent = useMemo(
-    () => new HttpAgent({ url: agentUrl, threadId }),
-    [agentUrl, threadId],
-  )
+function ChatShell({ agents, currentAgentId, threadId }: ChatShellProps) {
+  // 把所有已注册 Agent 都交给 CopilotKit，否则切换 Agent 时 useAgent
+  // 内部 known agents 只有当前一个，导致报错。
+  const agentMap = useMemo(() => {
+    const map: Record<string, HttpAgent> = {}
+    for (const agent of agents) {
+      const url = agents.length === 1 ? '/agent' : `/agent/${agent.name}`
+      map[agent.name] = new HttpAgent({ url, threadId })
+    }
+    return map
+  }, [agents, threadId])
 
   return (
-    <CopilotKit threadId={threadId} selfManagedAgents={{ [agentId]: agent }}>
-      <ChatInner agentId={agentId} />
+    <CopilotKit threadId={threadId} agents__unsafe_dev_only={agentMap}>
+      <ChatInner agentId={currentAgentId} />
     </CopilotKit>
   )
 }
@@ -83,7 +89,6 @@ export default function App() {
   }
 
   const currentAgentId = agentId ?? agents[0]?.name ?? 'default'
-  const agentUrl = agents.length === 1 ? '/agent' : `/agent/${currentAgentId}`
 
   const handleNewChat = () => {
     setThreadId(`thread-${crypto.randomUUID()}`)
@@ -104,9 +109,9 @@ export default function App() {
       </header>
       <ChatShell
         key={threadId}
-        agentId={currentAgentId}
+        agents={agents}
+        currentAgentId={currentAgentId}
         threadId={threadId}
-        agentUrl={agentUrl}
       />
     </div>
   )

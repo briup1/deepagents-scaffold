@@ -33,6 +33,12 @@ describe('App', () => {
     latestCopilotKitProps = {}
     latestCopilotChatProps = {}
     mockFetch.mockReset()
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        agents: [{ name: 'default' }, { name: 'coding' }, { name: 'code_reviewer' }],
+      }),
+    })
   })
 
   afterEach(() => {
@@ -42,25 +48,18 @@ describe('App', () => {
   })
 
   it('加载 Agent 列表并渲染选择器与新建会话按钮', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ agents: [{ name: 'default' }, { name: 'code_reviewer' }] }),
-    })
-
     render(<App />)
 
     await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument()
     expect(screen.getByTestId('copilot-kit')).toBeInTheDocument()
     expect(latestCopilotKitProps.threadId).toMatch(/^thread-/)
+    expect(Object.keys((latestCopilotKitProps.agents__unsafe_dev_only as Record<string, unknown>) ?? {})).toEqual(
+      expect.arrayContaining(['default', 'coding', 'code_reviewer']),
+    )
   })
 
-  it('切换 Agent 时更新 CopilotChat agentId', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ agents: [{ name: 'default' }, { name: 'code_reviewer' }] }),
-    })
-
+  it('切换 Agent 时更新 agentId 和 agentUrl', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -71,11 +70,6 @@ describe('App', () => {
   })
 
   it('点击新建会话重置 threadId', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ agents: [{ name: 'default' }] }),
-    })
-
     const user = userEvent.setup()
     render(<App />)
 

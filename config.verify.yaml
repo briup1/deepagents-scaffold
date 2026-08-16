@@ -65,8 +65,9 @@ skills:
 # ---------------------------------------------------------------------------
 # 声明注入到 DeepAgents agent 的有序中间件链。
 # 每个条目指定一个中间件类（或别名）和可选的 kwargs。
-# 内置别名：MemoryMiddleware, FilesystemMiddleware, SubAgentMiddleware,
-#   SkillsMiddleware, LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
+# 内置别名：MemoryMiddleware（由 DeepAgents 根据 memory.storage_path 自动注入，无需在此声明）、
+#   FilesystemMiddleware, SubAgentMiddleware, SkillsMiddleware,
+#   LoopDetectionMiddleware, ToolErrorHandlingMiddleware,
 #   DynamicContextMiddleware, TokenUsageMiddleware, SafetyTerminationMiddleware,
 #   TodoMiddleware, TitleMiddleware, DeepAgentsSummarizationMiddleware
 middleware:
@@ -77,9 +78,6 @@ middleware:
       enabled: true
       kwargs:
         inject_date: true
-        inject_memory: true
-        memory_sources:
-          - ./data/memory.md
     - name: LoopDetectionMiddleware
       enabled: true
       kwargs:
@@ -175,15 +173,11 @@ backend:
 # 记忆系统
 # ---------------------------------------------------------------------------
 # 跨会话持久化记忆，用于个性化。
+# DeepAgents 原生 MemoryMiddleware 会加载 storage_path 指向的 AGENTS.md 文件，
+# 并将其内容注入到 system prompt 中。Agent 可以通过 edit_file 工具更新该文件。
 memory:
   enabled: true
-  injection_enabled: true
-  storage_path: ./data/memory.json
-  debounce_seconds: 30
-  model_name: null  # null = 使用默认模型
-  max_facts: 100
-  fact_confidence_threshold: 0.7
-  max_injection_tokens: 2000
+  storage_path: ./data/AGENTS.md
 
 # ---------------------------------------------------------------------------
 # 子 Agent
