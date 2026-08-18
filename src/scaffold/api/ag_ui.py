@@ -124,22 +124,6 @@ def _ag_ui_message_to_thread_message(msg: Any, thread_id: str, run_id: str | Non
     )
 
 
-def _extract_text_message(event: Any) -> tuple[str | None, str | None]:
-    """从 TEXT_MESSAGE_END 事件中提取 message_id 和完整文本。"""
-    if _get_event_type(event) != "TEXT_MESSAGE_END":
-        return None, None
-    message_id = _get_event_field(event, "message_id")
-    raw_event = _get_event_field(event, "raw_event")
-    text = ""
-    if isinstance(raw_event, dict):
-        data = raw_event.get("data", {})
-        output = data.get("output", {})
-        text = output.get("content", "")
-    if not isinstance(text, str):
-        text = ""
-    return message_id, text
-
-
 def _log_stream_event(
     event: Any,
     *,
@@ -458,6 +442,7 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
         )
 
         # 持久化用户消息
+        history_repo: HistoryRepository | None = None
         try:
             history_repo = get_history_repo(request)
             await history_repo.ensure_thread(input_data.thread_id, base_agent.name)
@@ -475,12 +460,6 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
                 input_data.thread_id,
                 input_data.run_id,
             )
-
-        history_repo = None
-        try:
-            history_repo = get_history_repo(request)
-        except Exception:
-            logger.exception("History repo unavailable for this request")
 
         return StreamingResponse(
             _eager_event_generator(request_agent, input_data, encoder, request, history_repo=history_repo),

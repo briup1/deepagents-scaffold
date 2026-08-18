@@ -121,7 +121,7 @@ class HistoryRepository:
         cursor = await self._conn.execute(
             """
             SELECT
-                message_id, run_id, role, content, name, tool_call_id, tool_calls, created_at
+                thread_id, message_id, run_id, role, content, name, tool_call_id, tool_calls, created_at
             FROM messages
             WHERE thread_id = ?
             ORDER BY created_at ASC, rowid ASC
@@ -131,14 +131,15 @@ class HistoryRepository:
         rows = await cursor.fetchall()
         return [
             ThreadMessage(
-                message_id=row[0],
-                run_id=row[1],
-                role=row[2],
-                content=row[3],
-                name=row[4],
-                tool_call_id=row[5],
-                tool_calls=_parse_json(row[6]),
-                created_at=row[7],
+                thread_id=row[0],
+                message_id=row[1],
+                run_id=row[2],
+                role=row[3],
+                content=row[4],
+                name=row[5],
+                tool_call_id=row[6],
+                tool_calls=_parse_json(row[7]),
+                created_at=row[8],
             )
             for row in rows
         ]

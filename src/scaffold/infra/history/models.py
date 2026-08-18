@@ -29,6 +29,7 @@ class ThreadSummary(BaseModel):
 class ThreadMessage(BaseModel):
     """单条历史消息。"""
 
+    thread_id: str
     message_id: str
     run_id: str | None
     role: str
