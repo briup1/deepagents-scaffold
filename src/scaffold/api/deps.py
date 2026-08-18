@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from scaffold.infra.config.app_config import AppConfig, get_app_config
+from scaffold.infra.history import HistoryRepository
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -51,6 +52,16 @@ async def scaffold_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.checkpointer = checkpointer
         logger.info("Checkpointer initialized at %s", db_path)
 
+        # 历史消息库
+        history_db_path = config.database.history_db or f"{config.database.sqlite_dir}/history.db"
+        os.makedirs(os.path.dirname(history_db_path), exist_ok=True)
+        history_conn = await aiosqlite.connect(history_db_path)
+        stack.push_async_callback(history_conn.close)
+        history_repo = HistoryRepository(history_conn)
+        await history_repo.migrate()
+        app.state.history_repo = history_repo
+        logger.info("History repository initialized at %s", history_db_path)
+
         yield
 
         # 清理
@@ -62,3 +73,11 @@ def get_checkpointer(request: Request) -> BaseCheckpointSaver:
     if cp is None:
         raise HTTPException(status_code=503, detail="Checkpointer not initialized")
     return cp
+
+
+def get_history_repo(request: Request) -> HistoryRepository:
+    """返回当前请求的历史仓库实例。"""
+    repo = getattr(request.app.state, "history_repo", None)
+    if repo is None:
+        raise HTTPException(status_code=503, detail="History repository not initialized")
+    return repo

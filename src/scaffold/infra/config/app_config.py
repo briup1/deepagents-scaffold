@@ -28,8 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseConfig(BaseModel):
+    """数据库配置。"""
+
     backend: str = Field(default="sqlite", description="sqlite or postgres")
     sqlite_dir: str = Field(default="./data", description="Directory for SQLite files")
+    history_db: str | None = Field(
+        default=None,
+        description="历史消息数据库路径；默认使用 sqlite_dir/history.db",
+    )
     # Postgres 字段已省略，按需添加 host/port/user/password/dbname
 
 
