@@ -144,6 +144,11 @@ middleware:
       enabled: true
       kwargs:
         log_interval: 1
+    - name: TitleMiddleware
+      enabled: true
+      kwargs:
+        max_title_length: 60
+
     # DeepAgents 已自动注入原生 SummarizationMiddleware（根据模型 profile 自动选择
     # trigger/keep，并带 backend offload）。如果想自定义摘要参数，请：
     #   1. 在下方 profiles.harness.<name>.excluded_middleware 中加入

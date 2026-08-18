@@ -32,6 +32,7 @@ from scaffold.core.agents import get_agent, list_agents
 from scaffold.infra.context import request_id_ctx, trace_id_ctx
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.history import HistoryRepository, ThreadMessage
+from scaffold.infra.middleware.deerflow_adapters.title import get_thread_title
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,44 @@ def _extract_finish_reason(event: Any) -> str | None:
     if isinstance(response_metadata, dict):
         return response_metadata.get("finish_reason")
     return getattr(response_metadata, "finish_reason", None)
+
+
+def _extract_thread_title(event: Any) -> str | None:
+    """从 STATE_SNAPSHOT 或 RUN_FINISHED 事件中提取 TitleMiddleware 生成的标题。
+
+    支持 ``snapshot``、``raw_event.state`` 以及 pydantic model 的混合形态。
+    若未启用 TitleMiddleware 或事件中无 ``_thread_title``，则返回 None。
+    """
+    # STATE_SNAPSHOT 事件直接携带快照
+    snapshot = _get_event_field(event, "snapshot")
+    if snapshot is not None:
+        if isinstance(snapshot, dict):
+            title = snapshot.get("_thread_title")
+        else:
+            title = getattr(snapshot, "_thread_title", None)
+        if isinstance(title, str) and title.strip():
+            return title
+
+    raw_event = _get_event_field(event, "raw_event")
+    if raw_event is None:
+        return None
+
+    if isinstance(raw_event, dict):
+        state = raw_event.get("state")
+    else:
+        state = getattr(raw_event, "state", None)
+
+    if state is None:
+        return None
+
+    if isinstance(state, dict):
+        title = state.get("_thread_title")
+    else:
+        title = getattr(state, "_thread_title", None)
+
+    if isinstance(title, str) and title.strip():
+        return title
+    return None
 
 
 def _ag_ui_message_to_thread_message(msg: Any, thread_id: str, run_id: str | None) -> ThreadMessage | None:
@@ -235,6 +274,7 @@ async def _produce_events_to_queue(
     text_buffers: dict[str, list[str]] = {}
     tail_content_buffer: list[dict[str, Any]] = []
     assistant_buffers: dict[str, list[str]] = {}
+    title_updated = False
 
     logger.info(
         "ag-ui stream producer started | %s",
@@ -280,6 +320,24 @@ async def _produce_events_to_queue(
                         "Failed to persist assistant message | thread_id=%s message_id=%s",
                         input_data.thread_id,
                         mid,
+                    )
+
+            # 同步 TitleMiddleware 生成的会话标题
+            if history_repo is not None and not title_updated and _get_event_type(event) == "RUN_FINISHED":
+                try:
+                    title = _extract_thread_title(event) or get_thread_title(input_data.thread_id)
+                    if title:
+                        await history_repo.update_title(input_data.thread_id, title)
+                        title_updated = True
+                        logger.info(
+                            "Updated thread title | thread_id=%s title=%s",
+                            input_data.thread_id,
+                            title,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to update thread title | thread_id=%s",
+                        input_data.thread_id,
                     )
 
             # 采样检查队列深度，避免每条事件都检查

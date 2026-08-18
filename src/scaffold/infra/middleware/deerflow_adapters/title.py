@@ -11,9 +11,18 @@ import logging
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
+from langgraph.config import get_config
 from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)
+
+# 模块级标题缓存，供 AG-UI endpoint 在 RUN_FINISHED 时读取并持久化。
+_thread_titles: dict[str, str] = {}
+
+
+def get_thread_title(thread_id: str) -> str | None:
+    """获取指定线程由 TitleMiddleware 生成的标题。"""
+    return _thread_titles.get(thread_id)
 
 
 class TitleMiddleware(AgentMiddleware):
@@ -36,7 +45,8 @@ class TitleMiddleware(AgentMiddleware):
 
     def after_model(self, state: Any, runtime: Runtime[Any]) -> dict[str, Any] | None:
         """在首次助手响应后生成标题。"""
-        thread_id = state.get("configurable", {}).get("thread_id", "default")
+        config = get_config()
+        thread_id = config.get("configurable", {}).get("thread_id", "default") if config else "default"
 
         if thread_id in self._generated:
             return None
@@ -57,6 +67,7 @@ class TitleMiddleware(AgentMiddleware):
         # 简单启发式标题生成（生产环境应使用 LLM）
         title = _generate_title_heuristic(first_user_text, self.max_title_length)
         self._generated.add(thread_id)
+        _thread_titles[thread_id] = title
 
         logger.info("Generated title for thread %s: %s", thread_id, title)
 
