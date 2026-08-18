@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -25,9 +27,11 @@ from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 
+from scaffold.api.deps import get_history_repo
 from scaffold.core.agents import get_agent, list_agents
 from scaffold.infra.context import request_id_ctx, trace_id_ctx
 from scaffold.infra.config.app_config import get_app_config
+from scaffold.infra.history import HistoryRepository, ThreadMessage
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +93,51 @@ def _extract_finish_reason(event: Any) -> str | None:
     if isinstance(response_metadata, dict):
         return response_metadata.get("finish_reason")
     return getattr(response_metadata, "finish_reason", None)
+
+
+def _ag_ui_message_to_thread_message(msg: Any, thread_id: str, run_id: str | None) -> ThreadMessage | None:
+    """将 ag_ui Message 转换为 ThreadMessage。"""
+    if not isinstance(msg, dict):
+        return None
+    role = msg.get("role")
+    if role is None:
+        return None
+
+    content = msg.get("content")
+    if not isinstance(content, str):
+        content = None
+
+    tool_calls = msg.get("tool_calls")
+    if tool_calls is not None and not isinstance(tool_calls, list):
+        tool_calls = None
+
+    return ThreadMessage(
+        message_id=msg.get("id") or str(uuid.uuid4()),
+        run_id=run_id,
+        role=role,
+        content=content,
+        name=msg.get("name"),
+        tool_call_id=msg.get("tool_call_id"),
+        tool_calls=tool_calls,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        thread_id=thread_id,
+    )
+
+
+def _extract_text_message(event: Any) -> tuple[str | None, str | None]:
+    """从 TEXT_MESSAGE_END 事件中提取 message_id 和完整文本。"""
+    if _get_event_type(event) != "TEXT_MESSAGE_END":
+        return None, None
+    message_id = _get_event_field(event, "message_id")
+    raw_event = _get_event_field(event, "raw_event")
+    text = ""
+    if isinstance(raw_event, dict):
+        data = raw_event.get("data", {})
+        output = data.get("output", {})
+        text = output.get("content", "")
+    if not isinstance(text, str):
+        text = ""
+    return message_id, text
 
 
 def _log_stream_event(
@@ -191,6 +240,7 @@ async def _produce_events_to_queue(
     agent: LangGraphAgent,
     input_data: RunAgentInput,
     queue: asyncio.Queue[Any],
+    history_repo: HistoryRepository | None = None,
 ) -> None:
     """在后台 Task 中把 ``agent.run()`` 产生的事件写入队列。"""
     start = time.monotonic()
@@ -200,6 +250,7 @@ async def _produce_events_to_queue(
     # 用于累计 TEXT_MESSAGE_CONTENT 内容，仅在 TEXT_MESSAGE_END 时记录长度
     text_buffers: dict[str, list[str]] = {}
     tail_content_buffer: list[dict[str, Any]] = []
+    assistant_buffers: dict[str, list[str]] = {}
 
     logger.info(
         "ag-ui stream producer started | %s",
@@ -219,6 +270,33 @@ async def _produce_events_to_queue(
                 text_buffers=text_buffers,
                 tail_content_buffer=tail_content_buffer,
             )
+
+            # 持久化助手文本消息
+            if history_repo is not None and _get_event_type(event) == "TEXT_MESSAGE_CONTENT":
+                mid = _get_event_field(event, "message_id")
+                delta = _get_event_field(event, "delta") or ""
+                assistant_buffers.setdefault(mid, []).append(delta)
+
+            if history_repo is not None and _get_event_type(event) == "TEXT_MESSAGE_END":
+                mid = _get_event_field(event, "message_id")
+                full_text = "".join(assistant_buffers.pop(mid, []))
+                try:
+                    await history_repo.add_message(
+                        ThreadMessage(
+                            message_id=mid or str(uuid.uuid4()),
+                            run_id=input_data.run_id,
+                            role="assistant",
+                            content=full_text,
+                            created_at=datetime.now(timezone.utc).isoformat(),
+                            thread_id=input_data.thread_id,
+                        )
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to persist assistant message | thread_id=%s message_id=%s",
+                        input_data.thread_id,
+                        mid,
+                    )
 
             # 采样检查队列深度，避免每条事件都检查
             if sample_count >= QUEUE_BACKPRESSURE_SAMPLE_INTERVAL:
@@ -253,6 +331,7 @@ async def _eager_event_generator(
     input_data: RunAgentInput,
     encoder: EventEncoder,
     request: Request,
+    history_repo: HistoryRepository | None = None,
     heartbeat_interval: float = HEARTBEAT_INTERVAL_SECONDS,
 ) -> Any:
     """产生 SSE 事件流：后台执行 graph，前台带心跳消费。
@@ -263,7 +342,7 @@ async def _eager_event_generator(
     """
     queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=EVENT_QUEUE_MAXSIZE)
     producer = asyncio.create_task(
-        _produce_events_to_queue(agent, input_data, queue),
+        _produce_events_to_queue(agent, input_data, queue, history_repo=history_repo),
         name=f"ag-ui-producer-{input_data.run_id}",
     )
 
@@ -378,8 +457,33 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
             extra=_stream_extra(endpoint_ctx),
         )
 
+        # 持久化用户消息
+        try:
+            history_repo = get_history_repo(request)
+            await history_repo.ensure_thread(input_data.thread_id, base_agent.name)
+            for msg in input_data.messages or []:
+                tm = _ag_ui_message_to_thread_message(
+                    msg.model_dump() if hasattr(msg, "model_dump") else dict(msg),
+                    input_data.thread_id,
+                    input_data.run_id,
+                )
+                if tm:
+                    await history_repo.add_message(tm)
+        except Exception:
+            logger.exception(
+                "Failed to persist user messages | thread_id=%s run_id=%s",
+                input_data.thread_id,
+                input_data.run_id,
+            )
+
+        history_repo = None
+        try:
+            history_repo = get_history_repo(request)
+        except Exception:
+            logger.exception("History repo unavailable for this request")
+
         return StreamingResponse(
-            _eager_event_generator(request_agent, input_data, encoder, request),
+            _eager_event_generator(request_agent, input_data, encoder, request, history_repo=history_repo),
             media_type=encoder.get_content_type(),
         )
 
