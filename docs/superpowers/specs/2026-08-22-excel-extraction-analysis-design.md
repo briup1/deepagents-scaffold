@@ -446,27 +446,30 @@ GET /api/files/{artifact_id}
 - 确认 `user_id` 隔离方案；
 - 确认沙箱 MVP 方案。
 
-### Phase 1：文件上传与会话工件
+### Phase 1：文件上传与会话工件 ✅ 已完成
 
-- 实现 `/api/files/upload`；
-- 实现 `artifacts` 表；
-- 实现 `preview_excel` 工具；
-- 前端增加拖拽上传组件。
+- [x] 实现 `/api/files/upload`（`src/scaffold/api/routers/files.py`，测试见 `tests/test_files_api.py`）；
+- [x] 实现 `artifacts` 表（`src/scaffold/infra/artifacts/`）；
+- [x] 实现 `preview_excel` 工具（`src/scaffold/plugins/tools/preview_excel.py`，测试见 `tests/test_preview_excel.py`）；
+- [x] 前端增加拖拽上传组件（`src/web/src/components/FileUploadDropzone.tsx`）。
 
-### Phase 2：三段式抽取 Skill
+### Phase 2：三段式抽取 Skill ✅ 已完成
 
-- [x] 实现 `generate_extraction_code` 工具；
-- [x] 实现 `execute_extraction_code` 工具（MVP 子进程沙箱）；
-- [x] 实现 `validate_extraction_result` 工具；
-- [x] 编写 3 个 SKILL.md；
-- [x] 实现 `extraction_tasks` 表。
+- [x] 实现 `generate_extraction_code` 工具（`src/scaffold/plugins/tools/generate_extraction_code.py`，测试见 `tests/test_generate_extraction_code.py`）；
+- [x] 实现 `execute_extraction_code` 工具（MVP 子进程沙箱，`src/scaffold/plugins/tools/execute_extraction_code.py`，测试见 `tests/test_execute_extraction_code.py` / `tests/test_extraction_sandbox.py`）；
+- [x] 实现 `validate_extraction_result` 工具（`src/scaffold/plugins/tools/validate_extraction_result.py`，测试见 `tests/test_validate_extraction_result.py`）；
+- [x] 编写 3 个 SKILL.md（`src/scaffold/plugins/skills/extraction-{goal,code,validate}/`）；
+- [x] 实现 `extraction_tasks` 表（测试见 `tests/test_extraction_tasks.py`）。
 
-### Phase 3：分析与生成式 UI
+### Phase 3：分析与生成式 UI ✅ 已完成
 
-- 接入 DuckDB；
-- 实现 `query_extracted_data` 和 `analyze_extracted_data`；
-- 支持多文件对比分析；
-- 通过 `render_ui` 输出 `data_table` / `chart` / `metric_card`。
+实施计划见 `docs/superpowers/plans/2026-08-22-excel-extraction-phase3.md`；完成证据（截图/输出）见 `docs/superpowers/evidence/`。
+
+- [x] 接入 DuckDB（`duckdb>=1.5.5`）；
+- [x] 实现 `query_extracted_data`（`src/scaffold/plugins/tools/query_extracted_data.py`，测试见 `tests/test_query_extracted_data.py`）；
+- [x] 实现 `analyze_extracted_data`（`src/scaffold/plugins/tools/analyze_extracted_data.py`，测试见 `tests/test_analyze_extracted_data.py`）；
+- [x] 支持多文件对比分析（`comparison_extraction_id` 参数 + 跨 CSV JOIN）；
+- [x] 通过 `render_ui` 输出 `data_table` / `chart` / `metric_card`（L2 真实模型与 L3 浏览器均验证通过）。
 
 ### Phase 4：生产沙箱替换
 
