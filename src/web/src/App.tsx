@@ -3,7 +3,7 @@ import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { HttpAgent } from '@ag-ui/client'
 import { listAgents, type AgentInfo } from './api/copilotkit'
 import { getThreadMessages, type ThreadMessage } from './api/threads'
-import { type UploadedFile } from './api/files'
+import { uploadFile, type UploadedFile } from './api/files'
 import { Sidebar } from './components/Sidebar'
 import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadDropzone'
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
@@ -106,10 +106,58 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
     setUploadedFiles((prev) => prev.filter((f) => f.artifact_id !== artifactId))
   }, [])
 
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const handleAttachmentUpload = useCallback(
+    async (file: File) => {
+      const uploaded = await uploadFile(threadId, file)
+      handleFileUploaded(uploaded)
+      return {
+        type: 'url' as const,
+        value: `/api/files/${uploaded.artifact_id}`,
+        mimeType: file.type,
+        metadata: { artifact_id: uploaded.artifact_id },
+      }
+    },
+    [threadId, handleFileUploaded],
+  )
+
+  const handleAttachmentUploadFailed = useCallback(
+    ({ message }: { message: string }) => {
+      setUploadError(message)
+    },
+    [],
+  )
+
+  const handleDropzoneError = useCallback((message: string) => {
+    setUploadError(message)
+  }, [])
+
+  const clearUploadError = useCallback(() => {
+    setUploadError(null)
+  }, [])
+
   return (
     <GenerativeUIContext.Provider value={{ dispatch }}>
-      <FileUploadDropzone threadId={threadId} onFileUploaded={handleFileUploaded}>
+      <FileUploadDropzone
+        threadId={threadId}
+        onFileUploaded={handleFileUploaded}
+        onError={handleDropzoneError}
+      >
         <main className="flex h-full flex-1 flex-col overflow-hidden">
+          {uploadError && (
+            <div className="absolute right-4 top-4 z-50 rounded-lg bg-red-100 px-4 py-2 text-sm text-red-700 shadow">
+              <button
+                type="button"
+                onClick={clearUploadError}
+                className="mr-2 font-bold"
+                aria-label="关闭错误提示"
+              >
+                ×
+              </button>
+              {uploadError}
+            </div>
+          )}
           {uploadedFiles.length > 0 && (
             <div className="border-b border-cream-200 bg-white px-4 py-3">
               <FileAttachmentList files={uploadedFiles} onRemove={handleRemoveFile} />
@@ -122,6 +170,13 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
               chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
               welcomeMessageText: '有什么可以帮你的？',
               modalHeaderTitle: 'DeepAgents Chat',
+            }}
+            attachments={{
+              enabled: true,
+              accept: '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
+              maxSize: 20 * 1024 * 1024,
+              onUpload: handleAttachmentUpload,
+              onUploadFailed: handleAttachmentUploadFailed,
             }}
           />
         </main>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { uploadFile, type UploadedFile } from '../api/files'
 
 interface FileUploadDropzoneProps {
@@ -29,11 +29,19 @@ function isExcelFile(file: File): boolean {
 export function FileUploadDropzone({
   threadId,
   onFileUploaded,
+  onError,
   children,
-}: FileUploadDropzoneProps) {
+}: FileUploadDropzoneProps & { onError?: (message: string) => void }) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+
+  const reportError = useCallback(
+    (message: string) => {
+      setError(message)
+      onError?.(message)
+    },
+    [onError],
+  )
 
   const processFiles = useCallback(
     async (files: File[]) => {
@@ -47,13 +55,13 @@ export function FileUploadDropzone({
       })
 
       if (excelFiles.length === 0) {
-        setError('未检测到 Excel 文件（.xlsx 或 .xls）')
+        reportError('未检测到 Excel 文件（.xlsx 或 .xls）')
         return
       }
 
       const oversized = excelFiles.filter((file) => file.size > MAX_FILE_SIZE)
       if (oversized.length > 0) {
-        setError(`以下文件超过 20MB：${oversized.map((f) => f.name).join(', ')}`)
+        reportError(`以下文件超过 20MB：${oversized.map((f) => f.name).join(', ')}`)
         return
       }
 
@@ -66,11 +74,11 @@ export function FileUploadDropzone({
         } catch (err) {
           const msg = err instanceof Error ? err.message : '上传失败'
           console.error('[FileUpload] upload error:', file.name, err)
-          setError(`${file.name}: ${msg}`)
+          reportError(`${file.name}: ${msg}`)
         }
       }
     },
-    [threadId, onFileUploaded],
+    [threadId, onFileUploaded, reportError],
   )
 
   // 在 document 级别监听拖拽，避免 CopilotChat 内部元素阻止事件冒泡
@@ -108,32 +116,18 @@ export function FileUploadDropzone({
       await processFiles(files)
     }
 
-    document.addEventListener('dragenter', handleDragEnter)
-    document.addEventListener('dragover', handleDragOver)
-    document.addEventListener('dragleave', handleDragLeave)
-    document.addEventListener('drop', handleDrop)
+    document.addEventListener('dragenter', handleDragEnter, true)
+    document.addEventListener('dragover', handleDragOver, true)
+    document.addEventListener('dragleave', handleDragLeave, true)
+    document.addEventListener('drop', handleDrop, true)
 
     return () => {
-      document.removeEventListener('dragenter', handleDragEnter)
-      document.removeEventListener('dragover', handleDragOver)
-      document.removeEventListener('dragleave', handleDragLeave)
-      document.removeEventListener('drop', handleDrop)
+      document.removeEventListener('dragenter', handleDragEnter, true)
+      document.removeEventListener('dragover', handleDragOver, true)
+      document.removeEventListener('dragleave', handleDragLeave, true)
+      document.removeEventListener('drop', handleDrop, true)
     }
   }, [processFiles])
-
-  const handleFileInputChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files
-      if (!files || files.length === 0) return
-      await processFiles(Array.from(files))
-      e.target.value = ''
-    },
-    [processFiles],
-  )
-
-  const handleClickUpload = useCallback(() => {
-    inputRef.current?.click()
-  }, [])
 
   return (
     <div className="relative flex h-full w-full flex-col">
@@ -147,37 +141,6 @@ export function FileUploadDropzone({
           {error}
         </div>
       )}
-      <button
-        type="button"
-        onClick={handleClickUpload}
-        className="absolute bottom-6 right-16 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-[#444444] transition-colors hover:bg-[#f8f8f8] hover:text-[#333333] focus:outline-none"
-        title="上传 Excel 文件（可多选）"
-        aria-label="上传 Excel 文件，可多选"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-        onChange={handleFileInputChange}
-        className="hidden"
-      />
       {children}
     </div>
   )
