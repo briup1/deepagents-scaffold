@@ -161,7 +161,7 @@ export function FileUploadDropzone({
       <button
         type="button"
         onClick={handleClickUpload}
-        className="absolute bottom-4 left-4 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-[#444444] transition-colors hover:bg-[#f8f8f8] hover:text-[#333333] focus:outline-none"
+        className="absolute bottom-6 right-16 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-[#444444] transition-colors hover:bg-[#f8f8f8] hover:text-[#333333] focus:outline-none"
         title="上传 Excel 文件（可多选）"
         aria-label="上传 Excel 文件，可多选"
       >
@@ -176,8 +176,9 @@ export function FileUploadDropzone({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
       </button>
       <input
