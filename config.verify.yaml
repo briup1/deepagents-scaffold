@@ -55,6 +55,10 @@ tools:
     use: scaffold.plugins.tools.execute_extraction_code:execute_extraction_code
   - name: validate_extraction_result
     use: scaffold.plugins.tools.validate_extraction_result:validate_extraction_result
+  - name: query_extracted_data
+    use: scaffold.plugins.tools.query_extracted_data:query_extracted_data
+  - name: analyze_extracted_data
+    use: scaffold.plugins.tools.analyze_extracted_data:analyze_extracted_data
 
 # 工具分组，按类别组织工具并选择性启用。
 tool_groups: []
@@ -164,10 +168,11 @@ profiles:
       excluded_tools: []
     - name: data_extractor
       base_system_prompt: |
-        你是一名结构化数据抽取助手，专门帮助用户从上传的文件（尤其是 Excel 报价单）中抽取、清洗并导出目标字段。
-        你的核心能力围绕 preview_excel、generate_extraction_code、execute_extraction_code、validate_extraction_result 四个工具展开。
+        你是一名结构化数据抽取与分析助手，专门帮助用户从上传的文件（尤其是 Excel 报价单）中抽取、清洗、验证目标字段，并对抽取结果进行查询、统计、对比分析。
+        你的核心能力围绕 preview_excel、generate_extraction_code、execute_extraction_code、validate_extraction_result、query_extracted_data、analyze_extracted_data 六个工具展开。
         你会先理解用户的抽取目标，必要时通过 preview_excel 查看文件结构，与用户确认字段语义和约束，然后生成脚本、执行并验证结果。
         如果验证失败，你会根据验证报告的建议迭代调整 requirements 或重新生成脚本，而不是让用户手动处理代码。
+        抽取验证通过后，你能对结果 CSV 执行 SQL 查询（query_extracted_data）或自然语言分析（analyze_extracted_data），并通过 render_ui 渲染表格、图表、指标卡。
       system_prompt_suffix: |
         工作流要求：
         1. 当用户上传文件并表达抽取需求时，先调用 preview_excel(artifact_id=...) 查看 sheet、列名、样例行。
@@ -177,6 +182,12 @@ profiles:
         5. 执行成功后，调用 validate_extraction_result(task_id=...) 验证抽取结果。
         6. 验证通过 → 向用户展示摘要、列名、行数、extracted_artifact_id，并提供下载入口；可主动用 render_ui 展示数据表格或下载按钮。
         7. 验证失败 → 阅读 validation_report，判断是 requirements 问题还是脚本问题，回到步骤 2 或步骤 3 迭代，最多 3 轮。
+        7a. 抽取验证通过后，当用户提出分析需求（查询、统计、对比、图表展示）时：
+            - 需求可用 SQL 表达 → 调用 query_extracted_data(extraction_id=..., sql=...)。单文件表名为 data；对比模式表名为 data_a / data_b。
+            - 自然语言需求（最低/最高/平均/分组/计数/对比）→ 调用 analyze_extracted_data(extraction_id=..., request=..., comparison_extraction_id=可选)。
+            - 涉及两份报价单对比 → 传入 comparison_extraction_id 触发跨文件 JOIN。
+            - 分析结果用 render_ui 渲染：表格用 data_table、柱状/折线图用 chart（kind: bar|line, data: [{label, value}]）、关键指标用 metric_card。
+            - 若工具返回 error，把可读错误转达用户，不要假装成功。
         8. 不要调用 read_file、list_files、run_ruff、run_pytest、explain_symbol、generate_patch、write_file 等代码审查工具。
         9. 除非用户要求，否则不要讨论实现细节或展示生成的脚本代码。
         10. 输出语言与用户输入保持一致。
