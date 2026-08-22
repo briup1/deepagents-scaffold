@@ -62,10 +62,17 @@ _SENTINEL = _StreamSentinel()
 
 
 def _get_event_type(event: Any) -> str | None:
-    """安全地获取 AG-UI 事件类型。"""
+    """安全地获取 AG-UI 事件类型（兼容 enum 与字符串）。"""
     if isinstance(event, dict):
-        return event.get("type")
-    return getattr(event, "type", None)
+        t = event.get("type")
+    else:
+        t = getattr(event, "type", None)
+    if t is None:
+        return None
+    if isinstance(t, str):
+        return t
+    # 处理 Python/TypeScript enum 成员，如 EventType.TEXT_MESSAGE_CONTENT
+    return getattr(t, "value", None) or str(t)
 
 
 def _get_event_field(event: Any, field: str) -> Any:

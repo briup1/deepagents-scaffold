@@ -22,21 +22,20 @@ interface ChatInnerProps {
 
 function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
   useGenerativeUITool()
-  const { agent } = useAgent({ agentId })
+  const { agent, isReady } = useAgent({ agentId })
   const dispatch = useGenerativeUIAction(agentId)
 
   useEffect(() => {
-    if (agent && initialMessages.length > 0) {
-      const agUiMessages = initialMessages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({
-          id: m.message_id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content ?? '',
-        }))
-      agent.setMessages(agUiMessages as { id: string; role: 'user' | 'assistant'; content: string }[])
-    }
-  }, [agent, initialMessages])
+    if (!isReady || initialMessages.length === 0) return
+    const agUiMessages = initialMessages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        id: m.message_id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content ?? '',
+      }))
+    agent.setMessages(agUiMessages as { id: string; role: 'user' | 'assistant'; content: string }[])
+  }, [isReady, initialMessages])
 
   return (
     <GenerativeUIContext.Provider value={{ dispatch }}>
