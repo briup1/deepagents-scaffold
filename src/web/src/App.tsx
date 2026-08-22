@@ -3,7 +3,9 @@ import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { HttpAgent } from '@ag-ui/client'
 import { listAgents, type AgentInfo } from './api/copilotkit'
 import { getThreadMessages, type ThreadMessage } from './api/threads'
+import { type UploadedFile } from './api/files'
 import { Sidebar } from './components/Sidebar'
+import { FileUploadDropzone, FileAttachmentChip } from './components/FileUploadDropzone'
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
 import { useGenerativeUITool } from './hooks/useGenerativeUITool'
 import { useGenerativeUIAction } from './hooks/useGenerativeUIAction'
@@ -15,29 +17,63 @@ interface ChatShellProps {
   initialMessages: ThreadMessage[]
 }
 
+interface UploadedFileMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
+
 interface ChatInnerProps {
   agentId: string
+  threadId: string
   initialMessages: ThreadMessage[]
 }
 
-function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
+function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
   useGenerativeUITool()
   const { agent, isReady } = useAgent({ agentId })
   const dispatch = useGenerativeUIAction(agentId)
   const hasInjectedRef = useRef(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const pendingFilesRef = useRef<UploadedFile[]>([])
 
   const injectMessages = useCallback(() => {
-    if (!isReady || initialMessages.length === 0) return
-    const agUiMessages = initialMessages
+    if (!isReady) return
+    const baseMessages: UploadedFileMessage[] = initialMessages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({
         id: m.message_id,
         role: m.role as 'user' | 'assistant',
         content: m.content ?? '',
       }))
-    agent.setMessages(agUiMessages as { id: string; role: 'user' | 'assistant'; content: string }[])
+    const fileMessages: UploadedFileMessage[] = uploadedFiles.map((file) => ({
+      id: file.artifact_id,
+      role: 'user',
+      content: `已上传文件 ${file.original_name}（artifact_id: ${file.artifact_id}），可用于后续抽取分析。`,
+    }))
+    agent.setMessages([...baseMessages, ...fileMessages])
     hasInjectedRef.current = true
-  }, [isReady, initialMessages, agent])
+  }, [isReady, initialMessages, uploadedFiles, agent])
+
+  useEffect(() => {
+    if (!isReady) return
+    if (pendingFilesRef.current.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...pendingFilesRef.current])
+      pendingFilesRef.current = []
+    }
+  }, [isReady])
+
+  useEffect(() => {
+    if (!isReady || (initialMessages.length === 0 && uploadedFiles.length === 0)) return
+    injectMessages()
+  }, [isReady, initialMessages, uploadedFiles, injectMessages])
+
+  useEffect(() => {
+    if (!isReady || initialMessages.length === 0) return
+    if (hasInjectedRef.current && agent.messages.length === 0) {
+      injectMessages()
+    }
+  }, [agent.messages.length, isReady, initialMessages, uploadedFiles, injectMessages])
 
   // 在 agent ready 时注入历史消息
   useEffect(() => {
@@ -53,19 +89,44 @@ function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
     }
   }, [agent.messages.length, isReady, initialMessages, injectMessages])
 
+  const handleFileUploaded = useCallback((file: UploadedFile) => {
+    if (isReady && agent) {
+      setUploadedFiles((prev) => [...prev, file])
+    } else {
+      pendingFilesRef.current.push(file)
+    }
+  }, [isReady, agent])
+
+  const handleRemoveFile = useCallback((artifactId: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.artifact_id !== artifactId))
+  }, [])
+
   return (
     <GenerativeUIContext.Provider value={{ dispatch }}>
-      <main className="flex h-full flex-1 flex-col overflow-hidden">
-        <CopilotChat
-          agentId={agentId}
-          className="h-full"
-          labels={{
-            chatInputPlaceholder: '输入消息...',
-            welcomeMessageText: '有什么可以帮你的？',
-            modalHeaderTitle: 'DeepAgents Chat',
-          }}
-        />
-      </main>
+      <FileUploadDropzone threadId={threadId} onFileUploaded={handleFileUploaded}>
+        <main className="flex h-full flex-1 flex-col overflow-hidden">
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-b border-cream-200 bg-white px-4 py-2">
+              {uploadedFiles.map((file) => (
+                <FileAttachmentChip
+                  key={file.artifact_id}
+                  file={file}
+                  onRemove={() => handleRemoveFile(file.artifact_id)}
+                />
+              ))}
+            </div>
+          )}
+          <CopilotChat
+            agentId={agentId}
+            className="h-full"
+            labels={{
+              chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
+              welcomeMessageText: '有什么可以帮你的？',
+              modalHeaderTitle: 'DeepAgents Chat',
+            }}
+          />
+        </main>
+      </FileUploadDropzone>
     </GenerativeUIContext.Provider>
   )
 }
@@ -84,7 +145,7 @@ function ChatShell({ agents, currentAgentId, threadId, initialMessages }: ChatSh
 
   return (
     <CopilotKit agents__unsafe_dev_only={agentMap}>
-      <ChatInner agentId={currentAgentId} initialMessages={initialMessages} />
+      <ChatInner agentId={currentAgentId} threadId={threadId} initialMessages={initialMessages} />
     </CopilotKit>
   )
 }

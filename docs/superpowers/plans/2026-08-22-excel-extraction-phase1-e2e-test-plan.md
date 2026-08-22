@@ -15,7 +15,7 @@
 - **后端端到端**：使用 `httpx.AsyncClient` / `TestClient` 走完整链路：上传 → 落盘 → 查表 → 调工具预览；
 - **隔离性测试**：两个不同 thread 分别上传文件，验证彼此不可见；
 - **前端单元/集成**：用 Vitest + React Testing Library 验证拖拽组件触发上传并反馈结果；
-- **全栈冒烟**（可选）：启动 `scripts/dev.sh` 后，用 Playwright 或手动 curl 走一遍拖拽上传 → 页面显示文件卡片。
+- **全栈冒烟**：启动 `scripts/dev.sh` 后，用 Playwright 或手动 curl 走一遍拖拽上传 → 页面显示文件卡片。
 
 ## 3. 测试环境
 

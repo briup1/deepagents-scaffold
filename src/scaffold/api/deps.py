@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from scaffold.infra.config.app_config import AppConfig, get_app_config
+from scaffold.infra.artifacts import ArtifactRepository
 from scaffold.infra.history import HistoryRepository
 
 if TYPE_CHECKING:
@@ -59,6 +60,12 @@ async def scaffold_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
         stack.push_async_callback(history_conn.close)
         history_repo = HistoryRepository(history_conn)
         await history_repo.migrate()
+
+        # 工件元数据仓库（复用历史库连接）
+        artifact_repo = ArtifactRepository(history_conn)
+        await artifact_repo.migrate()
+        app.state.artifact_repo = artifact_repo
+
         app.state.history_repo = history_repo
         logger.info("History repository initialized at %s", history_db_path)
 
@@ -80,4 +87,12 @@ def get_history_repo(request: Request) -> HistoryRepository:
     repo = getattr(request.app.state, "history_repo", None)
     if repo is None:
         raise HTTPException(status_code=503, detail="History repository not initialized")
+    return repo
+
+
+def get_artifact_repo(request: Request) -> ArtifactRepository:
+    """返回当前请求的工件仓库实例。"""
+    repo = getattr(request.app.state, "artifact_repo", None)
+    if repo is None:
+        raise HTTPException(status_code=503, detail="Artifact repository not initialized")
     return repo

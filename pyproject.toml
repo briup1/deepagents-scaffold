@@ -20,6 +20,8 @@ dependencies = [
     "langfuse>=3.4.1",
     "langsmith>=0.1.0",
     "ag-ui-langgraph>=0.0.42",
+    "openpyxl>=3.1.5",
+    "python-multipart>=0.0.32",
 ]
 
 [project.optional-dependencies]

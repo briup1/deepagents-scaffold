@@ -89,6 +89,21 @@ describe('App', () => {
           }),
         }
       }
+      if (url === '/api/files/upload') {
+        return {
+          ok: true,
+          json: async () => ({
+            artifact_id: 'art-test-upload',
+            thread_id: 'thread-test',
+            artifact_type: 'upload',
+            original_name: 'quote.xlsx',
+            stored_path: 'thread-test/uploads/art-test-upload-quote.xlsx',
+            mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            size_bytes: 1024,
+            created_at: '2026-08-22T10:00:00Z',
+          }),
+        }
+      }
       return { ok: false, status: 404 }
     })
   })
@@ -153,5 +168,12 @@ describe('App', () => {
         expect.objectContaining({ id: 'm1', role: 'user', content: 'hello' }),
       ])),
     )
+  })
+
+  it('聊天输入区占位符提示支持拖拽上传', async () => {
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByTestId('copilot-kit')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('拖拽 Excel 到此处或输入消息...')).toBeInTheDocument())
   })
 })

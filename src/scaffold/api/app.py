@@ -17,7 +17,7 @@ from scaffold.api.middleware.error_handler import ErrorHandlerMiddleware
 from scaffold.api.middleware.request_id import RequestIdMiddleware
 from scaffold.api.middleware.rate_limit import RateLimitMiddleware
 from scaffold.api.ag_ui import register_ag_ui_endpoints
-from scaffold.api.routers import agents, health, state, threads, tools
+from scaffold.api.routers import agents, files, health, state, threads, tools
 from scaffold.core.agents import create_agent
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.logging.config import configure_logging
@@ -121,6 +121,7 @@ def create_app() -> FastAPI:
     # 路由
     app.include_router(agents.router)
     app.include_router(threads.router)
+    app.include_router(files.router)
     app.include_router(state.router)
     app.include_router(tools.router)
     app.include_router(health.router)

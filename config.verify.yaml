@@ -47,6 +47,8 @@ tools:
     use: scaffold.plugins.tools.code_review:generate_patch
   - name: write_file
     use: scaffold.plugins.tools.code_review:write_file
+  - name: preview_excel
+    use: scaffold.plugins.tools.preview_excel:preview_excel
 
 # 工具分组，按类别组织工具并选择性启用。
 tool_groups: []
