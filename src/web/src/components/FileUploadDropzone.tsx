@@ -207,3 +207,58 @@ export function FileAttachmentChip({
     </div>
   )
 }
+
+export function FileAttachmentList({
+  files,
+  onRemove,
+}: {
+  files: UploadedFile[]
+  onRemove?: (artifactId: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm">
+      <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+        </svg>
+        已上传文件（{files.length}）
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {files.map((file) => (
+          <li
+            key={file.artifact_id}
+            className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-blue-700">{file.original_name}</span>
+              <span className="shrink-0 text-xs text-slate-400">{formatBytes(file.size_bytes)}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <code className="hidden text-xs text-slate-500 sm:inline">{file.artifact_id}</code>
+              {onRemove && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(file.artifact_id)}
+                  className="rounded-full p-1 text-slate-400 hover:bg-blue-50 hover:text-red-500"
+                  aria-label="移除文件"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}

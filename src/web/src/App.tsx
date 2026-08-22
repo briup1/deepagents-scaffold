@@ -5,7 +5,7 @@ import { listAgents, type AgentInfo } from './api/copilotkit'
 import { getThreadMessages, type ThreadMessage } from './api/threads'
 import { type UploadedFile } from './api/files'
 import { Sidebar } from './components/Sidebar'
-import { FileUploadDropzone, FileAttachmentChip } from './components/FileUploadDropzone'
+import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadDropzone'
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
 import { useGenerativeUITool } from './hooks/useGenerativeUITool'
 import { useGenerativeUIAction } from './hooks/useGenerativeUIAction'
@@ -46,11 +46,16 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
         role: m.role as 'user' | 'assistant',
         content: m.content ?? '',
       }))
-    const fileMessages: UploadedFileMessage[] = uploadedFiles.map((file) => ({
-      id: file.artifact_id,
-      role: 'user',
-      content: `已上传文件 ${file.original_name}（artifact_id: ${file.artifact_id}），可用于后续抽取分析。`,
-    }))
+    const fileMessages: UploadedFileMessage[] =
+      uploadedFiles.length === 0
+        ? []
+        : [
+            {
+              id: `files-${uploadedFiles.map((f) => f.artifact_id).join('-')}`,
+              role: 'user',
+              content: `已上传以下文件，可用于后续抽取分析：\n${uploadedFiles.map((file, index) => `${index + 1}. ${file.original_name}（artifact_id: ${file.artifact_id}）`).join('\n')}`,
+            },
+          ]
     agent.setMessages([...baseMessages, ...fileMessages])
     hasInjectedRef.current = true
   }, [isReady, initialMessages, uploadedFiles, agent])
@@ -106,14 +111,8 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
       <FileUploadDropzone threadId={threadId} onFileUploaded={handleFileUploaded}>
         <main className="flex h-full flex-1 flex-col overflow-hidden">
           {uploadedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 border-b border-cream-200 bg-white px-4 py-2">
-              {uploadedFiles.map((file) => (
-                <FileAttachmentChip
-                  key={file.artifact_id}
-                  file={file}
-                  onRemove={() => handleRemoveFile(file.artifact_id)}
-                />
-              ))}
+            <div className="border-b border-cream-200 bg-white px-4 py-3">
+              <FileAttachmentList files={uploadedFiles} onRemove={handleRemoveFile} />
             </div>
           )}
           <CopilotChat
