@@ -7,6 +7,9 @@
 .claude/
 .agents/
 
+# Pi session logs
+pi-session-*.html
+
 # Python
 __pycache__/
 *.py[cod]
