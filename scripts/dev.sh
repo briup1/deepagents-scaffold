@@ -16,7 +16,7 @@ fi
 
 # Start backend in background
 echo "[2/3] Starting FastAPI backend on http://localhost:8000"
-PYTHONPATH=src uv run uvicorn scaffold.api.app:app --host 0.0.0.0 --port 8000 --reload &
+PYTHONPATH=src uv run uvicorn scaffold.api.app:app --host 0.0.0.0 --port 8000 --reload --reload-dir src/scaffold &
 BACKEND_PID=$!
 
 # Start frontend

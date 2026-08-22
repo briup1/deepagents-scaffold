@@ -73,8 +73,11 @@ def create_agent(
     model_cfg = _resolve_model_config(app_config, model_name)
     chat_model = create_chat_model(model_cfg)
 
-    # 解析工具
+    # 解析工具。先加载全局工具，再根据 harness profile 的 excluded_tools 做过滤。
     configured_tools = get_available_tools(app_config)
+    if profile and profile.excluded_tools:
+        excluded = set(profile.excluded_tools)
+        configured_tools = [t for t in configured_tools if getattr(t, "name", None) not in excluded]
     all_tools = configured_tools + (tools or [])
 
     # 解析系统提示词

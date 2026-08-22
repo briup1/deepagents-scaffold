@@ -7,7 +7,11 @@ from typing import Any
 
 import aiosqlite
 
-from scaffold.infra.history.models import ThreadMessage, ThreadSummary
+from scaffold.infra.history.models import (
+    ExtractionTask,
+    ThreadMessage,
+    ThreadSummary,
+)
 
 
 class HistoryRepository:
@@ -44,6 +48,25 @@ class HistoryRepository:
             CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
             CREATE INDEX IF NOT EXISTS idx_threads_updated_at ON threads(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_threads_agent_id ON threads(agent_id);
+
+            CREATE TABLE IF NOT EXISTS extraction_tasks (
+                task_id TEXT PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                upload_artifact_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                requirements TEXT,
+                script_artifact_id TEXT,
+                extracted_artifact_id TEXT,
+                validation_report TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
+                FOREIGN KEY (upload_artifact_id) REFERENCES artifacts(artifact_id),
+                FOREIGN KEY (script_artifact_id) REFERENCES artifacts(artifact_id),
+                FOREIGN KEY (extracted_artifact_id) REFERENCES artifacts(artifact_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_extraction_tasks_thread_id ON extraction_tasks(thread_id);
             """
         )
         await self._conn.commit()
@@ -201,3 +224,139 @@ def _dump_json(value: list[dict[str, Any]] | None) -> str | None:
     if value is None:
         return None
     return json.dumps(value, ensure_ascii=False)
+
+
+class ExtractionTaskRepository:
+    """管理抽取任务的异步仓库。"""
+
+    def __init__(self, conn: aiosqlite.Connection) -> None:
+        self._conn = conn
+
+    async def migrate(self) -> None:
+        """创建抽取任务表（通常由 HistoryRepository.migrate 统一调用）。"""
+        await self._conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS extraction_tasks (
+                task_id TEXT PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                upload_artifact_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                requirements TEXT,
+                script_artifact_id TEXT,
+                extracted_artifact_id TEXT,
+                validation_report TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
+                FOREIGN KEY (upload_artifact_id) REFERENCES artifacts(artifact_id),
+                FOREIGN KEY (script_artifact_id) REFERENCES artifacts(artifact_id),
+                FOREIGN KEY (extracted_artifact_id) REFERENCES artifacts(artifact_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_extraction_tasks_thread_id ON extraction_tasks(thread_id);
+            """
+        )
+        await self._conn.commit()
+
+    @staticmethod
+    def _now() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    async def create(self, task: ExtractionTask) -> None:
+        """创建抽取任务记录。"""
+        await self._conn.execute(
+            """
+            INSERT INTO extraction_tasks
+            (task_id, thread_id, upload_artifact_id, status, requirements,
+             script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task.task_id,
+                task.thread_id,
+                task.upload_artifact_id,
+                task.status,
+                _dump_json(task.requirements),
+                task.script_artifact_id,
+                task.extracted_artifact_id,
+                _dump_json(task.validation_report),
+                task.created_at,
+                task.updated_at,
+            ),
+        )
+        await self._conn.commit()
+
+    async def get(self, task_id: str) -> ExtractionTask | None:
+        """根据 task_id 查询抽取任务。"""
+        cursor = await self._conn.execute(
+            """
+            SELECT
+                task_id, thread_id, upload_artifact_id, status, requirements,
+                script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
+            FROM extraction_tasks
+            WHERE task_id = ?
+            """,
+            (task_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_task(row)
+
+    async def update(self, task: ExtractionTask) -> bool:
+        """更新抽取任务记录；返回是否更新成功。"""
+        cursor = await self._conn.execute(
+            """
+            UPDATE extraction_tasks
+            SET status = ?,
+                requirements = ?,
+                script_artifact_id = ?,
+                extracted_artifact_id = ?,
+                validation_report = ?,
+                updated_at = ?
+            WHERE task_id = ?
+            """,
+            (
+                task.status,
+                _dump_json(task.requirements),
+                task.script_artifact_id,
+                task.extracted_artifact_id,
+                _dump_json(task.validation_report),
+                task.updated_at,
+                task.task_id,
+            ),
+        )
+        await self._conn.commit()
+        return cursor.rowcount > 0
+
+    async def list_by_thread(self, thread_id: str) -> list[ExtractionTask]:
+        """列出某会话的全部抽取任务。"""
+        cursor = await self._conn.execute(
+            """
+            SELECT
+                task_id, thread_id, upload_artifact_id, status, requirements,
+                script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
+            FROM extraction_tasks
+            WHERE thread_id = ?
+            ORDER BY created_at DESC
+            """,
+            (thread_id,),
+        )
+        rows = await cursor.fetchall()
+        return [self._row_to_task(row) for row in rows]
+
+    def _row_to_task(self, row: Any) -> ExtractionTask:
+        requirements_json = row[4] or "{}"
+        validation_json = row[7] or "{}"
+        return ExtractionTask(
+            task_id=row[0],
+            thread_id=row[1],
+            upload_artifact_id=row[2],
+            status=row[3],
+            requirements=_parse_json(requirements_json),
+            script_artifact_id=row[5],
+            extracted_artifact_id=row[6],
+            validation_report=_parse_json(validation_json),
+            created_at=row[8],
+            updated_at=row[9],
+        )

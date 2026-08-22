@@ -189,3 +189,31 @@ class TestFilesUpload:
     def test_get_file_not_found(self, client: TestClient) -> None:
         response = client.get("/api/files/art-nonexistent")
         assert response.status_code == 404
+
+
+class TestFilesDownload:
+    def test_download_uploaded_file(self, client: TestClient, excel_bytes: bytes) -> None:
+        thread_id = _unique_thread_id()
+        response = client.post(
+            "/api/files/upload",
+            data={"thread_id": thread_id},
+            files={
+                "file": (
+                    "quote.xlsx",
+                    io.BytesIO(excel_bytes),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert response.status_code == 200
+        artifact_id = response.json()["artifact_id"]
+
+        response = client.get(f"/api/files/{artifact_id}/download")
+        assert response.status_code == 200
+        assert response.content == excel_bytes
+        assert response.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        assert 'attachment; filename="quote.xlsx"' in response.headers["content-disposition"]
+
+    def test_download_not_found(self, client: TestClient) -> None:
+        response = client.get("/api/files/art-nonexistent/download")
+        assert response.status_code == 404

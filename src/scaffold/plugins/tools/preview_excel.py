@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from io import BytesIO
 from pathlib import Path
 
@@ -14,6 +15,8 @@ import openpyxl
 
 from scaffold.infra.artifacts import ArtifactRepository, ArtifactStorage
 from scaffold.infra.config.app_config import get_app_config
+
+logger = logging.getLogger(__name__)
 
 
 def _get_storage() -> ArtifactStorage:
@@ -50,6 +53,8 @@ async def preview_excel(
     Returns:
         包含 sheet_names、columns、sample_rows、total_rows 的字典。
     """
+    logger.info("preview_excel 被调用: artifact_id=%s sheet_index=%s limit=%s", artifact_id, sheet_index, limit)
+
     artifact = await _get_artifact(artifact_id)
     if artifact is None:
         return {"error": f"工件 {artifact_id} 不存在"}

@@ -455,11 +455,11 @@ GET /api/files/{artifact_id}
 
 ### Phase 2：三段式抽取 Skill
 
-- 实现 `generate_extraction_code` 工具；
-- 实现 `execute_extraction_code` 工具（MVP 子进程沙箱）；
-- 实现 `validate_extraction_result` 工具；
-- 编写 3 个 SKILL.md；
-- 实现 `extraction_tasks` 表。
+- [x] 实现 `generate_extraction_code` 工具；
+- [x] 实现 `execute_extraction_code` 工具（MVP 子进程沙箱）；
+- [x] 实现 `validate_extraction_result` 工具；
+- [x] 编写 3 个 SKILL.md；
+- [x] 实现 `extraction_tasks` 表。
 
 ### Phase 3：分析与生成式 UI
 

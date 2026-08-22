@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from unittest.mock import patch
+
 import pytest
 
 from scaffold.core.agents import _agent_registry, create_agent, get_agent, list_agents
@@ -31,6 +33,28 @@ class TestCreateAgent:
         assert agent_default is not agent_coding
         assert "default" in _agent_registry
         assert "coding" in _agent_registry
+
+    def test_create_data_extractor_agent_excludes_dev_tools(self, _reset_app_config: Any) -> None:
+        captured_tools: list[Any] = []
+
+        def _fake_create_deep_agent(*, tools: list[Any], **kwargs: Any) -> Any:
+            captured_tools.extend(tools)
+            # 返回一个最小 mock，满足注册表与 get_agent 的基本期望
+            mock_agent = type("MockCompiledGraph", (), {"name": "data_extractor"})()
+            _agent_registry["data_extractor"] = mock_agent
+            return mock_agent
+
+        with patch("scaffold.core.agents._create_deep_agent", side_effect=_fake_create_deep_agent):
+            create_agent(name="data_extractor", harness_profile="data_extractor")
+
+        assert "data_extractor" in _agent_registry
+        tool_names = {getattr(t, "name", None) for t in captured_tools}
+        assert "read_file" not in tool_names
+        assert "write_file" not in tool_names
+        assert "preview_excel" in tool_names
+        assert "generate_extraction_code" in tool_names
+        assert "execute_extraction_code" in tool_names
+        assert "validate_extraction_result" in tool_names
 
     def test_create_agent_overwrites_same_name(self, _reset_app_config: Any) -> None:
         first = create_agent(name="default", harness_profile="default")

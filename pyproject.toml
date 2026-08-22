@@ -22,6 +22,9 @@ dependencies = [
     "ag-ui-langgraph>=0.0.42",
     "openpyxl>=3.1.5",
     "python-multipart>=0.0.32",
+    "pandas>=3.0.5",
+    "numpy>=2.5.2",
+    "duckdb>=1.5.5",
 ]
 
 [project.optional-dependencies]

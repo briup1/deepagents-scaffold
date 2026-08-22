@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 
 from scaffold.api.deps import get_artifact_repo
 from scaffold.infra.artifacts import Artifact, ArtifactStorage
@@ -143,3 +144,34 @@ async def get_file(
         "created_at": artifact.created_at,
         "metadata": artifact.metadata,
     }
+
+
+@router.get("/{artifact_id}/download")
+async def download_file(
+    request: Request,
+    artifact_id: str,
+) -> Response:
+    """下载工件原始内容。
+
+    返回带有 ``Content-Disposition: attachment`` 的文件字节流，
+    前端可直接触发浏览器下载。
+    """
+    repo = get_artifact_repo(request)
+    artifact = await repo.get(artifact_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail=f"工件 {artifact_id} 不存在")
+
+    storage = _get_storage()
+    try:
+        content = storage.read(artifact.stored_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"工件文件不存在：{artifact.stored_path}") from exc
+
+    filename = artifact.original_name or f"{artifact_id}.bin"
+    return Response(
+        content=content,
+        media_type=artifact.mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

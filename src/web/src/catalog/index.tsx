@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ButtonGroup } from '../components/ui/ButtonGroup'
 import { Chart } from '../components/ui/Chart'
 import { DataTable } from '../components/ui/DataTable'
+import { DownloadButton } from '../components/ui/DownloadButton'
 import { Form } from '../components/ui/Form'
 import { MarkdownCard } from '../components/ui/MarkdownCard'
 import { MetricCard } from '../components/ui/MetricCard'
@@ -66,6 +67,12 @@ const metricCardSchema = z.object({
   change: z.number().optional(),
 })
 
+const downloadButtonSchema = z.object({
+  artifact_id: z.string(),
+  file_name: z.string(),
+  description: z.string().optional(),
+})
+
 const chartSchema = z.object({
   title: z.string().optional(),
   kind: z.enum(['bar', 'line']),
@@ -101,6 +108,10 @@ export const catalog = createCatalog(
       description: '渲染单个指标数值与可选变化率。',
       schema: metricCardSchema,
     },
+    download_button: {
+      description: '渲染一个下载按钮，点击后从 /api/files/{artifact_id}/download 下载文件。',
+      schema: downloadButtonSchema,
+    },
     chart: {
       description: '渲染简单 SVG 柱状图或折线图。',
       schema: chartSchema,
@@ -112,6 +123,7 @@ export const catalog = createCatalog(
     form: ({ props, dispatch, surfaceId }) => <Form {...props} dispatch={dispatch} surfaceId={surfaceId} />,
     button_group: ({ props, dispatch, surfaceId }) => <ButtonGroup {...props} dispatch={dispatch} surfaceId={surfaceId} />,
     metric_card: ({ props }) => <MetricCard {...props} />,
+    download_button: ({ props }) => <DownloadButton {...props} />,
     chart: ({ props }) => <Chart {...props} />,
   },
 )
