@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { uploadFile, type UploadedFile } from '../api/files'
 
 interface FileUploadDropzoneProps {
@@ -33,31 +33,7 @@ export function FileUploadDropzone({
 }: FileUploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const dragCounterRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const handleDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dragCounterRef.current += 1
-    setIsDragging(true)
-  }, [])
-
-  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!isDragging) setIsDragging(true)
-  }, [isDragging])
-
-  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dragCounterRef.current -= 1
-    if (dragCounterRef.current <= 0) {
-      dragCounterRef.current = 0
-      setIsDragging(false)
-    }
-  }, [])
 
   const processFile = useCallback(
     async (file: File) => {
@@ -92,14 +68,32 @@ export function FileUploadDropzone({
     [threadId, onFileUploaded],
   )
 
-  const handleDrop = useCallback(
-    async (e: DragEvent<HTMLDivElement>) => {
+  // 在 document 级别监听拖拽，避免 CopilotChat 内部元素阻止事件冒泡
+  useEffect(() => {
+    const handleDragEnter = (e: globalThis.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(true)
+    }
+
+    const handleDragOver = (e: globalThis.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(true)
+    }
+
+    const handleDragLeave = (e: globalThis.DragEvent) => {
+      e.preventDefault()
+      const related = e.relatedTarget as Node | null
+      if (!related || related === document.body || related === document.documentElement) {
+        setIsDragging(false)
+      }
+    }
+
+    const handleDrop = async (e: globalThis.DragEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      dragCounterRef.current = 0
       setIsDragging(false)
 
-      const files = Array.from(e.dataTransfer.files)
+      const files = Array.from(e.dataTransfer?.files ?? [])
       console.log('[FileUpload] dropped files:', files.length)
       if (files.length === 0) {
         setError('未检测到文件，请重新拖拽')
@@ -107,9 +101,20 @@ export function FileUploadDropzone({
       }
 
       await processFile(files[0])
-    },
-    [processFile],
-  )
+    }
+
+    document.addEventListener('dragenter', handleDragEnter)
+    document.addEventListener('dragover', handleDragOver)
+    document.addEventListener('dragleave', handleDragLeave)
+    document.addEventListener('drop', handleDrop)
+
+    return () => {
+      document.removeEventListener('dragenter', handleDragEnter)
+      document.removeEventListener('dragover', handleDragOver)
+      document.removeEventListener('dragleave', handleDragLeave)
+      document.removeEventListener('drop', handleDrop)
+    }
+  }, [processFile])
 
   const handleFileInputChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,16 +131,10 @@ export function FileUploadDropzone({
   }, [])
 
   return (
-    <div
-      className="relative flex h-full w-full flex-col"
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div className="relative flex h-full w-full flex-col">
       {isDragging && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/90">
-          <p className="text-lg font-medium text-blue-600">释放以上传 Excel 文件</p>
+        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center border-4 border-dashed border-blue-500 bg-blue-50/90">
+          <p className="text-2xl font-semibold text-blue-600">释放以上传 Excel 文件</p>
         </div>
       )}
       {error && (
@@ -146,14 +145,14 @@ export function FileUploadDropzone({
       <button
         type="button"
         onClick={handleClickUpload}
-        className="absolute bottom-24 right-4 z-40 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        className="absolute right-4 top-4 z-40 rounded-full bg-blue-600 p-2.5 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         title="上传 Excel 文件"
         aria-label="上传 Excel 文件"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
+          width="18"
+          height="18"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
