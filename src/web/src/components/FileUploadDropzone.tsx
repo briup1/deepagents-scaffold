@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { uploadFile, type UploadedFile } from '../api/files'
 
 interface FileUploadDropzoneProps {
@@ -81,6 +81,22 @@ export function FileUploadDropzone({
     [threadId, onFileUploaded, reportError],
   )
 
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleClickUpload = useCallback(() => {
+    inputRef.current?.click()
+  }, [])
+
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (!files || files.length === 0) return
+      await processFiles(Array.from(files))
+      e.target.value = ''
+    },
+    [processFiles],
+  )
+
   // 在 document 级别监听拖拽，避免 CopilotChat 内部元素阻止事件冒泡
   useEffect(() => {
     const handleDragEnter = (e: globalThis.DragEvent) => {
@@ -142,6 +158,36 @@ export function FileUploadDropzone({
         </div>
       )}
       {children}
+      <button
+        type="button"
+        onClick={handleClickUpload}
+        className="absolute bottom-4 left-4 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-[#444444] transition-colors hover:bg-[#f8f8f8] hover:text-[#333333] focus:outline-none"
+        title="上传 Excel 文件（可多选）"
+        aria-label="上传 Excel 文件，可多选"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
     </div>
   )
 }

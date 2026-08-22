@@ -160,6 +160,11 @@ html [data-copilotkit] {
   color: var(--color-ink) !important;
 }
 
+/* 隐藏 CopilotKit 的 "+" 添加菜单按钮，用我们自己的直接上传按钮替代 */
+button[data-testid="copilot-add-menu-button"] {
+  display: none !important;
+}
+
 /* 隐藏 CopilotKit Web Inspector 及其促销弹窗（开发调试浮层，非应用功能） */
 cpk-web-inspector {
   display: none !important;

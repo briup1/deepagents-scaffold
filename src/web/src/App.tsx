@@ -3,7 +3,7 @@ import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { HttpAgent } from '@ag-ui/client'
 import { listAgents, type AgentInfo } from './api/copilotkit'
 import { getThreadMessages, type ThreadMessage } from './api/threads'
-import { uploadFile, type UploadedFile } from './api/files'
+import { type UploadedFile } from './api/files'
 import { Sidebar } from './components/Sidebar'
 import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadDropzone'
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
@@ -108,27 +108,6 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
 
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  const handleAttachmentUpload = useCallback(
-    async (file: File) => {
-      const uploaded = await uploadFile(threadId, file)
-      handleFileUploaded(uploaded)
-      return {
-        type: 'url' as const,
-        value: `/api/files/${uploaded.artifact_id}`,
-        mimeType: file.type,
-        metadata: { artifact_id: uploaded.artifact_id },
-      }
-    },
-    [threadId, handleFileUploaded],
-  )
-
-  const handleAttachmentUploadFailed = useCallback(
-    ({ message }: { message: string }) => {
-      setUploadError(message)
-    },
-    [],
-  )
-
   const handleDropzoneError = useCallback((message: string) => {
     setUploadError(message)
   }, [])
@@ -170,13 +149,6 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
               chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
               welcomeMessageText: '有什么可以帮你的？',
               modalHeaderTitle: 'DeepAgents Chat',
-            }}
-            attachments={{
-              enabled: true,
-              accept: '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
-              maxSize: 20 * 1024 * 1024,
-              onUpload: handleAttachmentUpload,
-              onUploadFailed: handleAttachmentUploadFailed,
             }}
           />
         </main>
