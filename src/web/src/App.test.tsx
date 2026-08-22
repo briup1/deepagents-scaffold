@@ -17,7 +17,7 @@ vi.mock('@copilotkit/react-core/v2', () => ({
     return <div data-testid="copilot-chat">{String((props.labels as Record<string, string>)?.chatInputPlaceholder ?? '')}</div>
   },
   useAgent: () => ({
-    agent: { setMessages: mockSetMessages, runAgent: vi.fn() },
+    agent: { setMessages: mockSetMessages, runAgent: vi.fn(), messages: [] },
     isReady: true,
   }),
   useRenderTool: vi.fn(),

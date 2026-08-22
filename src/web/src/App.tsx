@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { HttpAgent } from '@ag-ui/client'
 import { listAgents, type AgentInfo } from './api/copilotkit'
@@ -24,8 +24,9 @@ function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
   useGenerativeUITool()
   const { agent, isReady } = useAgent({ agentId })
   const dispatch = useGenerativeUIAction(agentId)
+  const hasInjectedRef = useRef(false)
 
-  useEffect(() => {
+  const injectMessages = useCallback(() => {
     if (!isReady || initialMessages.length === 0) return
     const agUiMessages = initialMessages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -34,8 +35,26 @@ function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
         role: m.role as 'user' | 'assistant',
         content: m.content ?? '',
       }))
+    console.log('[ChatInner] injecting messages:', agUiMessages.length, 'current agent messages:', agent.messages.length)
     agent.setMessages(agUiMessages as { id: string; role: 'user' | 'assistant'; content: string }[])
-  }, [isReady, initialMessages])
+    hasInjectedRef.current = true
+  }, [isReady, initialMessages, agent])
+
+  // 在 agent ready 时注入历史消息
+  useEffect(() => {
+    console.log('[ChatInner] ready effect', { isReady, initialCount: initialMessages.length, agentMessages: agent.messages.length })
+    if (!isReady || initialMessages.length === 0) return
+    injectMessages()
+  }, [isReady, initialMessages, injectMessages])
+
+  // 防御性重注：若外部（如 CopilotChat connectAgent）将消息清空到 0，则重新注入
+  useEffect(() => {
+    if (!isReady || initialMessages.length === 0) return
+    if (hasInjectedRef.current && agent.messages.length === 0) {
+      console.log('[ChatInner] messages were cleared, re-injecting')
+      injectMessages()
+    }
+  }, [agent.messages.length, isReady, initialMessages, injectMessages])
 
   return (
     <GenerativeUIContext.Provider value={{ dispatch }}>
