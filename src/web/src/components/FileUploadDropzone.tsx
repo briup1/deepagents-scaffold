@@ -216,8 +216,8 @@ export function FileAttachmentList({
   onRemove?: (artifactId: string) => void
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm">
-      <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm">
+      <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-blue-800">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="16"
@@ -233,32 +233,26 @@ export function FileAttachmentList({
         </svg>
         已上传文件（{files.length}）
       </div>
-      <ul className="flex flex-col gap-1.5">
-        {files.map((file) => (
-          <li
-            key={file.artifact_id}
-            className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-blue-700">{file.original_name}</span>
-              <span className="shrink-0 text-xs text-slate-400">{formatBytes(file.size_bytes)}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <code className="hidden text-xs text-slate-500 sm:inline">{file.artifact_id}</code>
-              {onRemove && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(file.artifact_id)}
-                  className="rounded-full p-1 text-slate-400 hover:bg-blue-50 hover:text-red-500"
-                  aria-label="移除文件"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+      {files.map((file) => (
+        <div
+          key={file.artifact_id}
+          className="flex min-w-0 max-w-[260px] items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm shadow-sm"
+          title={`${file.original_name}（${file.artifact_id}）`}
+        >
+          <span className="truncate text-blue-700">{file.original_name}</span>
+          <span className="shrink-0 text-xs text-slate-400">{formatBytes(file.size_bytes)}</span>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={() => onRemove(file.artifact_id)}
+              className="rounded-full p-0.5 text-slate-400 hover:bg-blue-50 hover:text-red-500"
+              aria-label="移除文件"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
