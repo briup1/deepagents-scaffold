@@ -35,14 +35,12 @@ function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
         role: m.role as 'user' | 'assistant',
         content: m.content ?? '',
       }))
-    console.log('[ChatInner] injecting messages:', agUiMessages.length, 'current agent messages:', agent.messages.length)
     agent.setMessages(agUiMessages as { id: string; role: 'user' | 'assistant'; content: string }[])
     hasInjectedRef.current = true
   }, [isReady, initialMessages, agent])
 
   // 在 agent ready 时注入历史消息
   useEffect(() => {
-    console.log('[ChatInner] ready effect', { isReady, initialCount: initialMessages.length, agentMessages: agent.messages.length })
     if (!isReady || initialMessages.length === 0) return
     injectMessages()
   }, [isReady, initialMessages, injectMessages])
@@ -51,7 +49,6 @@ function ChatInner({ agentId, initialMessages }: ChatInnerProps) {
   useEffect(() => {
     if (!isReady || initialMessages.length === 0) return
     if (hasInjectedRef.current && agent.messages.length === 0) {
-      console.log('[ChatInner] messages were cleared, re-injecting')
       injectMessages()
     }
   }, [agent.messages.length, isReady, initialMessages, injectMessages])
@@ -86,7 +83,7 @@ function ChatShell({ agents, currentAgentId, threadId, initialMessages }: ChatSh
   }, [agents, threadId])
 
   return (
-    <CopilotKit threadId={threadId} agents__unsafe_dev_only={agentMap}>
+    <CopilotKit agents__unsafe_dev_only={agentMap}>
       <ChatInner agentId={currentAgentId} initialMessages={initialMessages} />
     </CopilotKit>
   )

@@ -23,8 +23,13 @@ vi.mock('@copilotkit/react-core/v2', () => ({
   useRenderTool: vi.fn(),
 }))
 
+let latestHttpAgentCall: { threadId?: string; url?: string } = {}
+
 vi.mock('@ag-ui/client', () => ({
-  HttpAgent: vi.fn(),
+  HttpAgent: vi.fn((args: { threadId?: string; url?: string }) => {
+    latestHttpAgentCall = args
+    return {}
+  }),
 }))
 
 const mockFetch = vi.fn()
@@ -34,6 +39,7 @@ describe('App', () => {
     vi.stubGlobal('fetch', mockFetch)
     latestCopilotKitProps = {}
     latestCopilotChatProps = {}
+    latestHttpAgentCall = {}
     mockFetch.mockReset()
     mockSetMessages.mockReset()
     mockFetch.mockImplementation(async (url: string) => {
@@ -100,7 +106,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('历史会话')).toBeInTheDocument())
     expect(screen.getByTestId('copilot-kit')).toBeInTheDocument()
-    expect(latestCopilotKitProps.threadId).toMatch(/^thread-/)
+    expect(latestHttpAgentCall.threadId).toMatch(/^thread-/)
     expect(Object.keys((latestCopilotKitProps.agents__unsafe_dev_only as Record<string, unknown>) ?? {})).toEqual(
       expect.arrayContaining(['default', 'coding', 'code_reviewer']),
     )
@@ -111,14 +117,14 @@ describe('App', () => {
     render(<App />)
 
     const trigger = await screen.findByRole('button', { name: '选择 Agent' })
-    const firstThreadId = latestCopilotKitProps.threadId as string
+    const firstThreadId = latestHttpAgentCall.threadId
 
     await user.click(trigger)
     const option = await screen.findByRole('option', { name: 'code_reviewer' })
     await user.click(option)
 
     await waitFor(() => expect(latestCopilotChatProps.agentId).toBe('code_reviewer'))
-    await waitFor(() => expect(latestCopilotKitProps.threadId).not.toBe(firstThreadId))
+    await waitFor(() => expect(latestHttpAgentCall.threadId).not.toBe(firstThreadId))
   })
 
   it('点击新建会话重置 threadId', async () => {
@@ -127,10 +133,10 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument())
 
-    const firstThreadId = latestCopilotKitProps.threadId as string
+    const firstThreadId = latestHttpAgentCall.threadId
     await user.click(screen.getByRole('button', { name: '新建会话' }))
 
-    await waitFor(() => expect(latestCopilotKitProps.threadId).not.toBe(firstThreadId))
+    await waitFor(() => expect(latestHttpAgentCall.threadId).not.toBe(firstThreadId))
   })
 
   it('点击历史会话后更新 threadId 并注入历史消息', async () => {
@@ -141,7 +147,7 @@ describe('App', () => {
     const historyThread = await screen.findByRole('button', { name: '历史会话' })
     await user.click(historyThread)
 
-    await waitFor(() => expect(latestCopilotKitProps.threadId).toBe('t-history'))
+    await waitFor(() => expect(latestHttpAgentCall.threadId).toBe('t-history'))
     await waitFor(() =>
       expect(mockSetMessages).toHaveBeenCalledWith(expect.arrayContaining([
         expect.objectContaining({ id: 'm1', role: 'user', content: 'hello' }),
