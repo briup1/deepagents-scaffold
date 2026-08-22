@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -132,6 +133,26 @@ def test_agent_stream_returns_run_lifecycle(client: TestClient) -> None:
     assert "TEXT_MESSAGE_CONTENT" in types
     assert "TEXT_MESSAGE_END" in types
     assert "RUN_FINISHED" in types
+
+
+def test_agent_stream_persists_user_message(client: TestClient) -> None:
+    """调用 /agent 后，用户消息应被持久化到历史表并可查询。"""
+    thread_id = f"thread-persist-{uuid.uuid4()}"
+    message_id = f"msg-persist-{uuid.uuid4()}"
+    payload = _agent_payload(thread_id, f"run-persist-{uuid.uuid4()}", message_id, "persist me")
+    response = client.post("/agent", json=payload, headers={"Accept": "text/event-stream"})
+    assert response.status_code == 200
+
+    # 消费完整 SSE 流，确保后台 producer 完成
+    for _ in response.iter_lines():
+        pass
+
+    res = client.get(f"/api/threads/{thread_id}/messages")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["thread_id"] == thread_id
+    roles = [m["role"] for m in data["messages"]]
+    assert "user" in roles
 
 
 def test_agent_stream_continues_thread(client: TestClient) -> None:

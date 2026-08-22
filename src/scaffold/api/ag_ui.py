@@ -504,6 +504,7 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
         try:
             history_repo = get_history_repo(request)
             await history_repo.ensure_thread(input_data.thread_id, base_agent.name)
+            persisted = 0
             for msg in input_data.messages or []:
                 tm = _ag_ui_message_to_thread_message(
                     msg.model_dump() if hasattr(msg, "model_dump") else dict(msg),
@@ -512,6 +513,12 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
                 )
                 if tm:
                     await history_repo.add_message(tm)
+                    persisted += 1
+            logger.info(
+                "Persisted user messages | thread_id=%s count=%d",
+                input_data.thread_id,
+                persisted,
+            )
         except Exception:
             logger.exception(
                 "Failed to persist user messages | thread_id=%s run_id=%s",

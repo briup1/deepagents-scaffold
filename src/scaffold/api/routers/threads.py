@@ -57,7 +57,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
         versions_seen={},
         updated_channels=set(),
     )
-    checkpoint_metadata = {"source": "thread_create", **body.metadata}
+    checkpoint_metadata = {"source": "thread_create", "step": -1, **body.metadata}
     await checkpointer.aput(
         config,
         checkpoint=checkpoint,

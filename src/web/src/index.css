@@ -2,14 +2,179 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CopilotKit 样式微调 */
-.copilotkit-chat {
-  --copilot-kit-primary-color: #3b82f6;
+:root {
+  --color-cream-50: #FDFCF8;
+  --color-cream-100: #F7F7F5;
+  --color-cream-200: #EFEEE9;
+  --color-cream-300: #E8E8E3;
+  --color-ink: #111827;
+  --color-ink-muted: #6B7280;
+  --color-ink-subtle: #9CA3AF;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #f3f4f6;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100dvh;
+  background-color: var(--color-cream-50);
+  color: var(--color-ink);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* CopilotKit v2 主题覆盖：统一为 Kimi 式暖白极简风
+   CopilotKit v2 在 [data-copilotkit] 上定义了 semantic color tokens，
+   用更高特异性的选择器覆盖它们。 */
+html [data-copilotkit] {
+  --background: var(--color-cream-50);
+  --foreground: var(--color-ink);
+  --card: #ffffff;
+  --card-foreground: var(--color-ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-ink);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-cream-100);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-cream-100);
+  --muted-foreground: var(--color-ink-muted);
+  --accent: var(--color-cream-100);
+  --accent-foreground: var(--color-ink);
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: var(--color-cream-300);
+  --input: var(--color-cream-300);
+  --ring: var(--color-ink);
+  --radius: 1rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--color-ink);
+  --sidebar-primary: var(--color-ink);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--color-cream-100);
+  --sidebar-accent-foreground: var(--color-ink);
+  --sidebar-border: var(--color-cream-300);
+  --sidebar-ring: var(--color-ink);
+  --cpk-default-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+}
+
+/* 让 CopilotChat 本身透明，融入主背景 */
+[data-copilotkit].copilotkit-chat,
+[data-copilotkit] .copilotkit-chat {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 隐藏 CopilotChat 默认 header（我们已有侧边栏） */
+[data-copilotkit] .copilotkit-header,
+[data-copilotkit] .copilotkit-modal-header {
+  display: none !important;
+}
+
+/* 消息列表区域融入背景 */
+[data-copilotkit] .copilotkit-messages-container {
+  background-color: transparent !important;
+}
+
+/* 输入框容器：白色圆角卡片 */
+[data-copilotkit] .copilotkit-input-container {
+  background-color: #ffffff !important;
+  border: 1px solid var(--color-cream-300) !important;
+  border-radius: 1.25rem !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-copilotkit] .copilotkit-input-container:focus-within {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 输入框文字 */
+[data-copilotkit] textarea.copilotkit-input,
+[data-copilotkit] .copilotkit-input {
+  color: var(--color-ink) !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.5 !important;
+}
+
+[data-copilotkit] textarea.copilotkit-input::placeholder,
+[data-copilotkit] .copilotkit-input::placeholder {
+  color: var(--color-ink-subtle) !important;
+}
+
+/* 发送按钮：深色圆形 */
+[data-copilotkit] .copilotkit-send-button {
+  background-color: var(--color-ink) !important;
+  color: #ffffff !important;
+  border-radius: 9999px !important;
+  transition: transform 150ms ease, background-color 150ms ease !important;
+}
+
+[data-copilotkit] .copilotkit-send-button:hover {
+  background-color: #374151 !important;
+}
+
+[data-copilotkit] .copilotkit-send-button:active {
+  transform: scale(0.96) !important;
+}
+
+/* 欢迎语 */
+[data-copilotkit] .copilotkit-welcome-message {
+  background-color: transparent !important;
+  color: var(--color-ink-muted) !important;
+  font-size: 0.9375rem !important;
+}
+
+/* 用户消息气泡：深色 */
+[data-copilotkit] .copilotkit-message-user {
+  background-color: var(--color-ink) !important;
+  color: #ffffff !important;
+  border-radius: 1rem !important;
+}
+
+/* 助手消息气泡：白色带边框 */
+[data-copilotkit] .copilotkit-message-assistant {
+  background-color: #ffffff !important;
+  color: var(--color-ink) !important;
+  border: 1px solid var(--color-cream-300) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* 建议 pill */
+[data-copilotkit] .copilotkit-suggestion-pill {
+  background-color: #ffffff !important;
+  border: 1px solid var(--color-cream-300) !important;
+  color: var(--color-ink-muted) !important;
+  border-radius: 9999px !important;
+  transition: background-color 150ms ease, border-color 150ms ease !important;
+}
+
+[data-copilotkit] .copilotkit-suggestion-pill:hover {
+  background-color: var(--color-cream-100) !important;
+  border-color: var(--color-cream-300) !important;
+  color: var(--color-ink) !important;
+}
+
+/* 隐藏 CopilotKit Web Inspector 及其促销弹窗（开发调试浮层，非应用功能） */
+cpk-web-inspector {
+  display: none !important;
+}
+[data-copilotkit] * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-cream-300) transparent;
+}
+
+[data-copilotkit] *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+[data-copilotkit] *::-webkit-scrollbar-thumb {
+  background-color: var(--color-cream-300);
+  border-radius: 9999px;
 }
