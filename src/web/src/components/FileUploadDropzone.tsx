@@ -145,14 +145,14 @@ export function FileUploadDropzone({
       <button
         type="button"
         onClick={handleClickUpload}
-        className="absolute right-4 top-4 z-40 rounded-full bg-blue-600 p-2.5 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        className="absolute bottom-6 right-16 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-[#444444] transition-colors hover:bg-[#f8f8f8] hover:text-[#333333] focus:outline-none"
         title="上传 Excel 文件"
         aria-label="上传 Excel 文件"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
+          width="20"
+          height="20"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
