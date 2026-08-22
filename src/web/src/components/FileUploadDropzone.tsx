@@ -35,34 +35,39 @@ export function FileUploadDropzone({
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const processFile = useCallback(
-    async (file: File) => {
+  const processFiles = useCallback(
+    async (files: File[]) => {
       setError(null)
-      console.log('[FileUpload] processing file:', file.name, file.type, file.size)
+      const excelFiles = files.filter((file) => {
+        const ok = isExcelFile(file)
+        if (!ok) {
+          console.warn('[FileUpload] rejected non-excel:', file.name)
+        }
+        return ok
+      })
 
-      if (!isExcelFile(file)) {
-        const msg = '仅支持 Excel 文件（.xlsx 或 .xls）'
-        console.warn('[FileUpload] rejected:', msg)
-        setError(msg)
+      if (excelFiles.length === 0) {
+        setError('未检测到 Excel 文件（.xlsx 或 .xls）')
         return
       }
 
-      if (file.size > MAX_FILE_SIZE) {
-        const msg = '文件大小超过 20MB 限制'
-        console.warn('[FileUpload] rejected:', msg)
-        setError(msg)
+      const oversized = excelFiles.filter((file) => file.size > MAX_FILE_SIZE)
+      if (oversized.length > 0) {
+        setError(`以下文件超过 20MB：${oversized.map((f) => f.name).join(', ')}`)
         return
       }
 
-      try {
-        console.log('[FileUpload] uploading to /api/files/upload, threadId:', threadId)
-        const uploaded = await uploadFile(threadId, file)
-        console.log('[FileUpload] upload success:', uploaded)
-        onFileUploaded(uploaded)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : '上传失败'
-        console.error('[FileUpload] upload error:', err)
-        setError(msg)
+      for (const file of excelFiles) {
+        try {
+          console.log('[FileUpload] uploading:', file.name)
+          const uploaded = await uploadFile(threadId, file)
+          console.log('[FileUpload] upload success:', uploaded)
+          onFileUploaded(uploaded)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : '上传失败'
+          console.error('[FileUpload] upload error:', file.name, err)
+          setError(`${file.name}: ${msg}`)
+        }
       }
     },
     [threadId, onFileUploaded],
@@ -100,7 +105,7 @@ export function FileUploadDropzone({
         return
       }
 
-      await processFile(files[0])
+      await processFiles(files)
     }
 
     document.addEventListener('dragenter', handleDragEnter)
@@ -114,16 +119,16 @@ export function FileUploadDropzone({
       document.removeEventListener('dragleave', handleDragLeave)
       document.removeEventListener('drop', handleDrop)
     }
-  }, [processFile])
+  }, [processFiles])
 
   const handleFileInputChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files
       if (!files || files.length === 0) return
-      await processFile(files[0])
+      await processFiles(Array.from(files))
       e.target.value = ''
     },
-    [processFile],
+    [processFiles],
   )
 
   const handleClickUpload = useCallback(() => {
@@ -146,8 +151,8 @@ export function FileUploadDropzone({
         type="button"
         onClick={handleClickUpload}
         className="absolute bottom-6 right-16 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-[#444444] transition-colors hover:bg-[#f8f8f8] hover:text-[#333333] focus:outline-none"
-        title="上传 Excel 文件"
-        aria-label="上传 Excel 文件"
+        title="上传 Excel 文件（可多选）"
+        aria-label="上传 Excel 文件，可多选"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -168,6 +173,7 @@ export function FileUploadDropzone({
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
         onChange={handleFileInputChange}
         className="hidden"
