@@ -1,6 +1,7 @@
 """中间件可观测性包装器。
 
 在不修改现有中间件的前提下，记录链上每个中间件 hook 进入/退出时的状态变化。
+事件 hook 的调用通过表驱动生成，避免手写多份重复的计时/日志逻辑。
 """
 
 from __future__ import annotations
@@ -43,6 +44,36 @@ def _is_overridden(cls: type[Any], method_name: str) -> bool:
     return False
 
 
+def _make_lifecycle_method(hook: str, is_async: bool):
+    """为生命周期 hook 生成绑定到动态子类的方法。"""
+    if is_async:
+
+        async def method(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+            return await self._arun_lifecycle_hook(hook, state, runtime)
+
+        return method
+
+    def method(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+        return self._run_lifecycle_hook(hook, state, runtime)
+
+    return method
+
+
+def _make_wrap_method(hook: str, is_async: bool):
+    """为回调式 hook 生成绑定到动态子类的方法。"""
+    if is_async:
+
+        async def method(self, request: Any, handler: Any) -> Any:
+            return await self._arun_wrap_hook(hook, request, handler)
+
+        return method
+
+    def method(self, request: Any, handler: Any) -> Any:
+        return self._run_wrap_hook(hook, request, handler)
+
+    return method
+
+
 def _make_telemetry_wrapper_cls(wrapped_cls: type[Any]) -> type:
     """为被包装中间件动态创建 TelemetryWrapper 子类。
 
@@ -57,15 +88,15 @@ def _make_telemetry_wrapper_cls(wrapped_cls: type[Any]) -> type:
     # 生命周期 hook 仅在被子类覆写 sync 或 async 时暴露，避免产生无意义空节点
     for sync_hook, async_hook in _STATE_HOOK_PAIRS:
         if _is_overridden(wrapped_cls, sync_hook):
-            methods[sync_hook] = getattr(StateTelemetryWrapper, f"_{sync_hook}_impl")
+            methods[sync_hook] = _make_lifecycle_method(sync_hook, False)
         if _is_overridden(wrapped_cls, async_hook):
-            methods[async_hook] = getattr(StateTelemetryWrapper, f"_{async_hook}_impl")
+            methods[async_hook] = _make_lifecycle_method(async_hook, True)
 
     # 回调式 hook 仅在被子类覆写时暴露，避免不必要的 wrap 链开销
     for sync_hook, async_hook in _WRAP_HOOK_PAIRS:
         if _is_overridden(wrapped_cls, sync_hook) or _is_overridden(wrapped_cls, async_hook):
-            methods[sync_hook] = getattr(StateTelemetryWrapper, f"_{sync_hook}_impl")
-            methods[async_hook] = getattr(StateTelemetryWrapper, f"_{async_hook}_impl")
+            methods[sync_hook] = _make_wrap_method(sync_hook, False)
+            methods[async_hook] = _make_wrap_method(async_hook, True)
 
     wrapper_cls = type(
         f"StateTelemetryWrapper_{wrapped_cls.__name__}",
@@ -74,6 +105,13 @@ def _make_telemetry_wrapper_cls(wrapped_cls: type[Any]) -> type:
     )
     _telemetry_wrapper_cls_cache[wrapped_cls] = wrapper_cls
     return wrapper_cls
+
+
+def _base_hook_name(hook: str) -> str:
+    """把 async hook 名还原为 sync 基础名（abefore_agent -> before_agent）。"""
+    if hook.startswith("a") and not hook.startswith("awrap_"):
+        return hook[1:]
+    return hook
 
 
 def _summarize_message(msg: Any) -> dict[str, Any]:
@@ -404,10 +442,6 @@ class StateTelemetryWrapper(AgentMiddleware):
             },
         )
 
-    # ------------------------------------------------------------------
-    # 简单生命周期 hook 实现
-    # ------------------------------------------------------------------
-
     def _call_wrapped_lifecycle(self, hook: str, state: Any, runtime: Any) -> dict[str, Any] | None:
         """调用被包装中间件的同步生命周期 hook；未覆盖时返回 None。"""
         if _is_overridden(type(self._wrapped), hook):
@@ -424,78 +458,52 @@ class StateTelemetryWrapper(AgentMiddleware):
             return getattr(self._wrapped, hook)(state, runtime)
         return None
 
-    def _before_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+    def _run_lifecycle_hook(
+        self,
+        hook: str,
+        state: Any,
+        runtime: Any,
+    ) -> dict[str, Any] | None:
+        """执行单个同步生命周期 hook 并记录 telemetry。"""
+        base_hook = _base_hook_name(hook)
         start = time.perf_counter()
-        self._log_hook_enter("before_agent", summarize_state(state))
-        update = self._call_wrapped_lifecycle("before_agent", state, runtime)
+        self._log_hook_enter(hook, summarize_state(state))
+        update = self._call_wrapped_lifecycle(base_hook, state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("before_agent", summarize_state(state), summarize_update(update), duration_ms)
+        self._log_hook_exit(hook, summarize_state(state), summarize_update(update), duration_ms)
         return update
 
-    async def _abefore_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+    async def _arun_lifecycle_hook(
+        self,
+        hook: str,
+        state: Any,
+        runtime: Any,
+    ) -> dict[str, Any] | None:
+        """执行单个异步生命周期 hook 并记录 telemetry。"""
+        base_hook = _base_hook_name(hook)
         start = time.perf_counter()
-        self._log_hook_enter("abefore_agent", summarize_state(state))
-        update = await self._acall_wrapped_lifecycle("before_agent", state, runtime)
+        self._log_hook_enter(hook, summarize_state(state))
+        update = await self._acall_wrapped_lifecycle(base_hook, state, runtime)
         duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("abefore_agent", summarize_state(state), summarize_update(update), duration_ms)
+        self._log_hook_exit(hook, summarize_state(state), summarize_update(update), duration_ms)
         return update
 
-    def _before_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+    def _run_wrap_hook(
+        self,
+        hook: str,
+        request: Any,
+        handler: Any,
+    ) -> Any:
+        """执行单个同步 wrap hook 并记录 telemetry。"""
         start = time.perf_counter()
-        self._log_hook_enter("before_model", summarize_state(state))
-        update = self._call_wrapped_lifecycle("before_model", state, runtime)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("before_model", summarize_state(state), summarize_update(update), duration_ms)
-        return update
+        request_summary = (
+            summarize_model_request(request) if hook.startswith("wrap_model") else summarize_tool_request(request)
+        )
+        enter_log = self._log_model_call_enter if hook.startswith("wrap_model") else self._log_tool_call_enter
+        exit_log = self._log_model_call_exit if hook.startswith("wrap_model") else self._log_tool_call_exit
+        summarize_response = summarize_model_response if hook.startswith("wrap_model") else summarize_tool_response
 
-    async def _abefore_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        start = time.perf_counter()
-        self._log_hook_enter("abefore_model", summarize_state(state))
-        update = await self._acall_wrapped_lifecycle("before_model", state, runtime)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("abefore_model", summarize_state(state), summarize_update(update), duration_ms)
-        return update
-
-    def _after_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        start = time.perf_counter()
-        self._log_hook_enter("after_model", summarize_state(state))
-        update = self._call_wrapped_lifecycle("after_model", state, runtime)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("after_model", summarize_state(state), summarize_update(update), duration_ms)
-        return update
-
-    async def _aafter_model_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        start = time.perf_counter()
-        self._log_hook_enter("after_model", summarize_state(state))
-        update = await self._acall_wrapped_lifecycle("after_model", state, runtime)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("after_model", summarize_state(state), summarize_update(update), duration_ms)
-        return update
-
-    def _after_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        start = time.perf_counter()
-        self._log_hook_enter("after_agent", summarize_state(state))
-        update = self._call_wrapped_lifecycle("after_agent", state, runtime)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("after_agent", summarize_state(state), summarize_update(update), duration_ms)
-        return update
-
-    async def _aafter_agent_impl(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        start = time.perf_counter()
-        self._log_hook_enter("after_agent", summarize_state(state))
-        update = await self._acall_wrapped_lifecycle("after_agent", state, runtime)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_hook_exit("after_agent", summarize_state(state), summarize_update(update), duration_ms)
-        return update
-
-    # ------------------------------------------------------------------
-    # wrap_model_call 实现（透明包装 handler 以捕获中间件修改后的 request）
-    # ------------------------------------------------------------------
-
-    def _wrap_model_call_impl(self, request: Any, handler: Any) -> Any:
-        start = time.perf_counter()
-        entered_request_summary = summarize_model_request(request)
-        self._log_model_call_enter("wrap_model_call", entered_request_summary)
+        enter_log(hook, request_summary)
 
         final_request: list[Any] = [request]
 
@@ -503,20 +511,33 @@ class StateTelemetryWrapper(AgentMiddleware):
             final_request[0] = req
             return handler(req)
 
-        response = self._wrapped.wrap_model_call(request, wrapped_handler)
+        response = getattr(self._wrapped, hook)(request, wrapped_handler)
         duration_ms = (time.perf_counter() - start) * 1000
-        self._log_model_call_exit(
-            "wrap_model_call",
-            summarize_model_request(final_request[0]),
-            summarize_model_response(response),
+        exit_log(
+            hook,
+            summarize_model_request(final_request[0])
+            if hook.startswith("wrap_model")
+            else summarize_tool_request(final_request[0]),
+            summarize_response(response),
             duration_ms,
         )
         return response
 
-    async def _awrap_model_call_impl(self, request: Any, handler: Any) -> Any:
+    async def _arun_wrap_hook(
+        self,
+        hook: str,
+        request: Any,
+        handler: Any,
+    ) -> Any:
+        """执行单个异步 wrap hook 并记录 telemetry。"""
         start = time.perf_counter()
-        entered_request_summary = summarize_model_request(request)
-        self._log_model_call_enter("awrap_model_call", entered_request_summary)
+        is_model = hook.startswith("wrap_model") or hook.startswith("awrap_model")
+        request_summary = summarize_model_request(request) if is_model else summarize_tool_request(request)
+        enter_log = self._log_model_call_enter if is_model else self._log_tool_call_enter
+        exit_log = self._log_model_call_exit if is_model else self._log_tool_call_exit
+        summarize_response = summarize_model_response if is_model else summarize_tool_response
+
+        enter_log(hook, request_summary)
 
         final_request: list[Any] = [request]
 
@@ -524,58 +545,14 @@ class StateTelemetryWrapper(AgentMiddleware):
             final_request[0] = req
             return await handler(req)
 
-        response = await self._wrapped.awrap_model_call(request, wrapped_handler)
+        response = await getattr(self._wrapped, hook)(request, wrapped_handler)
         duration_ms = (time.perf_counter() - start) * 1000
-        self._log_model_call_exit(
-            "awrap_model_call",
-            summarize_model_request(final_request[0]),
-            summarize_model_response(response),
-            duration_ms,
-        )
-        return response
-
-    # ------------------------------------------------------------------
-    # wrap_tool_call 实现
-    # ------------------------------------------------------------------
-
-    def _wrap_tool_call_impl(self, request: Any, handler: Any) -> Any:
-        start = time.perf_counter()
-        entered_request_summary = summarize_tool_request(request)
-        self._log_tool_call_enter("wrap_tool_call", entered_request_summary)
-
-        final_request: list[Any] = [request]
-
-        def wrapped_handler(req: Any) -> Any:
-            final_request[0] = req
-            return handler(req)
-
-        response = self._wrapped.wrap_tool_call(request, wrapped_handler)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_tool_call_exit(
-            "wrap_tool_call",
-            summarize_tool_request(final_request[0]),
-            summarize_tool_response(response),
-            duration_ms,
-        )
-        return response
-
-    async def _awrap_tool_call_impl(self, request: Any, handler: Any) -> Any:
-        start = time.perf_counter()
-        entered_request_summary = summarize_tool_request(request)
-        self._log_tool_call_enter("awrap_tool_call", entered_request_summary)
-
-        final_request: list[Any] = [request]
-
-        async def wrapped_handler(req: Any) -> Any:
-            final_request[0] = req
-            return await handler(req)
-
-        response = await self._wrapped.awrap_tool_call(request, wrapped_handler)
-        duration_ms = (time.perf_counter() - start) * 1000
-        self._log_tool_call_exit(
-            "awrap_tool_call",
-            summarize_tool_request(final_request[0]),
-            summarize_tool_response(response),
+        exit_log(
+            hook,
+            summarize_model_request(final_request[0])
+            if hook.startswith("wrap_model")
+            else summarize_tool_request(final_request[0]),
+            summarize_response(response),
             duration_ms,
         )
         return response
