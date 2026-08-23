@@ -8,34 +8,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from io import BytesIO
-from pathlib import Path
 
-import aiosqlite
 import openpyxl
 
-from scaffold.infra.artifacts import ArtifactRepository, ArtifactStorage
-from scaffold.infra.config.app_config import get_app_config
+from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
-
-
-def _get_storage() -> ArtifactStorage:
-    """根据当前配置获取工件存储实例。"""
-    config = get_app_config()
-    base_dir = Path(config.database.sqlite_dir or "./data") / "artifacts"
-    return ArtifactStorage(base_dir)
-
-
-async def _get_artifact(artifact_id: str):
-    """根据 artifact_id 查询工件元数据。"""
-    config = get_app_config()
-    db_path = config.database.history_db or f"{config.database.sqlite_dir or './data'}/history.db"
-    conn = await aiosqlite.connect(db_path)
-    try:
-        repo = ArtifactRepository(conn)
-        return await repo.get(artifact_id)
-    finally:
-        await conn.close()
 
 
 async def preview_excel(
@@ -55,18 +33,18 @@ async def preview_excel(
     """
     logger.info("preview_excel 被调用: artifact_id=%s sheet_index=%s limit=%s", artifact_id, sheet_index, limit)
 
-    artifact = await _get_artifact(artifact_id)
-    if artifact is None:
-        return {"error": f"工件 {artifact_id} 不存在"}
+    async with get_extraction_workspace() as ws:
+        artifact = await ws.get_artifact(artifact_id)
+        if artifact is None:
+            return {"error": f"工件 {artifact_id} 不存在"}
 
-    if artifact.artifact_type != "upload":
-        return {"error": f"工件 {artifact_id} 不是上传文件"}
+        if artifact.artifact_type != "upload":
+            return {"error": f"工件 {artifact_id} 不是上传文件"}
 
-    storage = _get_storage()
-    try:
-        content = await asyncio.to_thread(storage.read, artifact.stored_path)
-    except FileNotFoundError:
-        return {"error": f"工件文件不存在：{artifact.stored_path}"}
+        try:
+            content = await ws.read_artifact(artifact_id)
+        except FileNotFoundError:
+            return {"error": f"工件文件不存在：{artifact.stored_path}"}
 
     def _parse() -> dict:
         wb = openpyxl.load_workbook(BytesIO(content), data_only=True)

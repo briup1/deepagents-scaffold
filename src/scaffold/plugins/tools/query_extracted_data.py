@@ -8,23 +8,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import duckdb
 
-from scaffold.infra.artifacts import ArtifactStorage
-from scaffold.infra.config.app_config import get_app_config
-from scaffold.plugins.tools._extraction_common import _get_artifact
+from scaffold.infra.extraction import ExtractionWorkspace
+from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
-
-
-def _get_storage() -> ArtifactStorage:
-    """根据当前配置获取工件存储实例。"""
-    config = get_app_config()
-    base_dir = Path(config.database.sqlite_dir or "./data") / "artifacts"
-    return ArtifactStorage(base_dir)
 
 
 def _validate_select_only(sql: str) -> tuple[str | None, str | None]:
@@ -71,9 +64,14 @@ def _fetch_result(con: duckdb.DuckDBPyConnection, sql: str, limit: int) -> dict[
     return {"columns": columns, "rows": safe_rows, "row_count": len(safe_rows), "truncated": truncated}
 
 
-async def _artifact_csv(artifact_id: str, expected_type: str, thread_id: str | None) -> tuple[Any, str] | tuple[dict[str, Any], None]:
+async def _artifact_csv(
+    ws: ExtractionWorkspace,
+    artifact_id: str,
+    expected_type: str,
+    thread_id: str | None,
+) -> tuple[Any, str] | tuple[dict[str, Any], None]:
     """校验工件并返回 (artifact, 绝对 csv 路径)；失败返回 (错误 dict, None)。"""
-    artifact = await _get_artifact(artifact_id)
+    artifact = await ws.get_artifact(artifact_id)
     if artifact is None:
         return {"error": f"工件 {artifact_id} 不存在"}, None
     if artifact.artifact_type != expected_type:
@@ -85,15 +83,12 @@ async def _artifact_csv(artifact_id: str, expected_type: str, thread_id: str | N
     if thread_id is not None and artifact.thread_id != thread_id:
         return {"error": f"工件 {artifact_id} 不属于会话 {thread_id}，已拒绝访问"}, None
 
-    storage = _get_storage()
     try:
-        content = await asyncio.to_thread(storage.read, artifact.stored_path)
+        content = await ws.read_artifact(artifact_id)
     except FileNotFoundError:
         return {"error": f"工件文件不存在：{artifact.stored_path}"}, None
 
     # 写到临时文件供 DuckDB 读取（并发安全）
-    import tempfile  # noqa: PLC0415
-
     fd, tmp_path = tempfile.mkstemp(suffix=".csv")
     with open(fd, "wb") as fh:
         fh.write(content)
@@ -131,34 +126,35 @@ async def query_extracted_data(
     if sql_error:
         return {"error": sql_error}
 
-    artifact, primary_path = await _artifact_csv(extraction_id, "extraction", thread_id)
-    if primary_path is None:
-        return artifact  # type: ignore[return-value]
+    async with get_extraction_workspace() as ws:
+        artifact, primary_path = await _artifact_csv(ws, extraction_id, "extraction", thread_id)
+        if primary_path is None:
+            return artifact  # type: ignore[return-value]
 
-    comparison_path: str | None = None
-    if comparison_extraction_id:
-        comp, comparison_path = await _artifact_csv(comparison_extraction_id, "extraction", thread_id)
-        if comparison_path is None:
-            return comp  # type: ignore[return-value]
+        comparison_path: str | None = None
+        if comparison_extraction_id:
+            comp, comparison_path = await _artifact_csv(ws, comparison_extraction_id, "extraction", thread_id)
+            if comparison_path is None:
+                return comp  # type: ignore[return-value]
 
-    def _run() -> dict[str, Any]:
-        con = duckdb.connect()
-        try:
+        def _run() -> dict[str, Any]:
+            con = duckdb.connect()
             try:
-                if comparison_path:
-                    _load_table(con, "data_a", primary_path)  # type: ignore[arg-type]
-                    _load_table(con, "data_b", comparison_path)
-                else:
-                    _load_table(con, "data", primary_path)  # type: ignore[arg-type]
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"CSV 读取失败：{exc}"}
+                try:
+                    if comparison_path:
+                        _load_table(con, "data_a", primary_path)  # type: ignore[arg-type]
+                        _load_table(con, "data_b", comparison_path)
+                    else:
+                        _load_table(con, "data", primary_path)  # type: ignore[arg-type]
+                except Exception as exc:  # noqa: BLE001
+                    return {"error": f"CSV 读取失败：{exc}"}
 
-            try:
-                return _fetch_result(con, checked_sql, limit)  # type: ignore[arg-type]
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"SQL 执行失败：{exc}"}
-        finally:
-            con.close()
+                try:
+                    return _fetch_result(con, checked_sql, limit)  # type: ignore[arg-type]
+                except Exception as exc:  # noqa: BLE001
+                    return {"error": f"SQL 执行失败：{exc}"}
+            finally:
+                con.close()
 
     try:
         result = await asyncio.to_thread(_run)

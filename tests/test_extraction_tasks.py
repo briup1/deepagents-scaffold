@@ -14,8 +14,8 @@ async def task_repo():
     conn = await aiosqlite.connect(":memory:")
     history_repo = HistoryRepository(conn)
     await history_repo.migrate()
-    # artifacts 表在 HistoryRepository.migrate 中已通过 extraction_tasks 外键依赖创建
     repo = ExtractionTaskRepository(conn)
+    await repo.migrate()  # 抽取任务表由 ExtractionTaskRepository 单独维护
     yield repo
     await conn.close()
 

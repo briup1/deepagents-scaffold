@@ -8,7 +8,7 @@ from io import StringIO
 from typing import Any
 
 from scaffold.infra.history.models import ValidationCheck, ValidationReport
-from scaffold.plugins.tools._extraction_common import _get_artifact, _get_task, _read_artifact_bytes, _update_task
+from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -24,101 +24,105 @@ async def validate_extraction_result(task_id: str) -> dict[str, Any]:
     """
     logger.info("validate_extraction_result 被调用: task_id=%s", task_id)
 
-    task = await _get_task(task_id)
-    if task is None:
-        return {"error": f"抽取任务 {task_id} 不存在"}
-    if task.status not in ("validating", "success", "failed"):
-        return {"error": f"任务 {task_id} 当前状态为 {task.status}，无法验证"}
-    if task.extracted_artifact_id is None:
-        return {"error": f"任务 {task_id} 尚未生成抽取结果"}
+    async with get_extraction_workspace() as ws:
+        task = await ws.get_task(task_id)
+        if task is None:
+            return {"error": f"抽取任务 {task_id} 不存在"}
+        if task.status not in ("validating", "success", "failed"):
+            return {"error": f"任务 {task_id} 当前状态为 {task.status}，无法验证"}
+        if task.extracted_artifact_id is None:
+            return {"error": f"任务 {task_id} 尚未生成抽取结果"}
 
-    extracted_artifact = await _get_artifact(task.extracted_artifact_id)
-    if extracted_artifact is None:
-        return {"error": f"抽取结果工件 {task.extracted_artifact_id} 不存在"}
+        extracted_artifact = await ws.get_artifact(task.extracted_artifact_id)
+        if extracted_artifact is None:
+            return {"error": f"抽取结果工件 {task.extracted_artifact_id} 不存在"}
 
-    csv_bytes = await _read_artifact_bytes(extracted_artifact)
-    requirements = task.requirements or {}
-    fields = requirements.get("fields", [])
-    expected_samples = requirements.get("expected_samples", [])
+        try:
+            csv_bytes = await ws.read_artifact(task.extracted_artifact_id)
+        except FileNotFoundError:
+            return {"error": f"工件文件不存在：{extracted_artifact.stored_path}"}
 
-    text = csv_bytes.decode("utf-8", errors="replace")
-    reader = csv_module.DictReader(StringIO(text))
-    columns = reader.fieldnames or []
-    rows = list(reader)
+        requirements = task.requirements or {}
+        fields = requirements.get("fields", [])
+        expected_samples = requirements.get("expected_samples", [])
 
-    checks: list[ValidationCheck] = []
+        text = csv_bytes.decode("utf-8", errors="replace")
+        reader = csv_module.DictReader(StringIO(text))
+        columns = reader.fieldnames or []
+        rows = list(reader)
 
-    # 1. 字段存在性
-    for field in fields:
-        exists = field["name"] in columns
-        checks.append(
-            ValidationCheck(
-                rule=f"字段 {field['name']} 存在",
-                status="pass" if exists else "fail",
-                details=None if exists else "CSV 中未找到该字段",
+        checks: list[ValidationCheck] = []
+
+        # 1. 字段存在性
+        for field in fields:
+            exists = field["name"] in columns
+            checks.append(
+                ValidationCheck(
+                    rule=f"字段 {field['name']} 存在",
+                    status="pass" if exists else "fail",
+                    details=None if exists else "CSV 中未找到该字段",
+                )
             )
-        )
 
-    # 2. 非空约束
-    for field in fields:
-        if not field.get("required"):
-            continue
-        if field["name"] not in columns:
+        # 2. 非空约束
+        for field in fields:
+            if not field.get("required"):
+                continue
+            if field["name"] not in columns:
+                checks.append(
+                    ValidationCheck(
+                        rule=f"字段 {field['name']} 非空",
+                        status="fail",
+                        details="字段不存在",
+                    )
+                )
+                continue
+            empty_count = sum(1 for row in rows if not row.get(field["name"], "").strip())
             checks.append(
                 ValidationCheck(
                     rule=f"字段 {field['name']} 非空",
-                    status="fail",
-                    details="字段不存在",
+                    status="pass" if empty_count == 0 else "fail",
+                    details=None if empty_count == 0 else f"存在 {empty_count} 行空值",
                 )
             )
-            continue
-        empty_count = sum(1 for row in rows if not row.get(field["name"], "").strip())
-        checks.append(
-            ValidationCheck(
-                rule=f"字段 {field['name']} 非空",
-                status="pass" if empty_count == 0 else "fail",
-                details=None if empty_count == 0 else f"存在 {empty_count} 行空值",
+
+        # 3. 类型检查
+        for field in fields:
+            field_type = field.get("type", "string")
+            if field["name"] not in columns:
+                continue
+            invalid = _check_type(rows, field["name"], field_type)
+            checks.append(
+                ValidationCheck(
+                    rule=f"字段 {field['name']} 类型为 {field_type}",
+                    status="pass" if invalid == 0 else "fail",
+                    details=None if invalid == 0 else f"存在 {invalid} 行无法转换为 {field_type}",
+                )
             )
+
+        # 4. 示例行一致性
+        sample_check = _check_samples(rows, columns, fields, expected_samples)
+        checks.append(sample_check)
+
+        passed = all(check.status == "pass" for check in checks)
+        pass_count = sum(1 for check in checks if check.status == "pass")
+        summary = f"{pass_count}/{len(checks)} 项检查通过"
+
+        suggestion = ""
+        if not passed:
+            failed = [check.rule for check in checks if check.status == "fail"]
+            suggestion = f"以下检查未通过：{', '.join(failed)}；建议根据失败项调整 requirements 或重新生成脚本。"
+
+        report = ValidationReport(
+            passed=passed,
+            summary=summary,
+            checks=checks,
+            suggestion=suggestion or None,
         )
 
-    # 3. 类型检查
-    for field in fields:
-        field_type = field.get("type", "string")
-        if field["name"] not in columns:
-            continue
-        invalid = _check_type(rows, field["name"], field_type)
-        checks.append(
-            ValidationCheck(
-                rule=f"字段 {field['name']} 类型为 {field_type}",
-                status="pass" if invalid == 0 else "fail",
-                details=None if invalid == 0 else f"存在 {invalid} 行无法转换为 {field_type}",
-            )
-        )
-
-    # 4. 示例行一致性
-    sample_check = _check_samples(rows, columns, fields, expected_samples)
-    checks.append(sample_check)
-
-    passed = all(check.status == "pass" for check in checks)
-    pass_count = sum(1 for check in checks if check.status == "pass")
-    summary = f"{pass_count}/{len(checks)} 项检查通过"
-
-    suggestion = ""
-    if not passed:
-        failed = [check.rule for check in checks if check.status == "fail"]
-        suggestion = f"以下检查未通过：{', '.join(failed)}；建议根据失败项调整 requirements 或重新生成脚本。"
-
-    report = ValidationReport(
-        passed=passed,
-        summary=summary,
-        checks=checks,
-        suggestion=suggestion or None,
-    )
-
-    task.validation_report = report.model_dump()
-    task.status = "success" if passed else "failed"
-    task.updated_at = _now()
-    await _update_task(task)
+        task.validation_report = report.model_dump()
+        task.status = "success" if passed else "failed"
+        await ws.update_task(task)
 
     return {
         "task_id": task_id,

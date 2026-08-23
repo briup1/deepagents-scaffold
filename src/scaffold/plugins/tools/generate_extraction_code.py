@@ -6,14 +6,7 @@ import json
 import logging
 from typing import Any
 
-from scaffold.infra.history.models import ExtractionTask
-from scaffold.plugins.tools._extraction_common import (
-    _get_artifact,
-    _get_task_repo,
-    _new_task_id,
-    _now,
-    _save_artifact,
-)
+from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -132,15 +125,6 @@ if __name__ == "__main__":
 '''
 
 
-async def _update_task(task: ExtractionTask) -> bool:
-    """重新连接并更新任务。"""
-    repo, conn = await _get_task_repo()
-    try:
-        return await repo.update(task)
-    finally:
-        await conn.close()
-
-
 async def generate_extraction_code(
     upload_artifact_id: str,
     requirements: dict[str, Any],
@@ -160,43 +144,34 @@ async def generate_extraction_code(
         list(requirements.keys()) if isinstance(requirements, dict) else "n/a",
     )
 
-    upload_artifact = await _get_artifact(upload_artifact_id)
-    if upload_artifact is None:
-        return {"error": f"上传工件 {upload_artifact_id} 不存在"}
-    if upload_artifact.artifact_type != "upload":
-        return {"error": f"工件 {upload_artifact_id} 不是上传文件"}
+    async with get_extraction_workspace() as ws:
+        upload_artifact = await ws.get_artifact(upload_artifact_id)
+        if upload_artifact is None:
+            return {"error": f"上传工件 {upload_artifact_id} 不存在"}
+        if upload_artifact.artifact_type != "upload":
+            return {"error": f"工件 {upload_artifact_id} 不是上传文件"}
 
-    task_id = _new_task_id()
-    task = ExtractionTask(
-        task_id=task_id,
-        thread_id=upload_artifact.thread_id,
-        upload_artifact_id=upload_artifact_id,
-        status="goal_setting",
-        requirements=requirements,
-        created_at=_now(),
-        updated_at=_now(),
-    )
-    repo, conn = await _get_task_repo()
-    try:
-        await repo.create(task)
-    finally:
-        await conn.close()
+        task = await ws.create_task(
+            thread_id=upload_artifact.thread_id,
+            upload_artifact_id=upload_artifact_id,
+            requirements=requirements,
+        )
+        task_id = task.task_id
 
-    script_content = _build_extraction_script(requirements, upload_artifact_id)
-    script_artifact = await _save_artifact(
-        thread_id=upload_artifact.thread_id,
-        artifact_type="script",
-        filename=f"{task_id}.py",
-        content=script_content.encode("utf-8"),
-        original_name=f"{task_id}.py",
-        mime_type="text/x-python",
-        metadata={"task_id": task_id, "upload_artifact_id": upload_artifact_id},
-    )
+        script_content = _build_extraction_script(requirements, upload_artifact_id)
+        script_artifact = await ws.save_artifact(
+            thread_id=upload_artifact.thread_id,
+            artifact_type="script",
+            filename=f"{task_id}.py",
+            content=script_content.encode("utf-8"),
+            original_name=f"{task_id}.py",
+            mime_type="text/x-python",
+            metadata={"task_id": task_id, "upload_artifact_id": upload_artifact_id},
+        )
 
-    task.script_artifact_id = script_artifact.artifact_id
-    task.status = "code_generated"
-    task.updated_at = _now()
-    await _update_task(task)
+        task.script_artifact_id = script_artifact.artifact_id
+        task.status = "code_generated"
+        await ws.update_task(task)
 
     return {
         "task_id": task_id,

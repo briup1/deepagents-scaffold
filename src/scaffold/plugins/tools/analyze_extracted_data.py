@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 from scaffold.plugins.tools.query_extracted_data import _artifact_csv, _load_table, _validate_select_only
 
 logger = logging.getLogger(__name__)
@@ -30,10 +31,7 @@ def _describe_columns(con: Any, table: str) -> dict[str, str]:
 
 
 def _is_numeric_type(duckdb_type: str) -> bool:
-    return any(
-        t in duckdb_type
-        for t in ("int", "float", "double", "decimal", "numeric", "hugeint", "ubigint")
-    )
+    return any(t in duckdb_type for t in ("int", "float", "double", "decimal", "numeric", "hugeint", "ubigint"))
 
 
 def _pick_price_column(columns: dict[str, str]) -> str | None:
@@ -129,7 +127,9 @@ def _build_single_sql(request: str, columns: dict[str, str]) -> tuple[str, str] 
     return "SELECT * FROM data LIMIT 50", "返回数据前 50 行"
 
 
-def _build_comparison_sql(columns_a: dict[str, str], columns_b: dict[str, str], join_keys: list[str]) -> tuple[str, str] | tuple[None, str]:
+def _build_comparison_sql(
+    columns_a: dict[str, str], columns_b: dict[str, str], join_keys: list[str]
+) -> tuple[str, str] | tuple[None, str]:
     """构建跨文件对比 SQL。返回 (SQL, 摘要) 或 (None, 错误信息)。"""
     price_a = _pick_price_column(columns_a) or "amount"
     price_b = _pick_price_column(columns_b) or "amount"
@@ -149,10 +149,7 @@ def _build_comparison_sql(columns_a: dict[str, str], columns_b: dict[str, str], 
     select_parts += [f"a.{price_a} AS price_a", f"b.{price_b} AS price_b", f"b.{price_b} - a.{price_a} AS diff"]
 
     on_clause = " AND ".join(f"a.{k} = b.{k}" for k in keys)
-    sql = (
-        f"SELECT {', '.join(select_parts)} "
-        f"FROM data_a a JOIN data_b b ON {on_clause} ORDER BY diff DESC"
-    )
+    sql = f"SELECT {', '.join(select_parts)} FROM data_a a JOIN data_b b ON {on_clause} ORDER BY diff DESC"
     summary = f"按 {', '.join(keys)} 对比两份报价单价格（diff = 对比方 - 主方）"
     return sql, summary
 
@@ -186,57 +183,58 @@ async def analyze_extracted_data(
     if not request or not request.strip():
         return {"error": "分析需求不能为空"}
 
-    artifact, primary_path = await _artifact_csv(extraction_id, "extraction", thread_id)
-    if primary_path is None:
-        return artifact  # type: ignore[return-value]
+    async with get_extraction_workspace() as ws:
+        artifact, primary_path = await _artifact_csv(ws, extraction_id, "extraction", thread_id)
+        if primary_path is None:
+            return artifact  # type: ignore[return-value]
 
-    comparison_path: str | None = None
-    if comparison_extraction_id:
-        comp, comparison_path = await _artifact_csv(comparison_extraction_id, "extraction", thread_id)
-        if comparison_path is None:
-            return comp  # type: ignore[return-value]
+        comparison_path: str | None = None
+        if comparison_extraction_id:
+            comp, comparison_path = await _artifact_csv(ws, comparison_extraction_id, "extraction", thread_id)
+            if comparison_path is None:
+                return comp  # type: ignore[return-value]
 
-    def _run() -> dict[str, Any]:
-        import duckdb  # noqa: PLC0415
+        def _run() -> dict[str, Any]:
+            import duckdb  # noqa: PLC0415
 
-        from scaffold.plugins.tools.query_extracted_data import _fetch_result  # noqa: PLC0415
+            from scaffold.plugins.tools.query_extracted_data import _fetch_result  # noqa: PLC0415
 
-        con = duckdb.connect()
-        try:
+            con = duckdb.connect()
             try:
-                if comparison_path:
-                    _load_table(con, "data_a", primary_path)  # type: ignore[arg-type]
-                    _load_table(con, "data_b", comparison_path)
-                    columns_a = _describe_columns(con, "data_a")
-                    columns_b = _describe_columns(con, "data_b")
-                    keys = join_keys or list(DEFAULT_JOIN_KEYS)
-                    built = _build_comparison_sql(columns_a, columns_b, keys)
-                    if built[0] is None:
-                        return {"error": built[1]}
-                    sql, summary = built  # type: ignore[misc]
-                else:
-                    _load_table(con, "data", primary_path)  # type: ignore[arg-type]
-                    columns = _describe_columns(con, "data")
-                    built = _build_single_sql(request, columns)
-                    if built[0] is None:
-                        return {"error": built[1]}
-                    sql, summary = built  # type: ignore[misc]
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"CSV 读取失败：{exc}"}
+                try:
+                    if comparison_path:
+                        _load_table(con, "data_a", primary_path)  # type: ignore[arg-type]
+                        _load_table(con, "data_b", comparison_path)
+                        columns_a = _describe_columns(con, "data_a")
+                        columns_b = _describe_columns(con, "data_b")
+                        keys = join_keys or list(DEFAULT_JOIN_KEYS)
+                        built = _build_comparison_sql(columns_a, columns_b, keys)
+                        if built[0] is None:
+                            return {"error": built[1]}
+                        sql, summary = built  # type: ignore[misc]
+                    else:
+                        _load_table(con, "data", primary_path)  # type: ignore[arg-type]
+                        columns = _describe_columns(con, "data")
+                        built = _build_single_sql(request, columns)
+                        if built[0] is None:
+                            return {"error": built[1]}
+                        sql, summary = built  # type: ignore[misc]
+                except Exception as exc:  # noqa: BLE001
+                    return {"error": f"CSV 读取失败：{exc}"}
 
-            try:
-                checked, sql_error = _validate_select_only(sql)
-                if sql_error:
-                    return {"error": sql_error}
-                result = _fetch_result(con, checked, limit=100)  # type: ignore[arg-type]
-            except Exception as exc:  # noqa: BLE001
-                return {"error": f"SQL 执行失败：{exc}"}
+                try:
+                    checked, sql_error = _validate_select_only(sql)
+                    if sql_error:
+                        return {"error": sql_error}
+                    result = _fetch_result(con, checked, limit=100)  # type: ignore[arg-type]
+                except Exception as exc:  # noqa: BLE001
+                    return {"error": f"SQL 执行失败：{exc}"}
 
-            result["sql"] = sql
-            result["summary"] = summary
-            return result
-        finally:
-            con.close()
+                result["sql"] = sql
+                result["summary"] = summary
+                return result
+            finally:
+                con.close()
 
     import asyncio  # noqa: PLC0415
 

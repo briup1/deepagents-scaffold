@@ -48,25 +48,6 @@ class HistoryRepository:
             CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
             CREATE INDEX IF NOT EXISTS idx_threads_updated_at ON threads(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_threads_agent_id ON threads(agent_id);
-
-            CREATE TABLE IF NOT EXISTS extraction_tasks (
-                task_id TEXT PRIMARY KEY,
-                thread_id TEXT NOT NULL,
-                upload_artifact_id TEXT NOT NULL,
-                status TEXT NOT NULL,
-                requirements TEXT,
-                script_artifact_id TEXT,
-                extracted_artifact_id TEXT,
-                validation_report TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
-                FOREIGN KEY (upload_artifact_id) REFERENCES artifacts(artifact_id),
-                FOREIGN KEY (script_artifact_id) REFERENCES artifacts(artifact_id),
-                FOREIGN KEY (extracted_artifact_id) REFERENCES artifacts(artifact_id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_extraction_tasks_thread_id ON extraction_tasks(thread_id);
             """
         )
         await self._conn.commit()
