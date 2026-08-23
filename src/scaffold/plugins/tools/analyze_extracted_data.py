@@ -27,7 +27,9 @@ _TEXT_TYPE_PREFIXES = ("varchar", "text", "string", "date", "timestamp", "time",
 def _describe_columns(con: Any, table: str) -> dict[str, str]:
     """返回 {列名: DuckDB 类型}。"""
     rows = con.execute(f"DESCRIBE SELECT * FROM {table}").fetchall()
-    return {str(r[0]): str(r[1]).lower() for r in rows}
+    schema = {str(r[0]): str(r[1]).lower() for r in rows}
+    logger.debug("DuckDB 表结构 | table=%s schema=%s", table, schema)
+    return schema
 
 
 def _is_numeric_type(duckdb_type: str) -> bool:
@@ -39,10 +41,13 @@ def _pick_price_column(columns: dict[str, str]) -> str | None:
     for col, ctype in columns.items():
         lowered = col.lower()
         if any(k in lowered for k in PRICE_KEYWORDS) and _is_numeric_type(ctype):
+            logger.debug("选中价格列 | column=%s type=%s", col, ctype)
             return col
     for col, ctype in columns.items():
         if _is_numeric_type(ctype):
+            logger.debug("未找到价格关键词列， fallback 到第一个数值列 | column=%s type=%s", col, ctype)
             return col
+    logger.warning("未找到任何数值列可用于聚合 | schema=%s", columns)
     return None
 
 
@@ -62,7 +67,9 @@ def _detect_group_column(request: str, columns: dict[str, str]) -> str | None:
     lowered = request.lower()
     for col in columns:
         if col.lower() in lowered:
+            logger.debug("从请求中识别到分组列 | column=%s request=%s", col, request)
             return col
+    logger.debug("未从请求中识别到分组列 | request=%s columns=%s", request, list(columns.keys()))
     return None
 
 
@@ -78,36 +85,58 @@ def _build_single_sql(request: str, columns: dict[str, str]) -> tuple[str, str] 
     is_count = any(k in lowered for k in ("多少条", "数量", "几条", "count", "总行数"))
     is_group = any(k in lowered for k in ("按", "分组", "分别", "各", "每个", "group", "统计"))
 
+    logger.debug(
+        "意图识别 | request=%s price_col=%s group_col=%s is_min=%s is_max=%s is_avg=%s is_count=%s is_group=%s",
+        request,
+        price_col,
+        group_col,
+        is_min,
+        is_max,
+        is_avg,
+        is_count,
+        is_group,
+    )
+
     if price_col is None and (is_min or is_max or is_avg):
+        logger.warning("聚合失败：缺少数值列 | request=%s columns=%s", request, columns)
         return None, "未找到可聚合的数值列（金额/价格），请确认抽取结果包含数值字段"
 
     if is_count:
         if group_col:
             sql = f"SELECT {group_col}, COUNT(*) AS cnt FROM data GROUP BY {group_col} ORDER BY cnt DESC"
+            logger.info("生成计数 SQL | sql=%s", sql)
             return sql, f"按 {group_col} 统计记录数"
+        logger.info("生成计数 SQL | sql=SELECT COUNT(*) AS cnt FROM data")
         return "SELECT COUNT(*) AS cnt FROM data", "统计记录总数"
 
     if is_min and price_col:
         agg = f"MIN({price_col}) AS min_{price_col}"
         if group_col:
             sql = f"SELECT {group_col}, {agg} FROM data GROUP BY {group_col} ORDER BY min_{price_col} ASC LIMIT 10"
+            logger.info("生成最低值 SQL | sql=%s", sql)
             return sql, f"按 {group_col} 统计最低 {price_col}"
         sql = f"SELECT * FROM data ORDER BY {price_col} ASC LIMIT 10"
+        logger.info("生成最低值 SQL | sql=%s", sql)
         return sql, f"按 {price_col} 升序取最低 10 条"
 
     if is_max and price_col:
         agg = f"MAX({price_col}) AS max_{price_col}"
         if group_col:
             sql = f"SELECT {group_col}, {agg} FROM data GROUP BY {group_col} ORDER BY max_{price_col} DESC LIMIT 10"
+            logger.info("生成最高值 SQL | sql=%s", sql)
             return sql, f"按 {group_col} 统计最高 {price_col}"
         sql = f"SELECT * FROM data ORDER BY {price_col} DESC LIMIT 10"
+        logger.info("生成最高值 SQL | sql=%s", sql)
         return sql, f"按 {price_col} 降序取最高 10 条"
 
     if is_avg and price_col:
         if group_col:
             sql = f"SELECT {group_col}, AVG({price_col}) AS avg_{price_col} FROM data GROUP BY {group_col} ORDER BY avg_{price_col} ASC"
+            logger.info("生成平均值 SQL | sql=%s", sql)
             return sql, f"按 {group_col} 计算平均 {price_col}"
-        return f"SELECT AVG({price_col}) AS avg_{price_col} FROM data", f"计算 {price_col} 平均值"
+        sql = f"SELECT AVG({price_col}) AS avg_{price_col} FROM data"
+        logger.info("生成平均值 SQL | sql=%s", sql)
+        return sql, f"计算 {price_col} 平均值"
 
     if is_group or group_col:
         if group_col:
@@ -116,14 +145,17 @@ def _build_single_sql(request: str, columns: dict[str, str]) -> tuple[str, str] 
                 + (f", AVG({price_col}) AS avg_{price_col}" if price_col else "")
                 + f" FROM data GROUP BY {group_col} ORDER BY cnt DESC"
             )
+            logger.info("生成分组统计 SQL | sql=%s", sql)
             return sql, f"按 {group_col} 分组统计"
         text_cols = _pick_text_columns(columns)
         if text_cols:
             col = text_cols[0]
             sql = f"SELECT {col}, COUNT(*) AS cnt FROM data GROUP BY {col} ORDER BY cnt DESC"
+            logger.info("生成分组统计 SQL | sql=%s", sql)
             return sql, f"按 {col} 分组统计"
 
     # 兜底：返回全表前 N 行
+    logger.info("未匹配到特定分析意图，返回前 50 行 | request=%s", request)
     return "SELECT * FROM data LIMIT 50", "返回数据前 50 行"
 
 
@@ -134,11 +166,16 @@ def _build_comparison_sql(
     price_a = _pick_price_column(columns_a) or "amount"
     price_b = _pick_price_column(columns_b) or "amount"
     keys = [k for k in join_keys if k in columns_a and k in columns_b]
+    logger.debug(
+        "对比模式列匹配 | join_keys=%s matched_keys=%s schema_a=%s schema_b=%s", join_keys, keys, columns_a, columns_b
+    )
     if not keys:
         # 取两表共有文本列的前 3 个
         common = [c for c in columns_a if c in columns_b and not _is_numeric_type(columns_a[c])]
         keys = common[:3]
+        logger.debug("未命中默认 JOIN 键， fallback 到共有文本列 | keys=%s", keys)
     if not keys:
+        logger.warning("对比失败：两份文件没有可用于 JOIN 的共有文本列")
         return None, "两份文件没有可用于 JOIN 的共有文本列，无法对比"
 
     # 展示列：主文件中的非数值列（排除 JOIN 键）
@@ -151,6 +188,7 @@ def _build_comparison_sql(
     on_clause = " AND ".join(f"a.{k} = b.{k}" for k in keys)
     sql = f"SELECT {', '.join(select_parts)} FROM data_a a JOIN data_b b ON {on_clause} ORDER BY diff DESC"
     summary = f"按 {', '.join(keys)} 对比两份报价单价格（diff = 对比方 - 主方）"
+    logger.info("生成跨文件对比 SQL | sql=%s summary=%s", sql, summary)
     return sql, summary
 
 
@@ -208,6 +246,7 @@ async def analyze_extracted_data(
                         columns_a = _describe_columns(con, "data_a")
                         columns_b = _describe_columns(con, "data_b")
                         keys = join_keys or list(DEFAULT_JOIN_KEYS)
+                        logger.info("进入跨文件对比模式 | keys=%s", keys)
                         built = _build_comparison_sql(columns_a, columns_b, keys)
                         if built[0] is None:
                             return {"error": built[1]}
@@ -215,19 +254,23 @@ async def analyze_extracted_data(
                     else:
                         _load_table(con, "data", primary_path)  # type: ignore[arg-type]
                         columns = _describe_columns(con, "data")
+                        logger.info("进入单文件自然语言分析模式 | schema=%s", columns)
                         built = _build_single_sql(request, columns)
                         if built[0] is None:
                             return {"error": built[1]}
                         sql, summary = built  # type: ignore[misc]
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception("DuckDB CSV 读取失败")
                     return {"error": f"CSV 读取失败：{exc}"}
 
                 try:
                     checked, sql_error = _validate_select_only(sql)
                     if sql_error:
+                        logger.warning("SQL 校验未通过 | error=%s", sql_error)
                         return {"error": sql_error}
                     result = _fetch_result(con, checked, limit=100)  # type: ignore[arg-type]
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception("DuckDB SQL 执行失败 | sql=%s", sql)
                     return {"error": f"SQL 执行失败：{exc}"}
 
                 result["sql"] = sql
@@ -246,4 +289,15 @@ async def analyze_extracted_data(
         for p in (primary_path, comparison_path):
             if p:
                 Path(p).unlink(missing_ok=True)
+
+    if "error" in result:
+        logger.warning("analyze_extracted_data 返回错误 | error=%s", result["error"])
+    else:
+        logger.info(
+            "analyze_extracted_data 执行成功 | sql=%s summary=%s columns=%s row_count=%s",
+            result.get("sql"),
+            result.get("summary"),
+            result.get("columns"),
+            result.get("row_count"),
+        )
     return result

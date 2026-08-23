@@ -149,12 +149,24 @@ class HistoryRepository:
         ]
 
     async def add_message(self, message: ThreadMessage) -> None:
-        """写入单条消息；幂等（按 message_id 去重）。"""
+        """写入单条消息；幂等（按 message_id 去重或更新）。
+
+        使用 upsert 而不是 INSERT OR IGNORE，以便后续消息快照可以补充
+        assistant 消息的 ``tool_calls`` 和缺失的 tool 结果消息。
+        """
         await self._conn.execute(
             """
-            INSERT OR IGNORE INTO messages
+            INSERT INTO messages
             (message_id, thread_id, run_id, role, content, name, tool_call_id, tool_calls, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(message_id) DO UPDATE SET
+                run_id = COALESCE(excluded.run_id, run_id),
+                role = excluded.role,
+                content = COALESCE(excluded.content, content),
+                name = COALESCE(excluded.name, name),
+                tool_call_id = COALESCE(excluded.tool_call_id, tool_call_id),
+                tool_calls = COALESCE(excluded.tool_calls, tool_calls),
+                created_at = COALESCE(messages.created_at, excluded.created_at)
             """,
             (
                 message.message_id,

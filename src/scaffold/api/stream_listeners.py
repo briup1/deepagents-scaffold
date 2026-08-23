@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
@@ -201,6 +203,79 @@ class HistoryPersistenceListener(StreamEventListener):
         import uuid  # noqa: PLC0415
 
         return str(uuid.uuid4())
+
+
+class MessagesSnapshotListener(StreamEventListener):
+    """把 LangGraph checkpoint 的完整消息快照持久化到历史表。
+
+    流式事件只覆盖了文本增量；tool 调用结果、assistant 的 ``tool_calls``
+    等结构只在 ``MESSAGES_SNAPSHOT`` 中出现。通过监听快照，可以：
+
+    - 补充 assistant 消息的 ``tool_calls`` 字段
+    - 持久化 tool 结果消息（如 ``render_ui`` 返回的 generative_ui envelope）
+    - 让前端切换回历史会话后仍能重新渲染 Generative UI
+    """
+
+    def __init__(self, history_repo: HistoryRepository) -> None:
+        self._history_repo = history_repo
+
+    async def on_event(self, event: Any, ctx: dict[str, Any]) -> None:
+        if _get_event_type(event) != "MESSAGES_SNAPSHOT":
+            return
+
+        messages = _get_event_field(event, "messages") or []
+        if not isinstance(messages, list):
+            return
+
+        thread_id = ctx.get("thread_id", "")
+        run_id = ctx.get("run_id")
+        created_at = datetime.now(timezone.utc).isoformat()
+        to_persist: list[ThreadMessage] = []
+
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role")
+            if role not in ("user", "assistant", "tool", "system"):
+                continue
+
+            content = msg.get("content")
+            if not isinstance(content, str):
+                content = json.dumps(content, ensure_ascii=False) if content is not None else None
+
+            tool_call_id = msg.get("tool_call_id")
+            if tool_call_id is None and role == "tool":
+                tool_call_id = msg.get("id")
+
+            tool_calls = msg.get("tool_calls")
+            if tool_calls is not None and not isinstance(tool_calls, list):
+                tool_calls = None
+
+            to_persist.append(
+                ThreadMessage(
+                    thread_id=thread_id,
+                    message_id=msg.get("id") or str(uuid.uuid4()),
+                    run_id=run_id,
+                    role=role,
+                    content=content,
+                    name=msg.get("name"),
+                    tool_call_id=tool_call_id,
+                    tool_calls=tool_calls,
+                    created_at=created_at,
+                )
+            )
+
+        if not to_persist:
+            return
+
+        try:
+            await self._history_repo.add_messages(to_persist)
+        except Exception:
+            logger.exception(
+                "Failed to persist messages snapshot | thread_id=%s count=%d",
+                thread_id,
+                len(to_persist),
+            )
 
 
 class ThreadTitleListener(StreamEventListener):

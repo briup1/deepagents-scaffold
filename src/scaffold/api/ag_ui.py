@@ -32,6 +32,7 @@ from scaffold.api.deps import get_history_repo
 from scaffold.api.stream_listeners import (
     AgUILogListener,
     HistoryPersistenceListener,
+    MessagesSnapshotListener,
     StreamEventListener,
     ThreadTitleListener,
     _ctx_str,
@@ -115,6 +116,7 @@ def _build_listeners(history_repo: HistoryRepository | None) -> list[StreamEvent
         listeners.extend(
             [
                 HistoryPersistenceListener(history_repo),
+                MessagesSnapshotListener(history_repo),
                 ThreadTitleListener(history_repo),
             ]
         )
