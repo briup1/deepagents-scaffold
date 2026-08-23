@@ -37,4 +37,17 @@ describe('ThreadList', () => {
     await userEvent.click(screen.getByRole('button', { name: '无标题会话预览' }))
     expect(onSelect).toHaveBeenCalledWith('t2', 'default')
   })
+
+  it('为 runningThreadId 对应的条目显示运行中指示', () => {
+    render(
+      <ThreadList threads={threads} currentThreadId="t1" runningThreadId="t2" onSelectThread={(_id, _agent) => {}} />,
+    )
+    expect(screen.getByTestId('thread-running-indicator')).toBeInTheDocument()
+    expect(screen.getByLabelText('运行中')).toBeInTheDocument()
+  })
+
+  it('未指定 runningThreadId 时不显示运行中指示', () => {
+    render(<ThreadList threads={threads} currentThreadId="t1" onSelectThread={(_id, _agent) => {}} />)
+    expect(screen.queryByTestId('thread-running-indicator')).not.toBeInTheDocument()
+  })
 })

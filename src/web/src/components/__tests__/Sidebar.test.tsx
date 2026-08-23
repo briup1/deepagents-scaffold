@@ -1,6 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { ThreadSummary } from '../../api/threads'
 import { Sidebar } from '../Sidebar'
 
 describe('Sidebar', () => {
@@ -9,49 +10,36 @@ describe('Sidebar', () => {
     { name: 'code_reviewer', type: 'agent' },
   ]
 
-  const mockFetch = vi.fn()
+  const threads: ThreadSummary[] = [
+    {
+      thread_id: 't1',
+      agent_id: 'default',
+      title: '测试会话',
+      last_message_preview: '最后一条消息',
+      created_at: '2026-08-18T10:00:00Z',
+      updated_at: '2026-08-18T10:05:00Z',
+    },
+  ]
 
-  beforeEach(() => {
-    vi.stubGlobal('fetch', mockFetch)
-    mockFetch.mockImplementation((url: string) => {
-      if (url.startsWith('/api/threads')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            threads: [
-              {
-                thread_id: 't1',
-                agent_id: 'default',
-                title: '测试会话',
-                last_message_preview: '最后一条消息',
-                created_at: '2026-08-18T10:00:00Z',
-                updated_at: '2026-08-18T10:05:00Z',
-              },
-            ],
-            total: 1,
-          }),
-        })
-      }
-      return Promise.resolve({ ok: true, json: async () => ({}) })
-    })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+  function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
+    const props: Parameters<typeof Sidebar>[0] = {
+      agents,
+      currentAgentId: 'default',
+      threadId: 'thread-test-123',
+      threads,
+      threadsLoading: false,
+      threadsError: null,
+      onAgentChange: vi.fn(),
+      onNewChat: vi.fn(),
+      onSelectThread: vi.fn(),
+      ...overrides,
+    }
+    render(<Sidebar {...props} />)
+    return props
+  }
 
   it('renders brand, new chat button, and agent selector', () => {
-    render(
-      <Sidebar
-        agents={agents}
-        currentAgentId="default"
-        threadId="thread-test-123"
-        onAgentChange={vi.fn()}
-        onNewChat={vi.fn()}
-        onSelectThread={(_id, _agent) => {}}
-      />
-    )
+    renderSidebar()
 
     expect(screen.getByText('DeepAgents')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument()
@@ -60,34 +48,14 @@ describe('Sidebar', () => {
   })
 
   it('calls onNewChat when new chat button is clicked', async () => {
-    const onNewChat = vi.fn()
-    render(
-      <Sidebar
-        agents={agents}
-        currentAgentId="default"
-        threadId="thread-test-123"
-        onAgentChange={vi.fn()}
-        onNewChat={onNewChat}
-        onSelectThread={(_id, _agent) => {}}
-      />
-    )
+    const { onNewChat } = renderSidebar()
 
     await userEvent.click(screen.getByRole('button', { name: '新建会话' }))
     expect(onNewChat).toHaveBeenCalledTimes(1)
   })
 
   it('calls onAgentChange when a different agent is selected', async () => {
-    const onAgentChange = vi.fn()
-    render(
-      <Sidebar
-        agents={agents}
-        currentAgentId="default"
-        threadId="thread-test-123"
-        onAgentChange={onAgentChange}
-        onNewChat={vi.fn()}
-        onSelectThread={(_id, _agent) => {}}
-      />
-    )
+    const { onAgentChange } = renderSidebar()
 
     await userEvent.click(screen.getByRole('button', { name: '选择 Agent' }))
     await userEvent.click(screen.getByRole('option', { name: 'code_reviewer' }))
@@ -95,37 +63,40 @@ describe('Sidebar', () => {
     expect(onAgentChange).toHaveBeenCalledWith('code_reviewer')
   })
 
-  it('loads and renders history threads for current agent', async () => {
-    render(
-      <Sidebar
-        agents={agents}
-        currentAgentId="default"
-        threadId="thread-test-123"
-        onAgentChange={vi.fn()}
-        onNewChat={vi.fn()}
-        onSelectThread={vi.fn()}
-      />
-    )
+  it('渲染传入的历史会话列表', () => {
+    renderSidebar()
+    expect(screen.getByText('测试会话')).toBeInTheDocument()
+  })
 
-    await waitFor(() => expect(screen.getByText('测试会话')).toBeInTheDocument())
-    expect(mockFetch).toHaveBeenCalledWith('/api/threads/?agent_id=default')
+  it('加载中显示提示，不渲染列表', () => {
+    renderSidebar({ threadsLoading: true })
+    expect(screen.getByText('加载中...')).toBeInTheDocument()
+    expect(screen.queryByText('测试会话')).not.toBeInTheDocument()
+  })
+
+  it('加载失败显示错误信息', () => {
+    renderSidebar({ threadsError: 'HTTP 500' })
+    expect(screen.getByText('HTTP 500')).toBeInTheDocument()
+  })
+
+  it('当前 threadId 对应条目高亮（aria-selected），其余不高亮', () => {
+    renderSidebar({ threadId: 't1' })
+
+    const options = screen.getAllByRole('option')
+    const active = options.find((el) => el.getAttribute('aria-selected') === 'true')
+    expect(active).toBeDefined()
+    expect(active?.textContent).toContain('测试会话')
+  })
+
+  it('为 runningThreadId 对应条目渲染运行中指示', () => {
+    renderSidebar({ runningThreadId: 't1' })
+    expect(screen.getByTestId('thread-running-indicator')).toBeInTheDocument()
   })
 
   it('calls onSelectThread when a history thread is clicked', async () => {
-    const onSelectThread = vi.fn()
-    render(
-      <Sidebar
-        agents={agents}
-        currentAgentId="default"
-        threadId="thread-test-123"
-        onAgentChange={vi.fn()}
-        onNewChat={vi.fn()}
-        onSelectThread={onSelectThread}
-      />
-    )
+    const { onSelectThread } = renderSidebar()
 
-    await waitFor(() => expect(screen.getByText('测试会话')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: '测试会话' }))
+    await userEvent.click(screen.getByRole('button', { name: /测试会话/ }))
     expect(onSelectThread).toHaveBeenCalledWith('t1', 'default')
   })
 })

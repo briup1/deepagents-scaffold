@@ -3,10 +3,12 @@ import type { ThreadSummary } from '../api/threads'
 interface ThreadListProps {
   threads: ThreadSummary[]
   currentThreadId: string
+  /** 正在运行 Agent 的会话 id，对应条目显示运行中指示 */
+  runningThreadId?: string | null
   onSelectThread: (threadId: string, agentId: string) => void
 }
 
-export function ThreadList({ threads, currentThreadId, onSelectThread }: ThreadListProps) {
+export function ThreadList({ threads, currentThreadId, runningThreadId, onSelectThread }: ThreadListProps) {
   if (threads.length === 0) {
     return (
       <div className="px-3 py-4 text-xs text-ink-subtle">
@@ -32,7 +34,16 @@ export function ThreadList({ threads, currentThreadId, onSelectThread }: ThreadL
                 ${isActive ? 'bg-cream-200 text-ink' : 'text-ink-muted hover:bg-cream-100'}
               `}
             >
-              <div className="truncate font-medium">{displayTitle}</div>
+              <div className="flex items-center gap-2 font-medium">
+                <span className="truncate">{displayTitle}</span>
+                {thread.thread_id === runningThreadId && (
+                  <span
+                    data-testid="thread-running-indicator"
+                    aria-label="运行中"
+                    className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500"
+                  />
+                )}
+              </div>
               {showPreview && (
                 <div className="mt-0.5 truncate text-xs opacity-70">
                   {thread.last_message_preview}

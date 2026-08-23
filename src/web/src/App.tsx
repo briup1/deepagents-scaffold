@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { HttpAgent } from '@ag-ui/client'
 import { listAgents, type AgentInfo } from './api/copilotkit'
-import { getThreadMessages, type ThreadMessage } from './api/threads'
+import { getThreadMessages, type ThreadMessage, type ThreadSummary } from './api/threads'
 import { type UploadedFile } from './api/files'
+import { mergePendingThread, useThreads } from './hooks/useThreads'
 import { Sidebar } from './components/Sidebar'
 import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadDropzone'
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
@@ -15,6 +16,8 @@ interface ChatShellProps {
   currentAgentId: string
   threadId: string
   initialMessages: ThreadMessage[]
+  onFirstUserMessage: (content: string) => void
+  onRunStateChange: (threadId: string, running: boolean) => void
 }
 
 interface AgentToolCall {
@@ -82,9 +85,11 @@ interface ChatInnerProps {
   agentId: string
   threadId: string
   initialMessages: ThreadMessage[]
+  onFirstUserMessage: (content: string) => void
+  onRunStateChange: (threadId: string, running: boolean) => void
 }
 
-function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
+function ChatInner({ agentId, threadId, initialMessages, onFirstUserMessage, onRunStateChange }: ChatInnerProps) {
   useGenerativeUITool()
   const { agent, isReady } = useAgent({ agentId })
   const dispatch = useGenerativeUIAction(agentId)
@@ -161,6 +166,30 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
 
   const [uploadError, setUploadError] = useState<string | null>(null)
 
+  // 首条用户消息出现时通知外层（用于更新侧栏占位条目标题），仅对全新会话生效
+  const firstMessageNotifiedRef = useRef(false)
+  useEffect(() => {
+    if (!isReady || initialMessages.length > 0 || firstMessageNotifiedRef.current) return
+    const firstUser = agent.messages.find(
+      (m) => m.role === 'user' && typeof m.content === 'string' && !m.id.startsWith('files-'),
+    )
+    if (firstUser && typeof firstUser.content === 'string' && firstUser.content.length > 0) {
+      firstMessageNotifiedRef.current = true
+      onFirstUserMessage(firstUser.content)
+    }
+  }, [agent.messages, isReady, initialMessages, onFirstUserMessage])
+
+  // 订阅 isRunning 边沿，run 开始/结束时通知外层（驱动运行中指示与列表 refetch）
+  const prevRunningRef = useRef(false)
+  useEffect(() => {
+    if (!isReady) return
+    const running = Boolean(agent.isRunning)
+    if (running !== prevRunningRef.current) {
+      prevRunningRef.current = running
+      onRunStateChange(threadId, running)
+    }
+  }, [agent.isRunning, isReady, threadId, onRunStateChange])
+
   const handleDropzoneError = useCallback((message: string) => {
     setUploadError(message)
   }, [])
@@ -211,7 +240,7 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
   )
 }
 
-function ChatShell({ agents, currentAgentId, threadId, initialMessages }: ChatShellProps) {
+function ChatShell({ agents, currentAgentId, threadId, initialMessages, onFirstUserMessage, onRunStateChange }: ChatShellProps) {
   // 把所有已注册 Agent 都交给 CopilotKit，否则切换 Agent 时 useAgent
   // 内部 known agents 只有当前一个，导致报错。
   const agentMap = useMemo(() => {
@@ -225,7 +254,13 @@ function ChatShell({ agents, currentAgentId, threadId, initialMessages }: ChatSh
 
   return (
     <CopilotKit agents__unsafe_dev_only={agentMap}>
-      <ChatInner agentId={currentAgentId} threadId={threadId} initialMessages={initialMessages} />
+      <ChatInner
+        agentId={currentAgentId}
+        threadId={threadId}
+        initialMessages={initialMessages}
+        onFirstUserMessage={onFirstUserMessage}
+        onRunStateChange={onRunStateChange}
+      />
     </CopilotKit>
   )
 }
@@ -237,6 +272,18 @@ export default function App() {
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [agentError, setAgentError] = useState<string | null>(null)
   const [agentId, setAgentId] = useState<string | null>(null)
+  // 本地乐观占位条目：新建会话时设置，服务器条目落库后清除
+  const [pendingThread, setPendingThread] = useState<ThreadSummary | null>(null)
+  const [runningThreadId, setRunningThreadId] = useState<string | null>(null)
+
+  const currentAgentId = agentId ?? agents[0]?.name ?? ''
+  const { threads, loading: threadsLoading, error: threadsError, refetch } = useThreads(currentAgentId)
+
+  // 渲染列表 = 服务器列表 + 本地占位（按 threadId 去重，占位置顶）
+  const mergedThreads = useMemo(
+    () => mergePendingThread(threads, pendingThread, currentAgentId),
+    [threads, pendingThread, currentAgentId],
+  )
 
   useEffect(() => {
     listAgents()
@@ -253,6 +300,24 @@ export default function App() {
         setLoadingAgents(false)
       })
   }, [agentId])
+
+  // 首条用户消息：占位条目标题本地截取前 20 字，立即生效
+  const handleFirstUserMessage = useCallback((content: string) => {
+    setPendingThread((p) =>
+      p && p.title === '新会话' ? { ...p, title: content.slice(0, 20) || '新会话' } : p,
+    )
+  }, [])
+
+  // run 开始显示运行中指示；run 结束触发 refetch，服务器条目落库后清除占位完成收敛
+  const handleRunStateChange = useCallback(
+    async (runThreadId: string, running: boolean) => {
+      setRunningThreadId(running ? runThreadId : null)
+      if (running) return
+      const latest = await refetch()
+      setPendingThread((p) => (p && latest.some((t) => t.thread_id === p.thread_id) ? null : p))
+    },
+    [refetch],
+  )
 
   if (loadingAgents) {
     return (
@@ -276,11 +341,27 @@ export default function App() {
     )
   }
 
-  const currentAgentId = agentId ?? agents[0]?.name ?? 'default'
+  const effectiveAgentId = currentAgentId || 'default'
 
   const handleNewChat = () => {
-    setThreadId(`thread-${crypto.randomUUID()}`)
+    // 当前会话仍是未发消息的空占位时复用，不产生第二个占位条目
+    if (pendingThread && pendingThread.thread_id === threadId && pendingThread.title === '新会话') {
+      return
+    }
+    // 旧占位已发消息但尚未收敛时，先刷新一次列表避免其从侧栏丢失
+    if (pendingThread) void refetch()
+    const id = `thread-${crypto.randomUUID()}`
+    const now = new Date().toISOString()
+    setThreadId(id)
     setInitialMessages([])
+    setPendingThread({
+      thread_id: id,
+      agent_id: effectiveAgentId,
+      title: '新会话',
+      last_message_preview: null,
+      created_at: now,
+      updated_at: now,
+    })
   }
 
   const handleAgentChange = (nextAgentId: string) => {
@@ -288,10 +369,14 @@ export default function App() {
     setAgentId(nextAgentId)
     setThreadId(`thread-${crypto.randomUUID()}`)
     setInitialMessages([])
+    // 切换 Agent 后清除占位条目，避免跨 Agent 泄漏
+    setPendingThread(null)
   }
 
   const handleSelectThread = async (selectedThreadId: string, selectedAgentId: string) => {
     if (selectedThreadId === threadId) return
+    // 空会话占位（从未发消息）切走后不留痕
+    if (pendingThread && pendingThread.title === '新会话') setPendingThread(null)
     try {
       const data = await getThreadMessages(selectedThreadId)
       if (selectedAgentId !== currentAgentId && agents.some((a) => a.name === selectedAgentId)) {
@@ -304,12 +389,18 @@ export default function App() {
     }
   }
 
+  // 首条用户消息与 run 状态回调定义于上方（hooks 需位于 early return 之前）
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cream-50">
       <Sidebar
         agents={agents}
-        currentAgentId={currentAgentId}
+        currentAgentId={effectiveAgentId}
         threadId={threadId}
+        threads={mergedThreads}
+        threadsLoading={threadsLoading}
+        threadsError={threadsError}
+        runningThreadId={runningThreadId}
         onAgentChange={handleAgentChange}
         onNewChat={handleNewChat}
         onSelectThread={handleSelectThread}
@@ -317,9 +408,11 @@ export default function App() {
       <ChatShell
         key={threadId}
         agents={agents}
-        currentAgentId={currentAgentId}
+        currentAgentId={effectiveAgentId}
         threadId={threadId}
         initialMessages={initialMessages}
+        onFirstUserMessage={handleFirstUserMessage}
+        onRunStateChange={handleRunStateChange}
       />
     </div>
   )

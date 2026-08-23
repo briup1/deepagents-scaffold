@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
 import type { AgentInfo } from '../api/copilotkit'
-import { listThreads, type ThreadSummary } from '../api/threads'
+import type { ThreadSummary } from '../api/threads'
 import { AgentSelector } from './AgentSelector'
 import { NewChatButton } from './NewChatButton'
 import { ThreadList } from './ThreadList'
@@ -9,6 +8,12 @@ interface SidebarProps {
   agents: AgentInfo[]
   currentAgentId: string
   threadId: string
+  /** 会话列表（含本地乐观占位条目），由 App 层统一维护与刷新 */
+  threads: ThreadSummary[]
+  threadsLoading: boolean
+  threadsError: string | null
+  /** 正在运行 Agent 的会话 id */
+  runningThreadId?: string | null
   onAgentChange: (agentId: string) => void
   onNewChat: () => void
   onSelectThread: (threadId: string, agentId: string) => void
@@ -37,33 +42,14 @@ export function Sidebar({
   agents,
   currentAgentId,
   threadId,
+  threads,
+  threadsLoading,
+  threadsError,
+  runningThreadId,
   onAgentChange,
   onNewChat,
   onSelectThread,
 }: SidebarProps) {
-  const [threads, setThreads] = useState<ThreadSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    listThreads(currentAgentId)
-      .then((data) => {
-        if (!cancelled) setThreads(data.threads)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [currentAgentId])
-
   const threadDisplay = threadId.replace(/^thread-/, '').slice(0, 8)
 
   return (
@@ -94,14 +80,15 @@ export function Sidebar({
 
         <div className="mt-6 px-1">
           <div className="mb-2 text-xs font-medium text-ink-subtle">历史会话</div>
-          {loading ? (
+          {threadsLoading ? (
             <div className="px-2 py-2 text-xs text-ink-muted">加载中...</div>
-          ) : error ? (
-            <div className="px-2 py-2 text-xs text-red-500">{error}</div>
+          ) : threadsError ? (
+            <div className="px-2 py-2 text-xs text-red-500">{threadsError}</div>
           ) : (
             <ThreadList
               threads={threads}
               currentThreadId={threadId}
+              runningThreadId={runningThreadId}
               onSelectThread={onSelectThread}
             />
           )}
