@@ -102,3 +102,21 @@ async def get_thread_messages(thread_id: str, request: Request) -> ThreadMessage
     history_repo = get_history_repo(request)
     messages = await history_repo.get_messages(thread_id)
     return ThreadMessagesResponse(thread_id=thread_id, messages=messages)
+
+
+class ThreadDeleteResponse(BaseModel):
+    thread_id: str
+    deleted: bool
+
+
+@router.delete("/{thread_id}", response_model=ThreadDeleteResponse)
+async def delete_thread(thread_id: str, request: Request) -> ThreadDeleteResponse:
+    """删除单个会话（历史消息 + checkpoint 状态）。"""
+    history_repo = get_history_repo(request)
+    checkpointer = get_checkpointer(request)
+
+    deleted = await history_repo.delete_thread(thread_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+    await checkpointer.adelete_thread(thread_id)
+    return ThreadDeleteResponse(thread_id=thread_id, deleted=True)

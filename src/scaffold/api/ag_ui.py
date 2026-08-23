@@ -24,6 +24,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 
+from ag_ui.core import RunErrorEvent
 from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
@@ -177,12 +178,21 @@ async def _produce_events_to_queue(
                         _ctx_str(backpressure_ctx),
                         extra=_stream_extra(backpressure_ctx),
                     )
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "ag-ui stream producer failed | %s",
             _ctx_str({**ctx, "events_produced": event_count}),
             extra=_stream_extra({**ctx, "events_produced": event_count}),
         )
+        # 关键：把后端异常显式转成 AG-UI RUN_ERROR 事件发给前端。
+        # 否则前端只会看到 RUN_STARTED 后流突然结束，表现为“没有反应”。
+        error_event = RunErrorEvent(
+            message=str(exc),
+            code=getattr(exc, "code", None) or type(exc).__name__,
+        )
+        await queue.put(error_event)
+        event_count += 1
+        await _notify_listeners(listeners, error_event, ctx)
     finally:
         await queue.put(_SENTINEL)
         elapsed_ms = (time.monotonic() - start) * 1000

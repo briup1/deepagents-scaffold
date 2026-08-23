@@ -90,6 +90,16 @@ class _FakeAgent:
             yield event
 
 
+class _FailingAgent:
+    """模拟运行中途抛错的 Agent，用于验证 RUN_ERROR 会被推送到前端。"""
+
+    name = "failing"
+
+    async def run(self, _input: RunAgentInput) -> AsyncGenerator[Any, None]:
+        yield RunStartedEvent(threadId="t", runId="r")
+        raise RuntimeError("boom")
+
+
 class _FakeRequest:
     """模拟 FastAPI Request，支持 is_disconnected()。"""
 
@@ -263,6 +273,35 @@ async def test_eager_streaming_emits_heartbeat_during_idle() -> None:
     types = [e.get("type") for e in data_events]
     assert "RUN_STARTED" in types
     assert "RUN_FINISHED" in types
+
+
+@pytest.mark.asyncio
+async def test_eager_streaming_emits_run_error_when_producer_fails() -> None:
+    """后台 producer 抛错时，SSE 流应收到 RUN_ERROR，而不是静默结束。"""
+    agent = _FailingAgent()
+    encoder = EventEncoder()
+    request = _FakeRequest()
+
+    gen = _eager_event_generator(
+        agent,
+        _make_run_input(),
+        encoder,
+        request,
+        [AgUILogListener()],
+        heartbeat_interval=1.0,
+    )
+
+    chunks = [chunk async for chunk in gen]
+    data_events = _parse_sse_lines(chunks)
+    types = [e.get("type") for e in data_events]
+
+    assert "RUN_STARTED" in types
+    assert "RUN_ERROR" in types
+    assert "RUN_FINISHED" not in types
+
+    run_error = next(e for e in data_events if e.get("type") == "RUN_ERROR")
+    assert "boom" in run_error.get("message", "")
+    assert run_error.get("code") == "RuntimeError"
 
 
 @pytest.mark.asyncio

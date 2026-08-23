@@ -17,10 +17,65 @@ interface ChatShellProps {
   initialMessages: ThreadMessage[]
 }
 
-interface UploadedFileMessage {
+interface AgentToolCall {
   id: string
-  role: 'user' | 'assistant'
-  content: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+interface AgentMessage {
+  id: string
+  role: 'user' | 'assistant' | 'tool' | 'system'
+  content?: string
+  name?: string
+  toolCallId?: string
+  toolCalls?: AgentToolCall[]
+}
+
+interface ThreadToolCall {
+  id?: string
+  function?: {
+    name?: string
+    arguments?: string | Record<string, unknown>
+  }
+}
+
+function toAgentMessage(m: ThreadMessage): AgentMessage | null {
+  // 前端聊天界面只需要展示 user/assistant/tool 三类消息
+  if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'tool') {
+    return null
+  }
+
+  const base: AgentMessage = {
+    id: m.message_id,
+    role: m.role,
+    content: m.content ?? undefined,
+    name: m.name ?? undefined,
+  }
+
+  if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+    base.toolCalls = (m.tool_calls as ThreadToolCall[]).map((tc) => {
+      const fn = tc.function ?? {}
+      const args = fn.arguments ?? {}
+      return {
+        id: String(tc.id ?? crypto.randomUUID()),
+        type: 'function' as const,
+        function: {
+          name: String(fn.name ?? ''),
+          arguments: typeof args === 'string' ? args : JSON.stringify(args),
+        },
+      }
+    })
+  }
+
+  if (m.role === 'tool') {
+    base.toolCallId = m.tool_call_id ?? m.message_id
+  }
+
+  return base
 }
 
 interface ChatInnerProps {
@@ -39,14 +94,10 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
 
   const injectMessages = useCallback(() => {
     if (!isReady) return
-    const baseMessages: UploadedFileMessage[] = initialMessages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        id: m.message_id,
-        role: m.role as 'user' | 'assistant',
-        content: m.content ?? '',
-      }))
-    const fileMessages: UploadedFileMessage[] =
+    const historyMessages = initialMessages
+      .map(toAgentMessage)
+      .filter((m): m is AgentMessage => m !== null)
+    const fileMessages: AgentMessage[] =
       uploadedFiles.length === 0
         ? []
         : [
@@ -56,7 +107,9 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
               content: `已上传以下文件，可用于后续抽取分析：\n${uploadedFiles.map((file, index) => `${index + 1}. ${file.original_name}（artifact_id: ${file.artifact_id}）`).join('\n')}`,
             },
           ]
-    agent.setMessages([...baseMessages, ...fileMessages])
+    agent.setMessages(
+      [...historyMessages, ...fileMessages] as Parameters<typeof agent.setMessages>[0],
+    )
     hasInjectedRef.current = true
   }, [isReady, initialMessages, uploadedFiles, agent])
 
@@ -144,6 +197,7 @@ function ChatInner({ agentId, threadId, initialMessages }: ChatInnerProps) {
           )}
           <CopilotChat
             agentId={agentId}
+            threadId={threadId}
             className="h-full"
             labels={{
               chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',

@@ -17,6 +17,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
 
+from pydantic import BaseModel
+
 from scaffold.infra.history import HistoryRepository, ThreadMessage
 from scaffold.infra.middleware.deerflow_adapters.title import get_thread_title
 
@@ -219,6 +221,22 @@ class MessagesSnapshotListener(StreamEventListener):
     def __init__(self, history_repo: HistoryRepository) -> None:
         self._history_repo = history_repo
 
+    @staticmethod
+    def _dump_value(value: Any) -> Any:
+        """把 AG-UI 消息中的 pydantic 模型递归转为普通 dict/list。"""
+        if isinstance(value, BaseModel):
+            return MessagesSnapshotListener._dump_value(value.model_dump())
+        if isinstance(value, list):
+            return [MessagesSnapshotListener._dump_value(item) for item in value]
+        if isinstance(value, dict):
+            return {k: MessagesSnapshotListener._dump_value(v) for k, v in value.items()}
+        return value
+
+    @staticmethod
+    def _json_default(value: Any) -> Any:
+        """兜底：把不可 JSON 序列化的对象转成字符串。"""
+        return str(value)
+
     async def on_event(self, event: Any, ctx: dict[str, Any]) -> None:
         if _get_event_type(event) != "MESSAGES_SNAPSHOT":
             return
@@ -232,7 +250,8 @@ class MessagesSnapshotListener(StreamEventListener):
         created_at = datetime.now(timezone.utc).isoformat()
         to_persist: list[ThreadMessage] = []
 
-        for msg in messages:
+        for raw_msg in messages:
+            msg = self._dump_value(raw_msg)
             if not isinstance(msg, dict):
                 continue
             role = msg.get("role")
@@ -240,14 +259,17 @@ class MessagesSnapshotListener(StreamEventListener):
                 continue
 
             content = msg.get("content")
+            content = self._dump_value(content)
             if not isinstance(content, str):
-                content = json.dumps(content, ensure_ascii=False) if content is not None else None
+                content = (
+                    json.dumps(content, ensure_ascii=False, default=self._json_default) if content is not None else None
+                )
 
             tool_call_id = msg.get("tool_call_id")
             if tool_call_id is None and role == "tool":
                 tool_call_id = msg.get("id")
 
-            tool_calls = msg.get("tool_calls")
+            tool_calls = self._dump_value(msg.get("tool_calls"))
             if tool_calls is not None and not isinstance(tool_calls, list):
                 tool_calls = None
 

@@ -1,13 +1,15 @@
-"""模型工厂测试。"""
+"""模型工厂与模型适配器测试。"""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from scaffold.infra.config.model_config import ModelConfig
 from scaffold.infra.models.factory import create_chat_model
+from scaffold.infra.models.patched_deepseek import PatchedChatDeepSeek, _fix_message_order
 
 
 @pytest.fixture
@@ -83,3 +85,73 @@ def test_no_bypass_proxy_does_not_inject_clients(openai_config: ModelConfig) -> 
         call_kwargs = mock_cls.call_args.kwargs
         assert "http_client" not in call_kwargs
         assert "http_async_client" not in call_kwargs
+
+
+def test_fix_message_order_moves_tool_messages_after_assistant_calls() -> None:
+    """ToolMessage 被拖到后面时，应恢复到所属 AIMessage 之后。"""
+    assistant_render = AIMessage(
+        content="",
+        id="ai-render",
+        tool_calls=[{"id": "call_render", "name": "render_ui", "args": {}}],
+    )
+    assistant_summary = AIMessage(content="summary", id="ai-summary")
+    assistant_read = AIMessage(
+        content="",
+        id="ai-read",
+        tool_calls=[{"id": "call_read", "name": "read_file", "args": {}}],
+    )
+    tool_read = ToolMessage(content="file content", tool_call_id="call_read")
+    tool_render = ToolMessage(content='{"generative_ui":{}}', tool_call_id="call_render")
+
+    messy = [assistant_render, assistant_summary, assistant_read, tool_read, tool_render]
+    fixed = _fix_message_order(messy)
+
+    roles = [m.type for m in fixed]
+    assert roles == ["ai", "tool", "ai", "ai", "tool"]
+    assert fixed[1].tool_call_id == "call_render"  # type: ignore[union-attr]
+    assert fixed[4].tool_call_id == "call_read"  # type: ignore[union-attr]
+
+
+def test_fix_message_order_preserves_already_valid_order() -> None:
+    """原本合法的顺序不应被改乱。"""
+    assistant = AIMessage(
+        content="",
+        tool_calls=[{"id": "call_1", "name": "render_ui", "args": {}}],
+    )
+    tool = ToolMessage(content="ok", tool_call_id="call_1")
+    user = HumanMessage(content="hello")
+
+    fixed = _fix_message_order([user, assistant, tool])
+    assert [m.type for m in fixed] == ["human", "ai", "tool"]
+
+
+def test_fix_message_order_keeps_unmatched_tool_at_end() -> None:
+    """找不到对应 assistant 的 tool 消息应被放到末尾，避免丢失。"""
+    user = HumanMessage(content="hi")
+    orphan = ToolMessage(content="orphan", tool_call_id="call_orphan")
+
+    fixed = _fix_message_order([user, orphan])
+    assert [m.type for m in fixed] == ["human", "tool"]
+
+
+def test_patched_deepseek_request_payload_reorders_messages() -> None:
+    """_get_request_payload 在序列化前会重排消息顺序。"""
+    assistant_render = AIMessage(
+        content="",
+        tool_calls=[{"id": "call_render", "name": "render_ui", "args": {}}],
+    )
+    assistant_summary = AIMessage(content="summary")
+    assistant_read = AIMessage(
+        content="",
+        tool_calls=[{"id": "call_read", "name": "read_file", "args": {}}],
+    )
+    tool_read = ToolMessage(content="file", tool_call_id="call_read")
+    tool_render = ToolMessage(content='{"generative_ui":{}}', tool_call_id="call_render")
+
+    model = PatchedChatDeepSeek(api_key="sk-test", model="deepseek-v4-flash")
+    payload = model._get_request_payload([assistant_render, assistant_summary, assistant_read, tool_read, tool_render])
+    payload_messages = payload["messages"]
+
+    assert [m["role"] for m in payload_messages] == ["assistant", "tool", "assistant", "assistant", "tool"]
+    assert payload_messages[1]["tool_call_id"] == "call_render"
+    assert payload_messages[4]["tool_call_id"] == "call_read"

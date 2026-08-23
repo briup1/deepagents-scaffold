@@ -15,8 +15,11 @@ async def render_ui(
     """渲染前端组件。
 
     Args:
-        type: 组件名，前端 Catalog 中已注册，例如 markdown_card、data_table、form 等。
+        type: 组件名，前端 Catalog 中已注册，例如 markdown_card、data_table、form、chart 等。
         props: 组件属性，由对应组件的 schema 决定。
+            - data_table: columns=[{"key", "label"}], rows=[{...}]
+            - chart: kind="bar" | "line", data=[{"label", "value"}]
+            - metric_card: value=number, 可选 unit/change
         surface_id: 可选表面 ID，用于更新同一界面区域而非创建新组件。
 
     Returns:

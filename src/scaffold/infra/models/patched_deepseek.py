@@ -15,11 +15,63 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langchain_core.outputs import ChatResult
 from langchain_deepseek import ChatDeepSeek
 
 logger = logging.getLogger(__name__)
+
+
+def _tool_call_id(tool_call: Any) -> str | None:
+    """从 LangChain ToolCall dict 或对象中提取 tool_call_id。"""
+    if isinstance(tool_call, dict):
+        tool_call_id = tool_call.get("id")
+    else:
+        tool_call_id = getattr(tool_call, "id", None)
+    return str(tool_call_id) if tool_call_id else None
+
+
+def _fix_message_order(messages: list[Any]) -> list[Any]:
+    """确保每条 assistant tool_calls 后面紧跟对应的 tool 结果消息。
+
+    当 LangGraph 的摘要或记忆中间件截断/重排消息历史时，工具调用结果可能被拖到
+    后续 assistant 消息甚至最新 user 消息之后。OpenAI/DeepSeek API 要求 tool_calls
+    与 tool 消息严格交替，否则会报 ``insufficient tool messages following
+    tool_calls message``。本函数先收集所有 ToolMessage，再把它们移动到所属
+    AIMessage 之后，恢复合法顺序。
+    """
+    tool_messages: dict[str, ToolMessage] = {}
+    ordered_messages: list[Any] = []
+
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            tool_messages[msg.tool_call_id] = msg
+        else:
+            ordered_messages.append(msg)
+
+    fixed: list[Any] = []
+    used_tool_call_ids: set[str] = set()
+
+    for msg in ordered_messages:
+        fixed.append(msg)
+        if not isinstance(msg, AIMessage) or not msg.tool_calls:
+            continue
+
+        for tool_call in msg.tool_calls:
+            tool_call_id = _tool_call_id(tool_call)
+            if not tool_call_id or tool_call_id in used_tool_call_ids:
+                continue
+            tool_msg = tool_messages.get(tool_call_id)
+            if tool_msg is not None:
+                fixed.append(tool_msg)
+                used_tool_call_ids.add(tool_call_id)
+
+    # 剩余的 tool 消息找不到对应 assistant（理论上不应发生），放在末尾兜底，避免丢数据。
+    for tool_call_id, tool_msg in tool_messages.items():
+        if tool_call_id not in used_tool_call_ids:
+            fixed.append(tool_msg)
+
+    return fixed
 
 
 class PatchedChatDeepSeek(ChatDeepSeek):
@@ -98,8 +150,9 @@ class PatchedChatDeepSeek(ChatDeepSeek):
         **kwargs: Any,
     ) -> dict:
         """获取请求 payload，同时保留 reasoning_content。"""
-        original_messages = self._convert_input(input_).to_messages()
-        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        original_messages = list(self._convert_input(input_).to_messages())
+        fixed_messages = _fix_message_order(original_messages)
+        payload = super()._get_request_payload(fixed_messages, stop=stop, **kwargs)
         payload_messages = payload.get("messages", [])
 
         # Diagnostic: log the message roles/ids/tool-call pairing right before
@@ -128,14 +181,14 @@ class PatchedChatDeepSeek(ChatDeepSeek):
         except Exception:
             logger.exception("Failed to log DeepSeek request messages")
 
-        if len(payload_messages) == len(original_messages):
-            for payload_msg, orig_msg in zip(payload_messages, original_messages):
+        if len(payload_messages) == len(fixed_messages):
+            for payload_msg, orig_msg in zip(payload_messages, fixed_messages):
                 if payload_msg.get("role") == "assistant" and isinstance(orig_msg, AIMessage):
                     reasoning_content = orig_msg.additional_kwargs.get("reasoning_content")
                     if reasoning_content is not None:
                         payload_msg["reasoning_content"] = reasoning_content
         else:
-            ai_messages = [m for m in original_messages if isinstance(m, AIMessage)]
+            ai_messages = [m for m in fixed_messages if isinstance(m, AIMessage)]
             assistant_payloads = [(i, m) for i, m in enumerate(payload_messages) if m.get("role") == "assistant"]
             for (idx, payload_msg), ai_msg in zip(assistant_payloads, ai_messages):
                 reasoning_content = ai_msg.additional_kwargs.get("reasoning_content")

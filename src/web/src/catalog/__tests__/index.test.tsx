@@ -82,6 +82,33 @@ describe('catalog components', () => {
     })
   })
 
+  describe('chart', () => {
+    it('缺少 kind 时默认渲染为柱状图，避免历史消息校验失败', () => {
+      render(
+        <>
+          {catalog.render(
+            {
+              type: 'chart',
+              props: {
+                title: '各起运港报价条数',
+                data: [
+                  { label: '上海 SHANGHAI', value: 1 },
+                  { label: '盐田 YANTIAN', value: 1 },
+                  { label: '宁波 NINGBO', value: 1 },
+                ],
+              },
+            },
+            vi.fn(),
+          )}
+        </>,
+      )
+
+      expect(screen.getByText('各起运港报价条数')).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: '各起运港报价条数' })).toBeInTheDocument()
+      expect(screen.queryByText('无法渲染 Generative UI')).not.toBeInTheDocument()
+    })
+  })
+
   it('导出的 componentSchema 仍描述 buttons 为必填字段', () => {
     expect(componentSchema.button_group).toMatchObject({
       description: expect.any(String),

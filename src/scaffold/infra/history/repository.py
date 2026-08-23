@@ -199,6 +199,30 @@ class HistoryRepository:
         )
         await self._conn.commit()
 
+    async def delete_thread(self, thread_id: str) -> bool:
+        """删除单个会话及其消息、抽取任务；返回是否存在。"""
+        cursor = await self._conn.execute("SELECT 1 FROM threads WHERE thread_id = ?", (thread_id,))
+        if await cursor.fetchone() is None:
+            return False
+        await self._delete_thread_rows(thread_id)
+        await self._conn.commit()
+        return True
+
+    async def delete_threads_by_agent(self, agent_id: str) -> list[str]:
+        """删除某 Agent 的全部会话；返回被删除的 thread_id 列表。"""
+        cursor = await self._conn.execute("SELECT thread_id FROM threads WHERE agent_id = ?", (agent_id,))
+        thread_ids = [row[0] for row in await cursor.fetchall()]
+        for thread_id in thread_ids:
+            await self._delete_thread_rows(thread_id)
+        await self._conn.commit()
+        return thread_ids
+
+    async def _delete_thread_rows(self, thread_id: str) -> None:
+        """删除单会话关联的所有行（不提交事务）。"""
+        await self._conn.execute("DELETE FROM messages WHERE thread_id = ?", (thread_id,))
+        await self._conn.execute("DELETE FROM extraction_tasks WHERE thread_id = ?", (thread_id,))
+        await self._conn.execute("DELETE FROM threads WHERE thread_id = ?", (thread_id,))
+
 
 def _parse_json(value: str | None) -> list[dict[str, Any]] | None:
     import json

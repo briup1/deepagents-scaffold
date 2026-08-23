@@ -170,6 +170,27 @@ describe('App', () => {
     )
   })
 
+  it('将当前 threadId 显式传给 CopilotChat，避免其自动生成随机线程 id', async () => {
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByTestId('copilot-chat')).toBeInTheDocument())
+    // 修复前：不传 threadId 时 CopilotChat 挂载时会 randomUUID() 覆盖 agent.threadId，
+    // 导致刷新后新消息写入另一条孤儿线程（看不到历史命令）。
+    expect(latestCopilotChatProps.threadId).toBe(latestHttpAgentCall.threadId)
+  })
+
+  it('点击历史会话后 CopilotChat 的 threadId 与选中线程一致', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('历史会话')).toBeInTheDocument())
+    const historyThread = await screen.findByRole('button', { name: '历史会话' })
+    await user.click(historyThread)
+
+    await waitFor(() => expect(latestCopilotChatProps.threadId).toBe('t-history'))
+    expect(latestCopilotChatProps.threadId).toBe(latestHttpAgentCall.threadId)
+  })
+
   it('聊天输入区占位符提示支持拖拽上传', async () => {
     render(<App />)
 

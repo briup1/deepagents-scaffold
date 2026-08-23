@@ -54,6 +54,36 @@ async def test_list_threads_filtered_by_agent(repo: HistoryRepository) -> None:
 
 
 @pytest.mark.asyncio
+async def test_add_message_upserts_tool_calls(repo: HistoryRepository) -> None:
+    await repo.ensure_thread("thread-1", "default")
+    await repo.add_message(
+        ThreadMessage(
+            thread_id="thread-1",
+            message_id="msg-1",
+            run_id="run-1",
+            role="assistant",
+            content="hi",
+            created_at="2026-08-18T10:00:00Z",
+        )
+    )
+    await repo.add_message(
+        ThreadMessage(
+            thread_id="thread-1",
+            message_id="msg-1",
+            run_id="run-1",
+            role="assistant",
+            content="hi",
+            tool_calls=[{"id": "tc-1", "function": {"name": "render_ui", "arguments": "{}"}}],
+            created_at="2026-08-18T10:00:00Z",
+        )
+    )
+    messages = await repo.get_messages("thread-1")
+    assert len(messages) == 1
+    assert messages[0].tool_calls is not None
+    assert messages[0].tool_calls[0]["function"]["name"] == "render_ui"
+
+
+@pytest.mark.asyncio
 async def test_update_title(repo: HistoryRepository) -> None:
     await repo.ensure_thread("thread-1", "default")
     await repo.update_title("thread-1", "测试标题")

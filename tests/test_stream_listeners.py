@@ -7,15 +7,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from ag_ui.core import (
+    AssistantMessage,
+    FunctionCall,
     RunFinishedEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    ToolCall,
+    ToolMessage,
+    UserMessage,
 )
 
 from scaffold.api.stream_listeners import (
     AgUILogListener,
     HistoryPersistenceListener,
+    MessagesSnapshotListener,
     ThreadTitleListener,
     _get_event_type,
 )
@@ -106,6 +112,117 @@ class TestHistoryPersistenceListener:
         await listener.on_event(TextMessageEndEvent(messageId="m1"), ctx)
 
         assert any("Failed to persist assistant message" in record.message for record in caplog.records)
+
+
+class TestMessagesSnapshotListener:
+    @pytest.mark.asyncio
+    async def test_persists_tool_and_assistant_messages(self) -> None:
+        history_repo = MagicMock()
+        history_repo.add_messages = AsyncMock()
+        listener = MessagesSnapshotListener(history_repo)
+        ctx = {"thread_id": "t-1", "run_id": "r-1"}
+
+        event = {
+            "type": "MESSAGES_SNAPSHOT",
+            "messages": [
+                {"id": "u-1", "role": "user", "content": "hello"},
+                {
+                    "id": "a-1",
+                    "role": "assistant",
+                    "content": "ok",
+                    "tool_calls": [
+                        {
+                            "id": "tc-1",
+                            "type": "function",
+                            "function": {"name": "render_ui", "arguments": '{"type":"markdown_card"}'},
+                        }
+                    ],
+                },
+                {
+                    "id": "tm-1",
+                    "role": "tool",
+                    "content": '{"generative_ui": {"type": "markdown_card", "props": {"title": "Hi"}}}',
+                    "tool_call_id": "tc-1",
+                },
+            ],
+        }
+
+        await listener.on_event(event, ctx)
+
+        history_repo.add_messages.assert_awaited_once()
+        persisted = history_repo.add_messages.await_args.args[0]
+        assert len(persisted) == 3
+
+        assistant = next(m for m in persisted if m.role == "assistant")
+        assert assistant.tool_calls is not None
+        assert assistant.tool_calls[0]["function"]["name"] == "render_ui"
+
+        tool = next(m for m in persisted if m.role == "tool")
+        assert tool.tool_call_id == "tc-1"
+        assert "generative_ui" in (tool.content or "")
+
+    @pytest.mark.asyncio
+    async def test_swallow_snapshot_exception(self, caplog: pytest.LogCaptureFixture) -> None:
+        history_repo = MagicMock()
+        history_repo.add_messages = AsyncMock(side_effect=RuntimeError("db down"))
+        listener = MessagesSnapshotListener(history_repo)
+        ctx = {"thread_id": "t-1", "run_id": "r-1"}
+
+        event = {"type": "MESSAGES_SNAPSHOT", "messages": [{"id": "u-1", "role": "user", "content": "hi"}]}
+        await listener.on_event(event, ctx)
+
+        assert any("Failed to persist messages snapshot" in record.message for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_persists_pydantic_messages_with_tool_calls(self) -> None:
+        """MESSAGES_SNAPSHOT 中的消息是 AG-UI pydantic 模型，必须能正确序列化后再落库。"""
+        history_repo = MagicMock()
+        history_repo.add_messages = AsyncMock()
+        listener = MessagesSnapshotListener(history_repo)
+        ctx = {"thread_id": "t-1", "run_id": "r-1"}
+
+        event = {
+            "type": "MESSAGES_SNAPSHOT",
+            "messages": [
+                UserMessage(id="u-1", role="user", content="hello"),
+                AssistantMessage(
+                    id="a-1",
+                    role="assistant",
+                    content="ok",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc-1",
+                            type="function",
+                            function=FunctionCall(
+                                name="render_ui",
+                                arguments='{"type":"chart","props":{"kind":"bar","data":[{"label":"A","value":1}]}}',
+                            ),
+                        )
+                    ],
+                ),
+                ToolMessage(
+                    id="tm-1",
+                    role="tool",
+                    content='{"generative_ui": {"type": "chart", "props": {"kind": "bar", "data": [{"label": "A", "value": 1}]}}}',
+                    tool_call_id="tc-1",
+                ),
+            ],
+        }
+
+        await listener.on_event(event, ctx)
+
+        history_repo.add_messages.assert_awaited_once()
+        persisted = history_repo.add_messages.await_args.args[0]
+        assert len(persisted) == 3
+
+        assistant = next(m for m in persisted if m.role == "assistant")
+        assert assistant.tool_calls is not None
+        assert assistant.tool_calls[0]["function"]["name"] == "render_ui"
+        assert assistant.tool_calls[0]["function"]["arguments"].startswith('{"type":"chart"')
+
+        tool = next(m for m in persisted if m.role == "tool")
+        assert tool.tool_call_id == "tc-1"
+        assert "generative_ui" in (tool.content or "")
 
 
 class TestThreadTitleListener:

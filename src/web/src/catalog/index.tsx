@@ -75,7 +75,8 @@ const downloadButtonSchema = z.object({
 
 const chartSchema = z.object({
   title: z.string().optional(),
-  kind: z.enum(['bar', 'line']),
+  // 兼容部分模型输出 chart 时漏传 kind 的情况；缺失时默认按柱状图渲染。
+  kind: z.enum(['bar', 'line']).default('bar'),
   data: z.array(
     z.object({
       label: z.string(),
