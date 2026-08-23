@@ -8,7 +8,8 @@
    pending Send 上。
 2. SSE handler 从队列消费事件，空闲时发送 heartbeat comment，保持 Vite 代理 /
    浏览器连接不超时。
-3. 全流程结构化日志，方便复现时定位是 graph 卡住、网络断开还是客户端丢事件。
+3. 事件副作用（日志、历史持久化、标题同步）通过 ``StreamEventListener`` 订阅者
+   处理，传输模块本身只负责队列、心跳和 SSE 编码。
 """
 
 from __future__ import annotations
@@ -28,11 +29,18 @@ from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 
 from scaffold.api.deps import get_history_repo
+from scaffold.api.stream_listeners import (
+    AgUILogListener,
+    HistoryPersistenceListener,
+    StreamEventListener,
+    ThreadTitleListener,
+    _ctx_str,
+    _stream_extra,
+)
 from scaffold.core.agents import get_agent, list_agents
 from scaffold.infra.context import request_id_ctx, trace_id_ctx
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.history import HistoryRepository, ThreadMessage
-from scaffold.infra.middleware.deerflow_adapters.title import get_thread_title
 
 logger = logging.getLogger(__name__)
 
@@ -50,95 +58,12 @@ QUEUE_BACKPRESSURE_SAMPLE_INTERVAL = 100
 # 队列深度告警阈值。超过该值说明客户端消费明显落后，需要关注。
 QUEUE_BACKPRESSURE_WARNING_THRESHOLD = 500
 
-# 为诊断“回复看起来不完整”而保留的最近 CONTENT 事件数。
-TAIL_CONTENT_EVENTS_TO_LOG = 3
-
 
 class _StreamSentinel:
     """用于标识事件流结束的唯一哨兵对象。"""
 
 
 _SENTINEL = _StreamSentinel()
-
-
-def _get_event_type(event: Any) -> str | None:
-    """安全地获取 AG-UI 事件类型（兼容 enum 与字符串）。"""
-    if isinstance(event, dict):
-        t = event.get("type")
-    else:
-        t = getattr(event, "type", None)
-    if t is None:
-        return None
-    if isinstance(t, str):
-        return t
-    # 处理 Python/TypeScript enum 成员，如 EventType.TEXT_MESSAGE_CONTENT
-    return getattr(t, "value", None) or str(t)
-
-
-def _get_event_field(event: Any, field: str) -> Any:
-    """安全地获取 AG-UI 事件字段。"""
-    if isinstance(event, dict):
-        return event.get(field)
-    return getattr(event, field, None)
-
-
-def _extract_finish_reason(event: Any) -> str | None:
-    """从 TEXT_MESSAGE_END 的 raw_event 中提取模型 finish_reason。"""
-    raw_event = _get_event_field(event, "raw_event")
-    if raw_event is None:
-        return None
-
-    # 支持 dict 与 pydantic model 两种形式
-    if isinstance(raw_event, dict):
-        data = raw_event.get("data", {})
-        output = data.get("output", {})
-        response_metadata = output.get("response_metadata", {})
-    else:
-        data = getattr(raw_event, "data", None) or {}
-        output = getattr(data, "output", None) or {}
-        response_metadata = getattr(output, "response_metadata", None) or {}
-
-    if isinstance(response_metadata, dict):
-        return response_metadata.get("finish_reason")
-    return getattr(response_metadata, "finish_reason", None)
-
-
-def _extract_thread_title(event: Any) -> str | None:
-    """从 STATE_SNAPSHOT 或 RUN_FINISHED 事件中提取 TitleMiddleware 生成的标题。
-
-    支持 ``snapshot``、``raw_event.state`` 以及 pydantic model 的混合形态。
-    若未启用 TitleMiddleware 或事件中无 ``_thread_title``，则返回 None。
-    """
-    # STATE_SNAPSHOT 事件直接携带快照
-    snapshot = _get_event_field(event, "snapshot")
-    if snapshot is not None:
-        if isinstance(snapshot, dict):
-            title = snapshot.get("_thread_title")
-        else:
-            title = getattr(snapshot, "_thread_title", None)
-        if isinstance(title, str) and title.strip():
-            return title
-
-    raw_event = _get_event_field(event, "raw_event")
-    if raw_event is None:
-        return None
-
-    if isinstance(raw_event, dict):
-        state = raw_event.get("state")
-    else:
-        state = getattr(raw_event, "state", None)
-
-    if state is None:
-        return None
-
-    if isinstance(state, dict):
-        title = state.get("_thread_title")
-    else:
-        title = getattr(state, "_thread_title", None)
-
-    if isinstance(title, str) and title.strip():
-        return title
-    return None
 
 
 def _ag_ui_message_to_thread_message(msg: Any, thread_id: str, run_id: str | None) -> ThreadMessage | None:
@@ -170,79 +95,6 @@ def _ag_ui_message_to_thread_message(msg: Any, thread_id: str, run_id: str | Non
     )
 
 
-def _log_stream_event(
-    event: Any,
-    *,
-    ctx: dict[str, Any],
-    text_buffers: dict[str, list[str]],
-    tail_content_buffer: list[dict[str, Any]],
-) -> None:
-    """记录关键 AG-UI 事件，用于后续定位“回复不完整”问题。
-
-    不记录完整消息内容，只记录长度、ID、事件类型等元信息。
-    """
-    etype = _get_event_type(event)
-    if etype is None:
-        return
-
-    if etype == "TEXT_MESSAGE_START":
-        message_id = _get_event_field(event, "message_id")
-        text_buffers[message_id] = []
-        logger.debug(
-            "ag-ui text message start | %s message_id=%s",
-            _ctx_str(ctx),
-            message_id,
-            extra=_stream_extra({**ctx, "message_id": message_id}),
-        )
-
-    elif etype == "TEXT_MESSAGE_CONTENT":
-        message_id = _get_event_field(event, "message_id")
-        delta = _get_event_field(event, "delta") or ""
-        text_buffers.setdefault(message_id, []).append(delta)
-        tail_content_buffer.append({"message_id": message_id, "delta_len": len(delta)})
-        if len(tail_content_buffer) > TAIL_CONTENT_EVENTS_TO_LOG:
-            tail_content_buffer.pop(0)
-
-    elif etype == "TEXT_MESSAGE_END":
-        message_id = _get_event_field(event, "message_id")
-        finish_reason = _extract_finish_reason(event)
-        full_text = "".join(text_buffers.pop(message_id, []))
-        logger.info(
-            "ag-ui text message finished | %s message_id=%s finish_reason=%s content_len=%d tail_lens=%s",
-            _ctx_str(ctx),
-            message_id,
-            finish_reason,
-            len(full_text),
-            [t["delta_len"] for t in tail_content_buffer],
-            extra=_stream_extra(
-                {
-                    **ctx,
-                    "message_id": message_id,
-                    "finish_reason": finish_reason,
-                    "content_len": len(full_text),
-                    "tail_delta_lens": [t["delta_len"] for t in tail_content_buffer],
-                }
-            ),
-        )
-        tail_content_buffer.clear()
-
-    elif etype == "RUN_FINISHED":
-        logger.info(
-            "ag-ui run finished | %s",
-            _ctx_str(ctx),
-            extra=_stream_extra(ctx),
-        )
-
-    elif etype == "RUN_ERROR":
-        message = _get_event_field(event, "message")
-        logger.error(
-            "ag-ui run error | %s error=%s",
-            _ctx_str(ctx),
-            message,
-            extra=_stream_extra({**ctx, "error": message}),
-        )
-
-
 def _stream_ctx(input_data: RunAgentInput, **kwargs: Any) -> dict[str, Any]:
     """构造 SSE 流日志的上下文字段，既写进日志消息也放入结构化 extra。
 
@@ -256,32 +108,47 @@ def _stream_ctx(input_data: RunAgentInput, **kwargs: Any) -> dict[str, Any]:
     }
 
 
-def _stream_extra(ctx: dict[str, Any]) -> dict[str, Any]:
-    """把上下文包装成 ``JSONFormatter`` 需要的 ``record.extra`` 结构。"""
-    return {"extra": ctx}
+def _build_listeners(history_repo: HistoryRepository | None) -> list[StreamEventListener]:
+    """根据是否可用历史仓库构建事件监听器列表。"""
+    listeners: list[StreamEventListener] = [AgUILogListener()]
+    if history_repo is not None:
+        listeners.extend(
+            [
+                HistoryPersistenceListener(history_repo),
+                ThreadTitleListener(history_repo),
+            ]
+        )
+    return listeners
 
 
-def _ctx_str(ctx: dict[str, Any]) -> str:
-    """把上下文格式化为人类可读的键值对字符串，用于 text 格式日志。"""
-    return " ".join(f"{k}={v}" for k, v in ctx.items())
+async def _notify_listeners(
+    listeners: list[StreamEventListener],
+    event: Any,
+    ctx: dict[str, Any],
+) -> None:
+    """通知所有监听器；单个监听器异常不影响其他监听器。"""
+    for listener in listeners:
+        try:
+            await listener.on_event(event, ctx)
+        except Exception:
+            logger.exception(
+                "Stream listener failed | listener=%s event_type=%s",
+                type(listener).__name__,
+                getattr(event, "type", None),
+            )
 
 
 async def _produce_events_to_queue(
     agent: LangGraphAgent,
     input_data: RunAgentInput,
     queue: asyncio.Queue[Any],
-    history_repo: HistoryRepository | None = None,
+    listeners: list[StreamEventListener],
 ) -> None:
-    """在后台 Task 中把 ``agent.run()`` 产生的事件写入队列。"""
+    """在后台 Task 中把 ``agent.run()`` 产生的事件写入队列并通知监听器。"""
     start = time.monotonic()
     event_count = 0
     sample_count = 0
     ctx = _stream_ctx(input_data, agent_name=agent.name)
-    # 用于累计 TEXT_MESSAGE_CONTENT 内容，仅在 TEXT_MESSAGE_END 时记录长度
-    text_buffers: dict[str, list[str]] = {}
-    tail_content_buffer: list[dict[str, Any]] = []
-    assistant_buffers: dict[str, list[str]] = {}
-    title_updated = False
 
     logger.info(
         "ag-ui stream producer started | %s",
@@ -295,57 +162,7 @@ async def _produce_events_to_queue(
             event_count += 1
             sample_count += 1
 
-            _log_stream_event(
-                event,
-                ctx=ctx,
-                text_buffers=text_buffers,
-                tail_content_buffer=tail_content_buffer,
-            )
-
-            # 持久化助手文本消息
-            if history_repo is not None and _get_event_type(event) == "TEXT_MESSAGE_CONTENT":
-                mid = _get_event_field(event, "message_id")
-                delta = _get_event_field(event, "delta") or ""
-                assistant_buffers.setdefault(mid, []).append(delta)
-
-            if history_repo is not None and _get_event_type(event) == "TEXT_MESSAGE_END":
-                mid = _get_event_field(event, "message_id")
-                full_text = "".join(assistant_buffers.pop(mid, []))
-                try:
-                    await history_repo.add_message(
-                        ThreadMessage(
-                            message_id=mid or str(uuid.uuid4()),
-                            run_id=input_data.run_id,
-                            role="assistant",
-                            content=full_text,
-                            created_at=datetime.now(timezone.utc).isoformat(),
-                            thread_id=input_data.thread_id,
-                        )
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to persist assistant message | thread_id=%s message_id=%s",
-                        input_data.thread_id,
-                        mid,
-                    )
-
-            # 同步 TitleMiddleware 生成的会话标题
-            if history_repo is not None and not title_updated and _get_event_type(event) == "RUN_FINISHED":
-                try:
-                    title = _extract_thread_title(event) or get_thread_title(input_data.thread_id)
-                    if title:
-                        await history_repo.update_title(input_data.thread_id, title)
-                        title_updated = True
-                        logger.info(
-                            "Updated thread title | thread_id=%s title=%s",
-                            input_data.thread_id,
-                            title,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to update thread title | thread_id=%s",
-                        input_data.thread_id,
-                    )
+            await _notify_listeners(listeners, event, ctx)
 
             # 采样检查队列深度，避免每条事件都检查
             if sample_count >= QUEUE_BACKPRESSURE_SAMPLE_INTERVAL:
@@ -380,7 +197,7 @@ async def _eager_event_generator(
     input_data: RunAgentInput,
     encoder: EventEncoder,
     request: Request,
-    history_repo: HistoryRepository | None = None,
+    listeners: list[StreamEventListener],
     heartbeat_interval: float = HEARTBEAT_INTERVAL_SECONDS,
 ) -> Any:
     """产生 SSE 事件流：后台执行 graph，前台带心跳消费。
@@ -391,7 +208,7 @@ async def _eager_event_generator(
     """
     queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=EVENT_QUEUE_MAXSIZE)
     producer = asyncio.create_task(
-        _produce_events_to_queue(agent, input_data, queue, history_repo=history_repo),
+        _produce_events_to_queue(agent, input_data, queue, listeners),
         name=f"ag-ui-producer-{input_data.run_id}",
     )
 
@@ -533,8 +350,10 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
                 input_data.run_id,
             )
 
+        listeners = _build_listeners(history_repo)
+
         return StreamingResponse(
-            _eager_event_generator(request_agent, input_data, encoder, request, history_repo=history_repo),
+            _eager_event_generator(request_agent, input_data, encoder, request, listeners),
             media_type=encoder.get_content_type(),
         )
 

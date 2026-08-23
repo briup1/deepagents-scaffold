@@ -23,6 +23,7 @@ from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 from scaffold.api.ag_ui import _build_ag_ui_agent, _eager_event_generator
+from scaffold.api.stream_listeners import AgUILogListener
 from scaffold.infra.config.app_config import get_app_config
 
 
@@ -214,6 +215,7 @@ async def test_eager_streaming_completes_despite_slow_consumer() -> None:
         _make_run_input(),
         encoder,
         request,
+        [AgUILogListener()],
         heartbeat_interval=1.0,
     )
 
@@ -250,6 +252,7 @@ async def test_eager_streaming_emits_heartbeat_during_idle() -> None:
         _make_run_input(),
         encoder,
         request,
+        [AgUILogListener()],
         heartbeat_interval=0.2,
     )
 
@@ -278,6 +281,7 @@ async def test_eager_streaming_stops_on_disconnect() -> None:
         _make_run_input(),
         encoder,
         request,
+        [AgUILogListener()],
         heartbeat_interval=0.1,
     )
 
