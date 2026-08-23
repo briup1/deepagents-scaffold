@@ -15,6 +15,12 @@ agent:
   max_iterations: 500
   drop_error_from_history: true
 
+execution_sandbox:
+  provider: subprocess
+  timeout_seconds: 60
+  memory_limit_mb: 512
+  allowed_imports: []
+
 tools:
   - name: read_file
     use: scaffold.plugins.tools.code_review:read_file

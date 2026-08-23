@@ -100,6 +100,21 @@ class AgentConfig(BaseModel):
     )
 
 
+class SandboxExecutionConfig(BaseModel):
+    """代码执行沙箱配置。"""
+
+    provider: str = Field(
+        default="subprocess",
+        description="沙箱实现：subprocess / docker / e2b（后两者需额外安装与配置）",
+    )
+    timeout_seconds: int = Field(default=60, description="脚本执行超时")
+    memory_limit_mb: int = Field(default=512, description="内存限制（MB）")
+    allowed_imports: list[str] = Field(
+        default_factory=list,
+        description="额外允许的 import 白名单（默认使用 SubprocessSandbox 内置白名单）",
+    )
+
+
 class AppConfig(BaseModel):
     """根应用配置。"""
 
@@ -127,6 +142,7 @@ class AppConfig(BaseModel):
     backend: BackendConfig = Field(default_factory=BackendConfig)
     subagent_definitions: SubAgentsDefinitionsConfig = Field(default_factory=SubAgentsDefinitionsConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    execution_sandbox: SandboxExecutionConfig = Field(default_factory=SandboxExecutionConfig)
 
     def get_model_config(self, name: str) -> ModelConfig | None:
         return next((m for m in self.models if m.name == name), None)

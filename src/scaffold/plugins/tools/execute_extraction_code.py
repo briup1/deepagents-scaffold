@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from scaffold.infra.sandbox import SubprocessSandbox
+from scaffold.infra.sandbox import get_sandbox
 from scaffold.plugins.tools._extraction_common import _now, get_extraction_workspace
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
             script_path = tmp_root / "extract.py"
             script_path.write_bytes(script_bytes)
 
-            sandbox = SubprocessSandbox()
+            sandbox = get_sandbox()
             result = await sandbox.run(
                 script_path=script_path,
                 input_dir=input_dir,
@@ -88,8 +88,8 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
                     "status": task.status,
                 }
 
-            output_file = output_dir / "extracted.csv"
-            if not output_file.exists():
+            csv_bytes = result.output_files.get("extracted.csv")
+            if csv_bytes is None:
                 task.status = "failed"
                 task.updated_at = _now()
                 task.validation_report = {
@@ -110,8 +110,6 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
                     "error": "脚本未输出 CSV 文件",
                     "status": task.status,
                 }
-
-            csv_bytes = output_file.read_bytes()
 
         extraction_artifact = await ws.save_artifact(
             thread_id=task.thread_id,
