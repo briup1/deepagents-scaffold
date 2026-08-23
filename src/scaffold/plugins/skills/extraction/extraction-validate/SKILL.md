@@ -1,6 +1,7 @@
 ---
 name: extraction-validate
 description: 验证抽取结果是否符合目标
+allowed-tools: execute_extraction_code validate_extraction_result
 ---
 
 # Excel 抽取结果验证

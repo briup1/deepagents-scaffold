@@ -1,6 +1,7 @@
 ---
 name: extraction-analysis
 description: 对抽取结果执行 SQL 查询、自然语言分析、多文件对比，并用生成式 UI 展示
+allowed-tools: preview_excel query_extracted_data analyze_extracted_data render_ui
 ---
 
 # 抽取结果分析与展示

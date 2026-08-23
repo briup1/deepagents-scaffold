@@ -19,7 +19,7 @@ from deepagents import (
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from scaffold.core.skills import get_skill_names
+from scaffold.core.skills import get_skill_names, validate_skill_tools
 from scaffold.core.subagents import build_subagents
 from scaffold.core.tools import get_available_tools
 from scaffold.infra.config.app_config import AppConfig, get_app_config
@@ -96,8 +96,10 @@ def create_agent(
     # 解析子 agent
     subagents = _build_subagents(app_config)
 
-    # 解析技能
-    skills = _build_skills(app_config)
+    # 解析技能（按 harness profile 隔离），并校验 skill 声明的工具依赖
+    skills = _build_skills(app_config, profile)
+    if errors := validate_skill_tools(skills or [], {getattr(t, "name", "") for t in all_tools}):
+        raise ValueError(f"Agent '{name}' skill 工具依赖不满足: " + "; ".join(errors))
 
     # 解析记忆来源
     memory = _build_memory_sources(app_config)
@@ -256,10 +258,10 @@ def _build_subagents(app_config: AppConfig) -> list[Any]:
     return build_subagents(app_config)
 
 
-def _build_skills(app_config: AppConfig) -> list[str] | None:
-    """根据配置构建技能名称列表。"""
+def _build_skills(app_config: AppConfig, profile: HarnessProfileConfig | None = None) -> list[str] | None:
+    """根据配置构建技能 source 列表（profile 未配置时继承全局池）。"""
     try:
-        return get_skill_names(app_config)
+        return get_skill_names(app_config, profile)
     except Exception:
         logger.debug("No skills configured")
         return None

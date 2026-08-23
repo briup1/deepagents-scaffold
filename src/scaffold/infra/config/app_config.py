@@ -83,7 +83,8 @@ class GatewayConfig(BaseModel):
 
 
 class SkillsConfig(BaseModel):
-    path: str = "./plugins/skills"
+    # str 向后兼容，归一化为单元素列表；多路径时后面的 source 同名覆盖前面的
+    path: str | list[str] = "./plugins/skills"
     container_path: str = "/mnt/skills"
 
 

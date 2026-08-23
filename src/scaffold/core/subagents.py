@@ -61,6 +61,13 @@ def _build_single_subagent(
     # 解析工具
     tools = _resolve_tools(cfg.tools, app_config)
 
+    # 校验 skill 声明的工具依赖。cfg.tools 为空表示继承主 agent 全部工具，无需校验。
+    if cfg.skills and cfg.tools:
+        from scaffold.core.skills import validate_skill_tools
+
+        if errors := validate_skill_tools(cfg.skills, {t.name for t in tools}):
+            raise ValueError(f"Subagent '{cfg.name}' skill 工具依赖不满足: " + "; ".join(errors))
+
     # 解析模型覆盖配置
     model = None
     if cfg.model:

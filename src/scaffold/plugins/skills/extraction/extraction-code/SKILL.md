@@ -1,6 +1,7 @@
 ---
 name: extraction-code
 description: 生成并执行 Excel 抽取脚本
+allowed-tools: generate_extraction_code execute_extraction_code
 ---
 
 # Excel 抽取脚本生成与执行

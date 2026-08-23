@@ -18,6 +18,8 @@ class HarnessProfileConfig(BaseModel):
     system_prompt_suffix: str | None = Field(default=None, description="Appended after BASE")
     excluded_middleware: list[str] = Field(default_factory=list, description="Middleware names to exclude")
     excluded_tools: list[str] = Field(default_factory=list, description="Tool names to exclude")
+    # 三态：None=继承全局 skills.path；[]=明确不挂 skill；[路径]=域目录白名单
+    skills: list[str] | None = Field(default=None, description="Skill source dirs; None inherits global pool")
     extra_tools: list[dict[str, Any]] = Field(default_factory=list, description="Additional tool definitions")
 
 

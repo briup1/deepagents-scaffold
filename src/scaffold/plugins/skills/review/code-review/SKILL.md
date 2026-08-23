@@ -1,6 +1,7 @@
 ---
 name: code-review
 description: 结对代码审查员审查清单与输出模板
+allowed-tools: read_file run_pytest write_file
 ---
 
 # 结对代码审查员技能

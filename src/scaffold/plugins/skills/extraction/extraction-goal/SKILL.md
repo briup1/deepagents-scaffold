@@ -1,6 +1,7 @@
 ---
 name: extraction-goal
 description: 设立 Excel 抽取目标，与用户对齐字段和约束
+allowed-tools: preview_excel generate_extraction_code
 ---
 
 # Excel 抽取目标设立

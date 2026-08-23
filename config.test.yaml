@@ -22,6 +22,8 @@ execution_sandbox:
   allowed_imports: []
 
 tools:
+  - name: render_ui
+    use: scaffold.plugins.tools.generative_ui:render_ui
   - name: read_file
     use: scaffold.plugins.tools.code_review:read_file
   - name: list_files
@@ -52,7 +54,9 @@ tools:
 tool_groups: []
 
 skills:
-  path: src/scaffold/plugins/skills
+  path:
+    - src/scaffold/plugins/skills/extraction
+    - src/scaffold/plugins/skills/review
   container_path: /mnt/skills
 
 middleware:
@@ -97,6 +101,8 @@ profiles:
       system_prompt_suffix: "Review carefully."
       excluded_middleware: []
       excluded_tools: []
+      skills:
+        - src/scaffold/plugins/skills/review
     - name: data_extractor
       base_system_prompt: |
         你是一名结构化数据抽取与分析助手，专门帮助用户从上传的文件（尤其是 Excel 报价单）中抽取、清洗、验证目标字段，并对抽取结果进行查询、统计、对比分析。
@@ -136,6 +142,8 @@ profiles:
         - explain_symbol
         - generate_patch
         - write_file
+      skills:
+        - src/scaffold/plugins/skills/extraction
   default_harness: default
 
 backend:

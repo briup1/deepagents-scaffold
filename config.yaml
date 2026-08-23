@@ -113,7 +113,9 @@ tool_groups: []
 # 技能是定义在 plugins/skills/ 目录下 SKILL.md 文件中的可复用行为。
 # 设置包含技能定义的目录路径。
 skills:
-  path: src/scaffold/plugins/skills
+  path:
+    - src/scaffold/plugins/skills/extraction
+    - src/scaffold/plugins/skills/review
   container_path: /mnt/skills
 
 # ---------------------------------------------------------------------------
@@ -253,6 +255,8 @@ profiles:
       system_prompt_suffix: "请使用 Markdown 输出结构化的审查报告。在应用 patch 前，默认先询问用户确认；如果用户明确说'直接改'或'应用 patch'，则可以跳过确认。禁止写入 .env、config.yaml、密钥文件以及 core/infra/api/runtime/ 目录。"
       excluded_middleware: []
       excluded_tools: []
+      skills:
+        - src/scaffold/plugins/skills/review
     - name: data_extractor
       base_system_prompt: |
         你是一名结构化数据抽取与分析助手，专门帮助用户从上传的文件（尤其是 Excel 报价单）中抽取、清洗、验证目标字段，并对抽取结果进行查询、统计、对比分析。
@@ -292,6 +296,8 @@ profiles:
         - explain_symbol
         - generate_patch
         - write_file
+      skills:
+        - src/scaffold/plugins/skills/extraction
   default_harness: code_reviewer
 
 # ---------------------------------------------------------------------------
