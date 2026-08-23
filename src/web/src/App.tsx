@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
-import { HttpAgent } from '@ag-ui/client'
 import { listAgents, type AgentInfo } from './api/copilotkit'
-import { getThreadMessages, type ThreadMessage, type ThreadSummary } from './api/threads'
+import { type ThreadSummary } from './api/threads'
+import { HistoryHttpAgent } from './api/historyAgent'
 import { type UploadedFile } from './api/files'
 import { mergePendingThread, useThreads } from './hooks/useThreads'
 import { Sidebar } from './components/Sidebar'
@@ -15,109 +15,25 @@ interface ChatShellProps {
   agents: AgentInfo[]
   currentAgentId: string
   threadId: string
-  initialMessages: ThreadMessage[]
-  onFirstUserMessage: (content: string) => void
+  onFirstUserMessage: (threadId: string, content: string) => void
   onRunStateChange: (threadId: string, running: boolean) => void
-}
-
-interface AgentToolCall {
-  id: string
-  type: 'function'
-  function: {
-    name: string
-    arguments: string
-  }
-}
-
-interface AgentMessage {
-  id: string
-  role: 'user' | 'assistant' | 'tool' | 'system'
-  content?: string
-  name?: string
-  toolCallId?: string
-  toolCalls?: AgentToolCall[]
-}
-
-interface ThreadToolCall {
-  id?: string
-  function?: {
-    name?: string
-    arguments?: string | Record<string, unknown>
-  }
-}
-
-function toAgentMessage(m: ThreadMessage): AgentMessage | null {
-  // 前端聊天界面只需要展示 user/assistant/tool 三类消息
-  if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'tool') {
-    return null
-  }
-
-  const base: AgentMessage = {
-    id: m.message_id,
-    role: m.role,
-    content: m.content ?? undefined,
-    name: m.name ?? undefined,
-  }
-
-  if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
-    base.toolCalls = (m.tool_calls as ThreadToolCall[]).map((tc) => {
-      const fn = tc.function ?? {}
-      const args = fn.arguments ?? {}
-      return {
-        id: String(tc.id ?? crypto.randomUUID()),
-        type: 'function' as const,
-        function: {
-          name: String(fn.name ?? ''),
-          arguments: typeof args === 'string' ? args : JSON.stringify(args),
-        },
-      }
-    })
-  }
-
-  if (m.role === 'tool') {
-    base.toolCallId = m.tool_call_id ?? m.message_id
-  }
-
-  return base
 }
 
 interface ChatInnerProps {
   agentId: string
   threadId: string
-  initialMessages: ThreadMessage[]
-  onFirstUserMessage: (content: string) => void
+  onFirstUserMessage: (threadId: string, content: string) => void
   onRunStateChange: (threadId: string, running: boolean) => void
 }
 
-function ChatInner({ agentId, threadId, initialMessages, onFirstUserMessage, onRunStateChange }: ChatInnerProps) {
+function ChatInner({ agentId, threadId, onFirstUserMessage, onRunStateChange }: ChatInnerProps) {
   useGenerativeUITool()
   const { agent, isReady } = useAgent({ agentId })
   const dispatch = useGenerativeUIAction(agentId)
-  const hasInjectedRef = useRef(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const pendingFilesRef = useRef<UploadedFile[]>([])
 
-  const injectMessages = useCallback(() => {
-    if (!isReady) return
-    const historyMessages = initialMessages
-      .map(toAgentMessage)
-      .filter((m): m is AgentMessage => m !== null)
-    const fileMessages: AgentMessage[] =
-      uploadedFiles.length === 0
-        ? []
-        : [
-            {
-              id: `files-${uploadedFiles.map((f) => f.artifact_id).join('-')}`,
-              role: 'user',
-              content: `已上传以下文件，可用于后续抽取分析：\n${uploadedFiles.map((file, index) => `${index + 1}. ${file.original_name}（artifact_id: ${file.artifact_id}）`).join('\n')}`,
-            },
-          ]
-    agent.setMessages(
-      [...historyMessages, ...fileMessages] as Parameters<typeof agent.setMessages>[0],
-    )
-    hasInjectedRef.current = true
-  }, [isReady, initialMessages, uploadedFiles, agent])
-
+  // agent 未 ready 时上传的文件先入暂存队列，ready 后落盘到状态
   useEffect(() => {
     if (!isReady) return
     if (pendingFilesRef.current.length > 0) {
@@ -126,31 +42,49 @@ function ChatInner({ agentId, threadId, initialMessages, onFirstUserMessage, onR
     }
   }, [isReady])
 
+  // 文件上传后向 agent 追加一条合成用户消息（携带 artifact_id 供工具抽取）。
+  // 若 connectAgent 的历史回放清空了本地消息（消息未随 run 落库），这里靠
+  // “消息列表中不存在同 id 条目”的判断重新追加，无需额外防御机制。
+  // 注意：deps 用 agent.messages.length 而非 agent.messages——
+  // ag-ui 的 addMessage 是原地 push，数组引用不变，length 才能触发 effect
   useEffect(() => {
-    if (!isReady || (initialMessages.length === 0 && uploadedFiles.length === 0)) return
-    injectMessages()
-  }, [isReady, initialMessages, uploadedFiles, injectMessages])
+    if (!isReady || uploadedFiles.length === 0) return
+    const key = uploadedFiles.map((f) => f.artifact_id).join('-')
+    const messageId = `files-${key}`
+    if (agent.messages.some((m) => m.id === messageId)) return
+    agent.addMessage({
+      id: messageId,
+      role: 'user',
+      content: `已上传以下文件，可用于后续抽取分析：\n${uploadedFiles.map((file, index) => `${index + 1}. ${file.original_name}（artifact_id: ${file.artifact_id}）`).join('\n')}`,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReady, uploadedFiles, agent, agent.messages.length])
 
+  // 首条用户消息出现时通知外层（用于更新侧栏占位条目标题）。
+  // 历史回放产生的用户消息不会误触发：App 层会校验 threadId 与占位状态。
+  const firstMessageNotifiedRef = useRef(false)
   useEffect(() => {
-    if (!isReady || initialMessages.length === 0) return
-    if (hasInjectedRef.current && agent.messages.length === 0) {
-      injectMessages()
+    if (!isReady || firstMessageNotifiedRef.current) return
+    const firstUser = agent.messages.find(
+      (m) => m.role === 'user' && typeof m.content === 'string' && !m.id.startsWith('files-'),
+    )
+    if (firstUser && typeof firstUser.content === 'string' && firstUser.content.length > 0) {
+      firstMessageNotifiedRef.current = true
+      onFirstUserMessage(threadId, firstUser.content)
     }
-  }, [agent.messages.length, isReady, initialMessages, uploadedFiles, injectMessages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.messages.length, isReady, threadId, onFirstUserMessage])
 
-  // 在 agent ready 时注入历史消息
+  // 订阅 isRunning 边沿，run 开始/结束时通知外层（驱动运行中指示与列表 refetch）
+  const prevRunningRef = useRef(false)
   useEffect(() => {
-    if (!isReady || initialMessages.length === 0) return
-    injectMessages()
-  }, [isReady, initialMessages, injectMessages])
-
-  // 防御性重注：若外部（如 CopilotChat connectAgent）将消息清空到 0，则重新注入
-  useEffect(() => {
-    if (!isReady || initialMessages.length === 0) return
-    if (hasInjectedRef.current && agent.messages.length === 0) {
-      injectMessages()
+    if (!isReady) return
+    const running = Boolean(agent.isRunning)
+    if (running !== prevRunningRef.current) {
+      prevRunningRef.current = running
+      onRunStateChange(threadId, running)
     }
-  }, [agent.messages.length, isReady, initialMessages, injectMessages])
+  }, [agent.isRunning, isReady, threadId, onRunStateChange])
 
   const handleFileUploaded = useCallback((file: UploadedFile) => {
     if (isReady && agent) {
@@ -165,30 +99,6 @@ function ChatInner({ agentId, threadId, initialMessages, onFirstUserMessage, onR
   }, [])
 
   const [uploadError, setUploadError] = useState<string | null>(null)
-
-  // 首条用户消息出现时通知外层（用于更新侧栏占位条目标题），仅对全新会话生效
-  const firstMessageNotifiedRef = useRef(false)
-  useEffect(() => {
-    if (!isReady || initialMessages.length > 0 || firstMessageNotifiedRef.current) return
-    const firstUser = agent.messages.find(
-      (m) => m.role === 'user' && typeof m.content === 'string' && !m.id.startsWith('files-'),
-    )
-    if (firstUser && typeof firstUser.content === 'string' && firstUser.content.length > 0) {
-      firstMessageNotifiedRef.current = true
-      onFirstUserMessage(firstUser.content)
-    }
-  }, [agent.messages, isReady, initialMessages, onFirstUserMessage])
-
-  // 订阅 isRunning 边沿，run 开始/结束时通知外层（驱动运行中指示与列表 refetch）
-  const prevRunningRef = useRef(false)
-  useEffect(() => {
-    if (!isReady) return
-    const running = Boolean(agent.isRunning)
-    if (running !== prevRunningRef.current) {
-      prevRunningRef.current = running
-      onRunStateChange(threadId, running)
-    }
-  }, [agent.isRunning, isReady, threadId, onRunStateChange])
 
   const handleDropzoneError = useCallback((message: string) => {
     setUploadError(message)
@@ -240,14 +150,16 @@ function ChatInner({ agentId, threadId, initialMessages, onFirstUserMessage, onR
   )
 }
 
-function ChatShell({ agents, currentAgentId, threadId, initialMessages, onFirstUserMessage, onRunStateChange }: ChatShellProps) {
+function ChatShell({ agents, currentAgentId, threadId, onFirstUserMessage, onRunStateChange }: ChatShellProps) {
   // 把所有已注册 Agent 都交给 CopilotKit，否则切换 Agent 时 useAgent
   // 内部 known agents 只有当前一个，导致报错。
+  // HistoryHttpAgent 在 threadId 切换时从后端回放历史消息；
+  // 显式传入 agentId 让 CopilotKitCore 的 restore 跟踪键稳定。
   const agentMap = useMemo(() => {
-    const map: Record<string, HttpAgent> = {}
+    const map: Record<string, HistoryHttpAgent> = {}
     for (const agent of agents) {
       const url = agents.length === 1 ? '/agent' : `/agent/${agent.name}`
-      map[agent.name] = new HttpAgent({ url, threadId })
+      map[agent.name] = new HistoryHttpAgent({ url, threadId, agentId: agent.name })
     }
     return map
   }, [agents, threadId])
@@ -257,7 +169,6 @@ function ChatShell({ agents, currentAgentId, threadId, initialMessages, onFirstU
       <ChatInner
         agentId={currentAgentId}
         threadId={threadId}
-        initialMessages={initialMessages}
         onFirstUserMessage={onFirstUserMessage}
         onRunStateChange={onRunStateChange}
       />
@@ -267,7 +178,6 @@ function ChatShell({ agents, currentAgentId, threadId, initialMessages, onFirstU
 
 export default function App() {
   const [threadId, setThreadId] = useState(() => `thread-${crypto.randomUUID()}`)
-  const [initialMessages, setInitialMessages] = useState<ThreadMessage[]>([])
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [agentError, setAgentError] = useState<string | null>(null)
@@ -301,10 +211,13 @@ export default function App() {
       })
   }, [agentId])
 
-  // 首条用户消息：占位条目标题本地截取前 20 字，立即生效
-  const handleFirstUserMessage = useCallback((content: string) => {
+  // 首条用户消息：占位条目标题本地截取前 20 字，立即生效。
+  // 历史回放的旧消息不会命中：占位条目只可能属于当前全新会话的 threadId。
+  const handleFirstUserMessage = useCallback((msgThreadId: string, content: string) => {
     setPendingThread((p) =>
-      p && p.title === '新会话' ? { ...p, title: content.slice(0, 20) || '新会话' } : p,
+      p && p.thread_id === msgThreadId && p.title === '新会话'
+        ? { ...p, title: content.slice(0, 20) || '新会话' }
+        : p,
     )
   }, [])
 
@@ -332,7 +245,7 @@ export default function App() {
 
   if (agentError) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-cream-50 p-4">
+      <div className="flex h-screen w-screen overflow-hidden bg-cream-50 p-4">
         <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-card">
           <h1 className="text-lg font-semibold text-red-600">加载失败</h1>
           <p className="mt-2 text-sm text-ink-muted">{agentError}</p>
@@ -353,7 +266,6 @@ export default function App() {
     const id = `thread-${crypto.randomUUID()}`
     const now = new Date().toISOString()
     setThreadId(id)
-    setInitialMessages([])
     setPendingThread({
       thread_id: id,
       agent_id: effectiveAgentId,
@@ -368,28 +280,20 @@ export default function App() {
     if (nextAgentId === currentAgentId) return
     setAgentId(nextAgentId)
     setThreadId(`thread-${crypto.randomUUID()}`)
-    setInitialMessages([])
     // 切换 Agent 后清除占位条目，避免跨 Agent 泄漏
     setPendingThread(null)
   }
 
-  const handleSelectThread = async (selectedThreadId: string, selectedAgentId: string) => {
+  const handleSelectThread = (selectedThreadId: string, selectedAgentId: string) => {
     if (selectedThreadId === threadId) return
     // 空会话占位（从未发消息）切走后不留痕
     if (pendingThread && pendingThread.title === '新会话') setPendingThread(null)
-    try {
-      const data = await getThreadMessages(selectedThreadId)
-      if (selectedAgentId !== currentAgentId && agents.some((a) => a.name === selectedAgentId)) {
-        setAgentId(selectedAgentId)
-      }
-      setThreadId(selectedThreadId)
-      setInitialMessages(data.messages ?? [])
-    } catch (err) {
-      setAgentError(err instanceof Error ? err.message : String(err))
+    if (selectedAgentId !== currentAgentId && agents.some((a) => a.name === selectedAgentId)) {
+      setAgentId(selectedAgentId)
     }
+    // 历史消息由 HistoryHttpAgent.connectAgent 在新 threadId 挂载时回放，无需在此拉取
+    setThreadId(selectedThreadId)
   }
-
-  // 首条用户消息与 run 状态回调定义于上方（hooks 需位于 early return 之前）
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cream-50">
@@ -410,7 +314,6 @@ export default function App() {
         agents={agents}
         currentAgentId={effectiveAgentId}
         threadId={threadId}
-        initialMessages={initialMessages}
         onFirstUserMessage={handleFirstUserMessage}
         onRunStateChange={handleRunStateChange}
       />

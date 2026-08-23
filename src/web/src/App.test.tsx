@@ -173,7 +173,7 @@ describe('App', () => {
     await waitFor(() => expect(latestHttpAgentCall.threadId).not.toBe(firstThreadId))
   })
 
-  it('点击历史会话后更新 threadId 并注入历史消息', async () => {
+  it('点击历史会话后更新 threadId（历史消息由 HistoryHttpAgent.connectAgent 回放）', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -181,12 +181,9 @@ describe('App', () => {
     const historyThread = await screen.findByRole('button', { name: '历史会话' })
     await user.click(historyThread)
 
+    // App 层只负责切换 threadId；消息回放发生在 HistoryHttpAgent.connectAgent，
+    // 其灌入逻辑由 src/api/historyAgent.test.ts 覆盖
     await waitFor(() => expect(latestHttpAgentCall.threadId).toBe('t-history'))
-    await waitFor(() =>
-      expect(mockSetMessages).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ id: 'm1', role: 'user', content: 'hello' }),
-      ])),
-    )
   })
 
   it('将当前 threadId 显式传给 CopilotChat，避免其自动生成随机线程 id', async () => {
