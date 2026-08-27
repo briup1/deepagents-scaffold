@@ -20,3 +20,6 @@ logs/
 src/web/node_modules/
 src/web/dist
 .playwright-mcp/*
+
+# Pi agent local runtime state
+.pi-glla/
