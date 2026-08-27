@@ -20,7 +20,7 @@
 | 命令 | 说明 |
 |------|------|
 | `uv pip install -e ".[dev]"` 或 `uv sync` | 安装后端开发依赖 |
-| `bash scripts/dev.sh` | 同时启动后端（8000）与前端（3000） |
+| `bash scripts/dev.sh` | 同时启动后端（8000）与前端（3002） |
 | `bash scripts/stop_dev.sh` | 停止后端与前端开发服务 |
 | `bash scripts/verify_dev.sh` | 使用 `config.verify.yaml` + mock 模型启动验证模式 |
 | `pytest` | 运行全部后端测试 |
@@ -60,7 +60,7 @@ src/scaffold/
 ## 5. 前端架构
 
 - **技术栈**：React 18.3 + TypeScript 5.6 + Vite 5.4 + Tailwind CSS 3.4 + CopilotKit v2
-- **入口**：`src/web/src/main.tsx`，开发服务器端口 3000，`/api` 与 `/agent` 代理到 `localhost:8000`
+- **入口**：`src/web/src/main.tsx`，开发服务器端口 3002，`/api` 与 `/agent` 代理到 `localhost:8000`
 - **API 客户端**：`src/web/src/api/copilotkit.ts`（Agent 列表）与 `src/web/src/api/threads.ts`（线程/历史消息）
 - **聊天框架**：`@copilotkit/react-core/v2` 的 `CopilotKit` + `CopilotChat`，通过 `@ag-ui/client` 的 `HttpAgent` 直连后端 `/agent/{agentId}` SSE 端点
 - **Generative UI**：`src/web/src/catalog/` 提供可扩展的组件目录（MarkdownCard、DataTable、Form、ButtonGroup、MetricCard、Chart），Agent 通过 `render_ui` 工具渲染组件
@@ -98,7 +98,7 @@ src/scaffold/
 7. 独立验证：
    - 后端健康检查：`curl -s http://localhost:8000/health`
    - API 文档：`http://localhost:8000/docs`
-   - 前端页面：`http://localhost:3000`
+   - 前端页面：`http://localhost:3002`
    - ag-ui 流式接口测试（默认 Agent 别名）：
 
      ```bash

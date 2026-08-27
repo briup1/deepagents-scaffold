@@ -11,7 +11,7 @@ import { chromium } from 'playwright-core'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const FRONTEND = 'http://localhost:3000'
+const FRONTEND = 'http://localhost:3002'
 const XLSX = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'simple_quote.xlsx')
 const SHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'superpowers', 'evidence')
 

@@ -29,7 +29,7 @@ stop_port() {
 }
 
 stop_port 8000
-stop_port 3000
+stop_port 3002
 
 # 兜底：停止后端 uvicorn（命令特征足够具体，不会误伤调用方 shell）
 pkill -f "uvicorn scaffold.api.app:app" 2>/dev/null || true

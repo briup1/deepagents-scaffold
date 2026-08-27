@@ -38,7 +38,7 @@ chmod +x scripts/dev.sh
 ```
 
 打开：
-- **前端**：http://localhost:3000
+- **前端**：http://localhost:3002
 - **API 文档**：http://localhost:8000/docs
 - **健康检查**：http://localhost:8000/health
 
