@@ -116,7 +116,7 @@ function ChatInner({ agentId, threadId, onFirstUserMessage, onRunStateChange }: 
         onFileUploaded={handleFileUploaded}
         onError={handleDropzoneError}
       >
-        <main className="flex h-full flex-1 flex-col overflow-hidden">
+        <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           {uploadError && (
             <div className="absolute right-4 top-4 z-50 rounded-lg bg-red-100 px-4 py-2 text-sm text-red-700 shadow">
               <button
@@ -131,20 +131,22 @@ function ChatInner({ agentId, threadId, onFirstUserMessage, onRunStateChange }: 
             </div>
           )}
           {uploadedFiles.length > 0 && (
-            <div className="border-b border-cream-200 bg-white px-4 py-3">
+            <div className="shrink-0 border-b border-cream-200 bg-white px-4 py-3">
               <FileAttachmentList files={uploadedFiles} onRemove={handleRemoveFile} />
             </div>
           )}
-          <CopilotChat
-            agentId={agentId}
-            threadId={threadId}
-            className="h-full"
-            labels={{
-              chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
-              welcomeMessageText: '有什么可以帮你的？',
-              modalHeaderTitle: 'DeepAgents Chat',
-            }}
-          />
+          <div className="min-h-0 flex-1">
+            <CopilotChat
+              agentId={agentId}
+              threadId={threadId}
+              className="h-full"
+              labels={{
+                chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
+                welcomeMessageText: '有什么可以帮你的？',
+                modalHeaderTitle: 'DeepAgents Chat',
+              }}
+            />
+          </div>
         </main>
       </FileUploadDropzone>
     </GenerativeUIContext.Provider>
