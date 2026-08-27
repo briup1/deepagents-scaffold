@@ -1,5 +1,6 @@
 import { useAgent } from '@copilotkit/react-core/v2'
 import { useCallback } from 'react'
+import { randomUUID } from '../lib/uuid'
 
 export function useGenerativeUIAction(agentId: string) {
   const { agent } = useAgent({ agentId })
@@ -11,7 +12,7 @@ export function useGenerativeUIAction(agentId: string) {
         return
       }
       agent.addMessage({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         role: 'user',
         content: JSON.stringify(action),
       })

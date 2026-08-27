@@ -6,6 +6,7 @@ import {
   type RunAgentResult,
 } from '@ag-ui/client'
 import { getThreadMessages, type ThreadMessage } from './threads'
+import { randomUUID } from '../lib/uuid'
 
 interface ThreadToolCall {
   id?: string
@@ -38,7 +39,7 @@ export function toAgentMessage(m: ThreadMessage): Message | null {
         const fn = tc.function ?? {}
         const args = fn.arguments ?? {}
         return {
-          id: String(tc.id ?? crypto.randomUUID()),
+          id: String(tc.id ?? randomUUID()),
           type: 'function' as const,
           function: {
             name: String(fn.name ?? ''),

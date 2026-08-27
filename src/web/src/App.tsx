@@ -10,6 +10,7 @@ import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadD
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
 import { useGenerativeUITool } from './hooks/useGenerativeUITool'
 import { useGenerativeUIAction } from './hooks/useGenerativeUIAction'
+import { randomUUID } from './lib/uuid'
 
 interface ChatShellProps {
   agents: AgentInfo[]
@@ -177,7 +178,7 @@ function ChatShell({ agents, currentAgentId, threadId, onFirstUserMessage, onRun
 }
 
 export default function App() {
-  const [threadId, setThreadId] = useState(() => `thread-${crypto.randomUUID()}`)
+  const [threadId, setThreadId] = useState(() => `thread-${randomUUID()}`)
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [agentError, setAgentError] = useState<string | null>(null)
@@ -263,7 +264,7 @@ export default function App() {
     }
     // 旧占位已发消息但尚未收敛时，先刷新一次列表避免其从侧栏丢失
     if (pendingThread) void refetch()
-    const id = `thread-${crypto.randomUUID()}`
+    const id = `thread-${randomUUID()}`
     const now = new Date().toISOString()
     setThreadId(id)
     setPendingThread({
@@ -279,7 +280,7 @@ export default function App() {
   const handleAgentChange = (nextAgentId: string) => {
     if (nextAgentId === currentAgentId) return
     setAgentId(nextAgentId)
-    setThreadId(`thread-${crypto.randomUUID()}`)
+    setThreadId(`thread-${randomUUID()}`)
     // 切换 Agent 后清除占位条目，避免跨 Agent 泄漏
     setPendingThread(null)
   }
