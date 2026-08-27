@@ -32,6 +32,11 @@ export async function getThreadMessages(threadId: string): Promise<{ thread_id: 
   return res.json()
 }
 
+export async function deleteThread(threadId: string): Promise<void> {
+  const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
 export async function createThread(agentId?: string): Promise<{ thread_id: string }> {
   const res = await fetch('/api/threads/', {
     method: 'POST',

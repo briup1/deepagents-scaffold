@@ -6,9 +6,10 @@ interface ThreadListProps {
   /** 正在运行 Agent 的会话 id，对应条目显示运行中指示 */
   runningThreadId?: string | null
   onSelectThread: (threadId: string, agentId: string) => void
+  onDeleteThread?: (threadId: string) => void
 }
 
-export function ThreadList({ threads, currentThreadId, runningThreadId, onSelectThread }: ThreadListProps) {
+export function ThreadList({ threads, currentThreadId, runningThreadId, onSelectThread, onDeleteThread }: ThreadListProps) {
   if (threads.length === 0) {
     return (
       <div className="px-3 py-4 text-xs text-ink-subtle">
@@ -24,13 +25,13 @@ export function ThreadList({ threads, currentThreadId, runningThreadId, onSelect
         const displayTitle = thread.title || thread.last_message_preview || '新会话'
         const showPreview = thread.last_message_preview && displayTitle !== thread.last_message_preview
         return (
-          <li key={thread.thread_id} role="option" aria-selected={isActive}>
+          <li key={thread.thread_id} role="option" aria-selected={isActive} className="group relative">
             <button
               type="button"
               aria-label={displayTitle}
               onClick={() => onSelectThread(thread.thread_id, thread.agent_id)}
               className={`
-                w-full rounded-lg px-3 py-2 text-left text-sm transition-colors
+                w-full rounded-lg px-3 py-2 pr-9 text-left text-sm transition-colors
                 ${isActive ? 'bg-cream-200 text-ink' : 'text-ink-muted hover:bg-cream-100'}
               `}
             >
@@ -50,6 +51,17 @@ export function ThreadList({ threads, currentThreadId, runningThreadId, onSelect
                 </div>
               )}
             </button>
+            {onDeleteThread && (
+              <button
+                type="button"
+                aria-label={`删除会话：${displayTitle}`}
+                title="删除会话"
+                onClick={() => window.confirm(`确定删除“${displayTitle}”吗？此操作不可撤销。`) && onDeleteThread(thread.thread_id)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-subtle opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+              >
+                ×
+              </button>
+            )}
           </li>
         )
       })}

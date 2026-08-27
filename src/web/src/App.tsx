@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { listAgents, type AgentInfo } from './api/copilotkit'
-import { type ThreadSummary } from './api/threads'
+import { deleteThread, type ThreadSummary } from './api/threads'
 import { HistoryHttpAgent } from './api/historyAgent'
 import { type UploadedFile } from './api/files'
 import { mergePendingThread, useThreads } from './hooks/useThreads'
@@ -296,6 +296,20 @@ export default function App() {
     setThreadId(selectedThreadId)
   }
 
+  const handleDeleteThread = async (deletedThreadId: string) => {
+    try {
+      if (pendingThread?.thread_id === deletedThreadId) {
+        setPendingThread(null)
+      } else {
+        await deleteThread(deletedThreadId)
+        await refetch()
+      }
+      if (deletedThreadId === threadId) setThreadId(`thread-${randomUUID()}`)
+    } catch (err) {
+      window.alert(`删除会话失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cream-50">
       <Sidebar
@@ -309,6 +323,7 @@ export default function App() {
         onAgentChange={handleAgentChange}
         onNewChat={handleNewChat}
         onSelectThread={handleSelectThread}
+        onDeleteThread={handleDeleteThread}
       />
       <ChatShell
         key={threadId}

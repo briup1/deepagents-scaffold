@@ -38,6 +38,25 @@ describe('ThreadList', () => {
     expect(onSelect).toHaveBeenCalledWith('t2', 'default')
   })
 
+  it('点击删除按钮时只触发删除，不选中会话', async () => {
+    const onSelect = vi.fn()
+    const onDelete = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <ThreadList
+        threads={threads}
+        currentThreadId="t1"
+        onSelectThread={onSelect}
+        onDeleteThread={onDelete}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '删除会话：测试会话' }))
+
+    expect(onDelete).toHaveBeenCalledWith('t1')
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('为 runningThreadId 对应的条目显示运行中指示', () => {
     render(
       <ThreadList threads={threads} currentThreadId="t1" runningThreadId="t2" onSelectThread={(_id, _agent) => {}} />,

@@ -186,6 +186,35 @@ describe('App', () => {
     await waitFor(() => expect(latestHttpAgentCall.threadId).toBe('t-history'))
   })
 
+  it('删除当前历史会话后调用删除接口、移除条目并创建新会话', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: '历史会话' }))
+    await waitFor(() => expect(latestHttpAgentCall.threadId).toBe('t-history'))
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/threads/t-history' && init?.method === 'DELETE') {
+        serverThreads = []
+        return { ok: true, json: async () => ({ thread_id: 't-history', deleted: true }) }
+      }
+      if (url === '/api/agents/') {
+        return { ok: true, json: async () => ({ agents: [{ name: 'default' }] }) }
+      }
+      if (url.startsWith('/api/threads/')) {
+        return { ok: true, json: async () => ({ threads: serverThreads, total: serverThreads.length }) }
+      }
+      return { ok: false, status: 404 }
+    })
+
+    await user.click(screen.getByRole('button', { name: '删除会话：历史会话' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: '历史会话' })).not.toBeInTheDocument())
+    expect(mockFetch).toHaveBeenCalledWith('/api/threads/t-history', { method: 'DELETE' })
+    expect(latestHttpAgentCall.threadId).toMatch(/^thread-/)
+    expect(latestHttpAgentCall.threadId).not.toBe('t-history')
+  })
+
   it('将当前 threadId 显式传给 CopilotChat，避免其自动生成随机线程 id', async () => {
     render(<App />)
 
@@ -321,7 +350,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: '新建会话' }))
     await screen.findByRole('button', { name: '新会话' })
 
-    await user.click(screen.getByRole('button', { name: /历史会话/ }))
+    await user.click(screen.getByRole('button', { name: '历史会话' }))
 
     await waitFor(() => expect(screen.queryByRole('button', { name: '新会话' })).not.toBeInTheDocument())
     const hasCreateCall = mockFetch.mock.calls.some(

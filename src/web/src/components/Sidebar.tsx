@@ -17,6 +17,7 @@ interface SidebarProps {
   onAgentChange: (agentId: string) => void
   onNewChat: () => void
   onSelectThread: (threadId: string, agentId: string) => void
+  onDeleteThread?: (threadId: string) => void
 }
 
 function SparkleIcon() {
@@ -49,6 +50,7 @@ export function Sidebar({
   onAgentChange,
   onNewChat,
   onSelectThread,
+  onDeleteThread,
 }: SidebarProps) {
   const threadDisplay = threadId.replace(/^thread-/, '').slice(0, 8)
 
@@ -90,6 +92,7 @@ export function Sidebar({
               currentThreadId={threadId}
               runningThreadId={runningThreadId}
               onSelectThread={onSelectThread}
+              onDeleteThread={onDeleteThread}
             />
           )}
         </div>

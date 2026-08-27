@@ -96,7 +96,7 @@ describe('Sidebar', () => {
   it('calls onSelectThread when a history thread is clicked', async () => {
     const { onSelectThread } = renderSidebar()
 
-    await userEvent.click(screen.getByRole('button', { name: /测试会话/ }))
+    await userEvent.click(screen.getByRole('button', { name: '测试会话' }))
     expect(onSelectThread).toHaveBeenCalledWith('t1', 'default')
   })
 })
