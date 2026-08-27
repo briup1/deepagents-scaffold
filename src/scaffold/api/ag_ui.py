@@ -21,13 +21,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-
 from ag_ui.core import RunErrorEvent
 from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 
 from scaffold.api.deps import get_history_repo
 from scaffold.api.stream_listeners import (
@@ -39,10 +38,10 @@ from scaffold.api.stream_listeners import (
     _ctx_str,
     _stream_extra,
 )
-from scaffold.core.agents import get_agent, list_agents
-from scaffold.infra.context import request_id_ctx, trace_id_ctx
 from scaffold.infra.config.app_config import get_app_config
+from scaffold.infra.context import request_id_ctx, trace_id_ctx
 from scaffold.infra.history import HistoryRepository, ThreadMessage
+from scaffold.runtime.agents import get_agent, list_agents
 
 logger = logging.getLogger(__name__)
 

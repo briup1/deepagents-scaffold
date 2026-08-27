@@ -10,8 +10,6 @@ from typing import Any
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
-
 from ag_ui.core import (
     RunFinishedEvent,
     RunStartedEvent,
@@ -22,6 +20,8 @@ from ag_ui.core import (
 from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
+from fastapi.testclient import TestClient
+
 from scaffold.api.ag_ui import _build_ag_ui_agent, _eager_event_generator
 from scaffold.api.stream_listeners import AgUILogListener
 from scaffold.infra.config.app_config import get_app_config

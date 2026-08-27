@@ -12,16 +12,16 @@ import logging
 from typing import Any
 
 from deepagents import (
-    create_deep_agent as _create_deep_agent,
     DeepAgentState,
 )
-
+from deepagents import (
+    create_deep_agent as _create_deep_agent,
+)
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from scaffold.core.skills import get_skill_names
 from scaffold.core.subagents import build_subagents
-from scaffold.core.tools import get_available_tools
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.config.backend_config import BackendConfig
 from scaffold.infra.config.model_config import ModelConfig
@@ -29,6 +29,7 @@ from scaffold.infra.config.profile_config import HarnessProfileConfig
 from scaffold.infra.middleware.factory import build_middleware_chain
 from scaffold.infra.models.factory import create_chat_model
 from scaffold.infra.prompts.assembler import PromptAssembler
+from scaffold.core.tools import get_available_tools
 
 logger = logging.getLogger(__name__)
 
@@ -284,8 +285,8 @@ def _build_tracing_callbacks(app_config: AppConfig) -> list[Any]:
     for provider in app_config.tracing.providers:
         if provider == "langsmith":
             try:
-                from langsmith import Client as LangSmithClient
                 from langchain.callbacks.tracers import LangChainTracer
+                from langsmith import Client as LangSmithClient
 
                 callbacks.append(LangChainTracer(client=LangSmithClient()))
                 logger.debug("Enabled LangSmith tracing")

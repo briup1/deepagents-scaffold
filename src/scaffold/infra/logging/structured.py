@@ -8,7 +8,6 @@ import traceback
 from datetime import datetime, timezone
 from typing import Any
 
-
 from scaffold.infra.context import get_request_id
 
 

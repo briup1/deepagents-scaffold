@@ -32,8 +32,8 @@ class SlackChannel(Channel):
     async def start(self) -> None:
         """启动 Slack Socket Mode 连接。"""
         try:
-            from slack_bolt.async_app import AsyncApp
             from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+            from slack_bolt.async_app import AsyncApp
         except ImportError:
             logger.error("slack-bolt not installed. Install channels: uv pip install -e '.[channels]'")
             return

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-
 from scaffold.infra.channels.registry import get_channel_registry
-from scaffold.infra.channels.router import ChannelRouter
+from scaffold.runtime.channel_router import ChannelRouter
 
 
 class TestChannelRegistry:

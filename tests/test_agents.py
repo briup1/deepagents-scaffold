@@ -1,15 +1,14 @@
-"""Tests for scaffold.core.agents agent factory and registry."""
+"""Tests for scaffold.runtime.agents agent factory and registry."""
 
 from __future__ import annotations
 
 from typing import Any
-
 from unittest.mock import patch
 
 import pytest
 
-from scaffold.core.agents import _agent_registry, create_agent, get_agent, list_agents
 from scaffold.infra.config.app_config import get_app_config
+from scaffold.runtime.agents import _agent_registry, create_agent, get_agent, list_agents
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +43,7 @@ class TestCreateAgent:
             _agent_registry["data_extractor"] = mock_agent
             return mock_agent
 
-        with patch("scaffold.core.agents._create_deep_agent", side_effect=_fake_create_deep_agent):
+        with patch("scaffold.runtime.agents._create_deep_agent", side_effect=_fake_create_deep_agent):
             create_agent(name="data_extractor", harness_profile="data_extractor")
 
         assert "data_extractor" in _agent_registry

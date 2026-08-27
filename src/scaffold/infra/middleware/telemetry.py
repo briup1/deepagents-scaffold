@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
@@ -44,7 +45,7 @@ def _is_overridden(cls: type[Any], method_name: str) -> bool:
     return False
 
 
-def _make_lifecycle_method(hook: str, is_async: bool):
+def _make_lifecycle_method(hook: str, is_async: bool) -> Callable[..., Any]:
     """为生命周期 hook 生成绑定到动态子类的方法。"""
     if is_async:
 
@@ -59,7 +60,7 @@ def _make_lifecycle_method(hook: str, is_async: bool):
     return method
 
 
-def _make_wrap_method(hook: str, is_async: bool):
+def _make_wrap_method(hook: str, is_async: bool) -> Callable[..., Any]:
     """为回调式 hook 生成绑定到动态子类的方法。"""
     if is_async:
 

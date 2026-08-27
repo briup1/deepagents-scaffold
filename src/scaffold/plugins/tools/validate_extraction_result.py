@@ -13,7 +13,7 @@ from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 logger = logging.getLogger(__name__)
 
 
-async def validate_extraction_result(task_id: str) -> dict[str, Any]:
+async def validate_extraction_result(task_id: str, **kwargs: Any) -> dict[str, Any]:
     """验证抽取结果 CSV 是否满足 requirements。
 
     Args:

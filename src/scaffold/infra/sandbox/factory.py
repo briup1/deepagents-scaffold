@@ -50,8 +50,6 @@ def get_sandbox(app_config: AppConfig | None = None) -> Sandbox:
 def create_sandbox(
     provider: str,
     *,
-    timeout_seconds: int = 60,
-    memory_limit_mb: int = 512,
     allowed_imports: list[str] | None = None,
     **kwargs: Any,
 ) -> Sandbox:

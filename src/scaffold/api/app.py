@@ -3,26 +3,25 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-
-import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from scaffold.api.ag_ui import register_ag_ui_endpoints
 from scaffold.api.deps import scaffold_runtime
 from scaffold.api.middleware.auth import AuthMiddleware
 from scaffold.api.middleware.error_handler import ErrorHandlerMiddleware
-from scaffold.api.middleware.request_id import RequestIdMiddleware
 from scaffold.api.middleware.rate_limit import RateLimitMiddleware
-from scaffold.api.ag_ui import register_ag_ui_endpoints
+from scaffold.api.middleware.request_id import RequestIdMiddleware
 from scaffold.api.routers import agents, files, health, state, threads, tools
-from scaffold.core.agents import create_agent
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.infra.logging.config import configure_logging
 from scaffold.infra.logging.middleware import LoggingMiddleware
 from scaffold.infra.proxy import configure_proxy_environment
+from scaffold.runtime.agents import create_agent
 
 logger = logging.getLogger(__name__)
 

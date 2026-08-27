@@ -9,12 +9,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from scaffold.core.tools import get_available_tools
-from scaffold.infra.config.app_config import AppConfig
+from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.config.subagent_config import SubAgentDefinitionConfig
 from scaffold.infra.middleware.registry import get_middleware_registry
 from scaffold.infra.models.factory import create_chat_model
-from scaffold.infra.config.app_config import get_app_config
+from scaffold.core.tools import get_available_tools
 
 logger = logging.getLogger(__name__)
 

@@ -180,7 +180,7 @@ tools:
 ## 添加自定义 Agent
 
 ```python
-from scaffold.core.agents import create_agent
+from scaffold.runtime.agents import create_agent
 
 agent = create_agent(
     name="researcher",

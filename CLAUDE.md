@@ -48,7 +48,7 @@ src/scaffold/
 ├── core/          # DeepAgents SDK 集成：Agent 工厂、工具、技能
 ├── infra/         # 基础设施：配置、模型、日志、通道、提示词、历史、中间件
 ├── plugins/       # 自定义工具与 SKILL.md
-└── runtime/       # 占位目录（原 StreamBridge/Worker 已移除）
+└── runtime/       # 运行时编排：Agent 工厂、注册表与通道路由
 ```
 
 - 分层依赖方向：`core → infra`、`api → infra`、`runtime → core + infra` 允许；反向与 `core ↔ api` 禁止

@@ -1,3 +1,5 @@
+import { fetchJson } from './request'
+
 export interface ThreadSummary {
   thread_id: string
   agent_id: string
@@ -21,15 +23,11 @@ export interface ThreadMessage {
 export async function listThreads(agentId?: string): Promise<{ threads: ThreadSummary[]; total: number }> {
   const params = new URLSearchParams()
   if (agentId) params.set('agent_id', agentId)
-  const res = await fetch(`/api/threads/?${params.toString()}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
+  return fetchJson(`/api/threads/?${params.toString()}`)
 }
 
 export async function getThreadMessages(threadId: string): Promise<{ thread_id: string; messages: ThreadMessage[] }> {
-  const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
+  return fetchJson(`/api/threads/${encodeURIComponent(threadId)}/messages`)
 }
 
 export async function deleteThread(threadId: string): Promise<void> {
@@ -38,11 +36,9 @@ export async function deleteThread(threadId: string): Promise<void> {
 }
 
 export async function createThread(agentId?: string): Promise<{ thread_id: string }> {
-  const res = await fetch('/api/threads/', {
+  return fetchJson('/api/threads/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ agent_id: agentId ?? 'default' }),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
 }

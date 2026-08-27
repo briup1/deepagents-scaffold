@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from scaffold.infra.config.app_config import AppConfig
 from scaffold.infra.config.backend_config import BackendConfig
 from scaffold.infra.config.middleware_config import MiddlewareChainConfig, MiddlewareConfig

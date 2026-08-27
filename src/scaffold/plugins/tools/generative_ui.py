@@ -6,11 +6,14 @@ Agent 通过调用 `render_ui` 告诉前端渲染哪个组件、传递什么 pro
 
 from __future__ import annotations
 
+from typing import Any
+
 
 async def render_ui(
     type: str,
     props: dict | None = None,
     surface_id: str | None = None,
+    **kwargs: Any,
 ) -> dict:
     """渲染前端组件。
 

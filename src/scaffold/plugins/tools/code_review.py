@@ -5,14 +5,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import asyncio
 import ast
+import asyncio
 import difflib
 import os
 import shutil
 import sys
+from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(os.environ.get("SCAFFOLD_PROJECT_ROOT") or Path(__file__).resolve().parents[4])
 
@@ -64,7 +64,7 @@ def _validate_write_path(path: Path) -> None:
             raise ValueError(f"禁止写入到 src/scaffold/{rel_parts[2]}/")
 
 
-async def read_file(relative_path: str, offset: int = 1, limit: int | None = None) -> str:
+async def read_file(relative_path: str, offset: int = 1, limit: int | None = None, **kwargs: Any) -> str:
     """读取文件内容，支持行偏移和行数限制。
 
     Args:
@@ -94,7 +94,7 @@ async def read_file(relative_path: str, offset: int = 1, limit: int | None = Non
     return "\n".join(f"{i + 1}: {line}" for i, line in enumerate(selected, start=start))
 
 
-async def list_files(relative_path: str = ".") -> str:
+async def list_files(relative_path: str = ".", **kwargs: Any) -> str:
     """列出目录中的文件和子目录。
 
     Args:
@@ -116,7 +116,7 @@ async def list_files(relative_path: str = ".") -> str:
     return await asyncio.to_thread(_list_entries)
 
 
-async def run_ruff(relative_path: str) -> str:
+async def run_ruff(relative_path: str, **kwargs: Any) -> str:
     """对目标运行 ruff check。
 
     Args:
@@ -145,7 +145,7 @@ async def run_ruff(relative_path: str) -> str:
     return f"退出码：{proc.returncode}\n\n{stdout.decode(errors='replace')}\n{stderr.decode(errors='replace')}".strip()
 
 
-async def run_pytest(relative_path: str) -> str:
+async def run_pytest(relative_path: str, **kwargs: Any) -> str:
     """对目标运行 pytest。
 
     Args:
@@ -174,7 +174,7 @@ async def run_pytest(relative_path: str) -> str:
     return f"退出码：{proc.returncode}\n\n{stdout.decode(errors='replace')}\n{stderr.decode(errors='replace')}".strip()
 
 
-async def explain_symbol(relative_path: str, symbol_name: str) -> str:
+async def explain_symbol(relative_path: str, symbol_name: str, **kwargs: Any) -> str:
     """解析 AST，解释函数或类定义。
 
     Args:
@@ -211,7 +211,7 @@ async def explain_symbol(relative_path: str, symbol_name: str) -> str:
     return f"未找到符号 `{symbol_name}`。"
 
 
-async def generate_patch(original_relative_path: str, modified_relative_path: str) -> str:
+async def generate_patch(original_relative_path: str, modified_relative_path: str, **kwargs: Any) -> str:
     """生成两个文件之间的统一 diff。
 
     Args:
@@ -250,7 +250,7 @@ async def generate_patch(original_relative_path: str, modified_relative_path: st
     return "\n".join(diff)
 
 
-async def write_file(relative_path: str, content: str, append: bool = False) -> str:
+async def write_file(relative_path: str, content: str, append: bool = False, **kwargs: Any) -> str:
     """写入或追加文件，自动备份并带安全限制。
 
     Args:

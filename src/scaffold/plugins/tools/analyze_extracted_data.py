@@ -198,6 +198,7 @@ async def analyze_extracted_data(
     comparison_extraction_id: str | None = None,
     thread_id: str | None = None,
     join_keys: list[str] | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """根据用户自然语言需求自动生成并执行 SQL 分析。
 

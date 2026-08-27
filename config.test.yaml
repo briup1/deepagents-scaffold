@@ -36,6 +36,8 @@ tools:
     use: scaffold.plugins.tools.code_review:generate_patch
   - name: write_file
     use: scaffold.plugins.tools.code_review:write_file
+  - name: render_ui
+    use: scaffold.plugins.tools.generative_ui:render_ui
   - name: preview_excel
     use: scaffold.plugins.tools.preview_excel:preview_excel
   - name: generate_extraction_code

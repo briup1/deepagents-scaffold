@@ -26,8 +26,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from langchain_core.messages import HumanMessage
 
-from scaffold.core.agents import create_agent
 from scaffold.infra.config.app_config import get_app_config
+from scaffold.runtime.agents import create_agent
 
 logging.basicConfig(
     level=logging.INFO,
