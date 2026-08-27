@@ -21,7 +21,7 @@ const dataTableSchema = z.object({
       label: z.string(),
     }),
   ),
-  rows: z.array(z.record(z.union([z.string(), z.number(), z.boolean()]))),
+  rows: z.array(z.record(z.union([z.string(), z.number(), z.boolean()]).nullable())),
 })
 
 const formFieldSchema = z.object({
