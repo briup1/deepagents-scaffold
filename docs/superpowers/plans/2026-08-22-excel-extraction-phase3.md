@@ -148,7 +148,7 @@ Phase 3 的「完成」需要**三层证据**，缺一不可：
 
 ### 6.2 L1：工具级 E2E（`tests/test_analysis_e2e.py`）
 
-固定数据：用 `simple_quote.xlsx`（仓库根目录已有：3 行报价，列 = 报价单号/起运港/目的港/船公司/柜型/海运费(USD)/有效期/航程(天)/备注）或测试内构造的确定性样例（参照 `tests/test_preview_excel.py` 的 `_make_excel_bytes`）。
+固定数据：测试内构造确定性 Excel 样例（参照 `tests/test_preview_excel.py` 的 `_make_excel_bytes`）。
 
 **场景 A：单文件 SQL 聚合查询**
 
@@ -222,7 +222,7 @@ uv run python scripts/verify_analysis.py
 前置：`bash scripts/verify_dev.sh`（mock 模型，无需真实 API Key）。
 
 验证内容（证明前端渲染链路就绪，可与 Phase 3 后端能力衔接）：
-1. 打开 `http://localhost:3000`，聊天框拖拽上传 `simple_quote.xlsx` → 出现文件卡片；
+1. 运行 `node scripts/ui_verify.mjs`，脚本会临时生成并上传 Excel 样例 → 出现文件卡片；
 2. 用 Playwright（项目已有 `.playwright-mcp` 基础设施）或手动检查 `src/web/src/catalog/index.tsx` 中 `data_table` / `chart` / `metric_card` / `download_button` 已注册且 schema 完整（`tests` 中 `createCatalog.test.tsx` / `Chart.test.tsx` 已覆盖渲染）；
 3. 可选：在 mock 模式下手动调 `render_ui` 信封（通过 API 层注入）确认组件能渲染——若做此步，把用例补进 `src/web` 前端测试。
 
