@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from scaffold.infra.extraction.workspace import ExtractionWorkspace
+from scaffold.infra.history.models import ExtractionTask
 
 
 @pytest.fixture
@@ -110,3 +111,106 @@ class TestExtractionWorkspace:
             assert ws.get_artifact is not None
             task = await ws.create_task(thread_id="t-001", upload_artifact_id="art-001")
             assert task.task_id.startswith("ext-")
+
+
+class _FakeTaskRepo:
+    """只记录 update 调用的假仓库，用于状态机矩阵测试（不碰 SQLite）。"""
+
+    def __init__(self) -> None:
+        self.saved: list[ExtractionTask] = []
+
+    async def update(self, task: ExtractionTask) -> bool:
+        self.saved.append(task)
+        return True
+
+
+ALL_STATUSES = ("goal_setting", "code_generated", "validating", "success", "failed")
+
+#: 三个工具实际使用的流转声明：(目标状态, 允许的前置状态, 动作标签)
+TOOL_TRANSITIONS = [
+    ("code_generated", ("goal_setting",), "生成脚本"),
+    ("validating", ("goal_setting", "code_generated"), "执行"),
+    ("success", ("validating", "success", "failed"), "验证"),
+    ("failed", ("validating", "success", "failed"), "验证"),
+]
+
+
+def _make_task(status: str) -> ExtractionTask:
+    return ExtractionTask(
+        task_id="ext-matrix",
+        thread_id="t-matrix",
+        upload_artifact_id="art-upload",
+        status=status,  # type: ignore[arg-type]
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+def _make_workspace() -> tuple[ExtractionWorkspace, _FakeTaskRepo]:
+    ws = ExtractionWorkspace(db_path=":memory:", artifacts_dir=Path("/tmp"))
+    repo = _FakeTaskRepo()
+    ws._task_repo = repo  # type: ignore[attr-defined]
+    return ws, repo
+
+
+class TestTaskStateMachine:
+    """五个状态 × 合法/非法流转的穷尽矩阵。"""
+
+    @pytest.mark.parametrize("status", ALL_STATUSES)
+    @pytest.mark.parametrize("to,allowed,action", TOOL_TRANSITIONS)
+    async def test_transition_matrix(self, status: str, to: str, allowed: tuple, action: str) -> None:
+        ws, repo = _make_workspace()
+        task = _make_task(status)
+        error = await ws.transition_task(task, to, allowed=allowed, action=action)  # type: ignore[arg-type]
+        if status in allowed:
+            assert error is None
+            assert task.status == to
+            assert repo.saved == [task], "合法流转应持久化"
+            assert task.updated_at != "2026-01-01T00:00:00+00:00", "合法流转应刷新时间戳"
+        else:
+            assert error is not None
+            assert error == {"error": f"任务 ext-matrix 当前状态为 {status}，无法{action}"}
+            assert task.status == status, "非法流转不得改变状态"
+            assert repo.saved == [], "非法流转不得持久化"
+
+    @pytest.mark.parametrize("status", ALL_STATUSES)
+    def test_check_task_transition_is_pure(self, status: str) -> None:
+        ws, repo = _make_workspace()
+        task = _make_task(status)
+        error = ws.check_task_transition(task, allowed=("goal_setting", "code_generated"), action="执行")
+        if status in ("goal_setting", "code_generated"):
+            assert error is None
+        else:
+            assert error is not None and "无法执行" in error["error"]
+        assert task.status == status
+        assert repo.saved == []
+
+    @pytest.mark.parametrize("status", ALL_STATUSES)
+    async def test_fail_task_response_structure(self, status: str) -> None:
+        """报告内容、failed 状态、错误 dict 三者一致。"""
+        ws, repo = _make_workspace()
+        task = _make_task(status)
+        result = await ws.fail_task(
+            task,
+            summary="脚本执行失败",
+            rule="脚本执行成功",
+            details="boom",
+            suggestion="重新生成脚本",
+            extra={"stderr": "boom"},
+        )
+        assert task.status == "failed"
+        assert task.validation_report == {
+            "passed": False,
+            "summary": "脚本执行失败",
+            "checks": [{"rule": "脚本执行成功", "status": "fail", "details": "boom"}],
+            "suggestion": "重新生成脚本",
+        }
+        assert result == {
+            "task_id": "ext-matrix",
+            "error": "脚本执行失败",
+            "stderr": "boom",
+            "status": "failed",
+        }
+        assert repo.saved == [task]
+        saved_report = repo.saved[0].validation_report
+        assert saved_report == task.validation_report

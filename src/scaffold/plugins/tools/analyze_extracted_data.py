@@ -9,8 +9,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import duckdb
+
+from scaffold.infra.extraction.data_query import TableRef, fetch_result, run_data_query, validate_select_only
 from scaffold.plugins.tools._extraction_common import get_extraction_workspace
-from scaffold.plugins.tools.query_extracted_data import _artifact_csv, _load_table, _validate_select_only
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ DEFAULT_JOIN_KEYS = ("pol", "pod", "container_type")
 _TEXT_TYPE_PREFIXES = ("varchar", "text", "string", "date", "timestamp", "time", "blob")
 
 
-def _describe_columns(con: Any, table: str) -> dict[str, str]:
+def _describe_columns(con: duckdb.DuckDBPyConnection, table: str) -> dict[str, str]:
     """返回 {列名: DuckDB 类型}。"""
     rows = con.execute(f"DESCRIBE SELECT * FROM {table}").fetchall()
     schema = {str(r[0]): str(r[1]).lower() for r in rows}
@@ -221,74 +223,40 @@ async def analyze_extracted_data(
     if not request or not request.strip():
         return {"error": "分析需求不能为空"}
 
-    async with get_extraction_workspace() as ws:
-        artifact, primary_path = await _artifact_csv(ws, extraction_id, "extraction", thread_id)
-        if primary_path is None:
-            return artifact  # type: ignore[return-value]
+    refs = [TableRef(artifact_id=extraction_id, table_name="data")]
+    if comparison_extraction_id:
+        refs = [
+            TableRef(artifact_id=extraction_id, table_name="data_a"),
+            TableRef(artifact_id=comparison_extraction_id, table_name="data_b"),
+        ]
 
-        comparison_path: str | None = None
+    def _run(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
         if comparison_extraction_id:
-            comp, comparison_path = await _artifact_csv(ws, comparison_extraction_id, "extraction", thread_id)
-            if comparison_path is None:
-                return comp  # type: ignore[return-value]
+            columns_a = _describe_columns(con, "data_a")
+            columns_b = _describe_columns(con, "data_b")
+            keys = join_keys or list(DEFAULT_JOIN_KEYS)
+            logger.info("进入跨文件对比模式 | keys=%s", keys)
+            built = _build_comparison_sql(columns_a, columns_b, keys)
+        else:
+            columns = _describe_columns(con, "data")
+            logger.info("进入单文件自然语言分析模式 | schema=%s", columns)
+            built = _build_single_sql(request, columns)
+        if built[0] is None:
+            return {"error": built[1]}
+        sql, summary = built
 
-        def _run() -> dict[str, Any]:
-            import duckdb  # noqa: PLC0415
+        checked, sql_error = validate_select_only(sql)
+        if sql_error or checked is None:
+            logger.warning("SQL 校验未通过 | error=%s", sql_error)
+            return {"error": sql_error}
 
-            from scaffold.plugins.tools.query_extracted_data import _fetch_result  # noqa: PLC0415
+        result = fetch_result(con, checked, limit=100)
+        result["sql"] = sql
+        result["summary"] = summary
+        return result
 
-            con = duckdb.connect()
-            try:
-                try:
-                    if comparison_path:
-                        _load_table(con, "data_a", primary_path)  # type: ignore[arg-type]
-                        _load_table(con, "data_b", comparison_path)
-                        columns_a = _describe_columns(con, "data_a")
-                        columns_b = _describe_columns(con, "data_b")
-                        keys = join_keys or list(DEFAULT_JOIN_KEYS)
-                        logger.info("进入跨文件对比模式 | keys=%s", keys)
-                        built = _build_comparison_sql(columns_a, columns_b, keys)
-                        if built[0] is None:
-                            return {"error": built[1]}
-                        sql, summary = built  # type: ignore[misc]
-                    else:
-                        _load_table(con, "data", primary_path)  # type: ignore[arg-type]
-                        columns = _describe_columns(con, "data")
-                        logger.info("进入单文件自然语言分析模式 | schema=%s", columns)
-                        built = _build_single_sql(request, columns)
-                        if built[0] is None:
-                            return {"error": built[1]}
-                        sql, summary = built  # type: ignore[misc]
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception("DuckDB CSV 读取失败")
-                    return {"error": f"CSV 读取失败：{exc}"}
-
-                try:
-                    checked, sql_error = _validate_select_only(sql)
-                    if sql_error:
-                        logger.warning("SQL 校验未通过 | error=%s", sql_error)
-                        return {"error": sql_error}
-                    result = _fetch_result(con, checked, limit=100)  # type: ignore[arg-type]
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception("DuckDB SQL 执行失败 | sql=%s", sql)
-                    return {"error": f"SQL 执行失败：{exc}"}
-
-                result["sql"] = sql
-                result["summary"] = summary
-                return result
-            finally:
-                con.close()
-
-    import asyncio  # noqa: PLC0415
-
-    try:
-        result = await asyncio.to_thread(_run)
-    finally:
-        from pathlib import Path  # noqa: PLC0415
-
-        for p in (primary_path, comparison_path):
-            if p:
-                Path(p).unlink(missing_ok=True)
+    async with get_extraction_workspace() as ws:
+        result = await run_data_query(ws, refs, _run, thread_id=thread_id)
 
     if "error" in result:
         logger.warning("analyze_extracted_data 返回错误 | error=%s", result["error"])

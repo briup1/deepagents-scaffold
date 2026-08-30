@@ -28,8 +28,9 @@ async def validate_extraction_result(task_id: str) -> dict[str, Any]:
         task = await ws.get_task(task_id)
         if task is None:
             return {"error": f"抽取任务 {task_id} 不存在"}
-        if task.status not in ("validating", "success", "failed"):
-            return {"error": f"任务 {task_id} 当前状态为 {task.status}，无法验证"}
+        error = ws.check_task_transition(task, allowed=("validating", "success", "failed"), action="验证")
+        if error is not None:
+            return error
         if task.extracted_artifact_id is None:
             return {"error": f"任务 {task_id} 尚未生成抽取结果"}
 
@@ -121,8 +122,14 @@ async def validate_extraction_result(task_id: str) -> dict[str, Any]:
         )
 
         task.validation_report = report.model_dump()
-        task.status = "success" if passed else "failed"
-        await ws.update_task(task)
+        transition_error = await ws.transition_task(
+            task,
+            "success" if passed else "failed",
+            allowed=("validating", "success", "failed"),
+            action="验证",
+        )
+        if transition_error is not None:
+            return transition_error
 
     return {
         "task_id": task_id,

@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+TaskStatus = Literal["goal_setting", "code_generated", "validating", "success", "failed"]
+
 
 class ExtractionGoal(BaseModel):
     """抽取目标定义。"""
@@ -39,7 +41,7 @@ class ExtractionTask(BaseModel):
     task_id: str
     thread_id: str
     upload_artifact_id: str
-    status: Literal["goal_setting", "code_generated", "validating", "success", "failed"]
+    status: TaskStatus
     requirements: dict[str, Any] | None = None
     script_artifact_id: str | None = None
     extracted_artifact_id: str | None = None

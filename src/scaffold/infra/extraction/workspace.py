@@ -18,7 +18,7 @@ import aiosqlite
 
 from scaffold.infra.artifacts import Artifact, ArtifactRepository, ArtifactStorage
 from scaffold.infra.config.app_config import AppConfig, get_app_config
-from scaffold.infra.history.models import ExtractionTask
+from scaffold.infra.history.models import ExtractionTask, TaskStatus, ValidationCheck, ValidationReport
 from scaffold.infra.history.repository import ExtractionTaskRepository
 from scaffold.infra.time import _now
 
@@ -102,6 +102,56 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
             raise RuntimeError("Workspace 未进入上下文")
         task.updated_at = _now()
         return await self._task_repo.update(task)
+
+    def check_task_transition(
+        self,
+        task: ExtractionTask,
+        *,
+        allowed: tuple[TaskStatus, ...],
+        action: str,
+    ) -> dict[str, Any] | None:
+        """纯守卫：当前状态不在允许的前置集合中时返回与工具错误响应同构的 error dict，否则返回 None。"""
+        if task.status not in allowed:
+            return {"error": f"任务 {task.task_id} 当前状态为 {task.status}，无法{action}"}
+        return None
+
+    async def transition_task(
+        self,
+        task: ExtractionTask,
+        to: TaskStatus,
+        *,
+        allowed: tuple[TaskStatus, ...],
+        action: str,
+    ) -> dict[str, Any] | None:
+        """守卫并流转任务状态：守卫失败返回 error dict；成功时刷新时间戳并持久化，返回 None。"""
+        error = self.check_task_transition(task, allowed=allowed, action=action)
+        if error is not None:
+            return error
+        task.status = to
+        await self.update_task(task)
+        return None
+
+    async def fail_task(
+        self,
+        task: ExtractionTask,
+        *,
+        summary: str,
+        rule: str,
+        details: str | None,
+        suggestion: str,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """任务失败仪式：构造 ValidationReport、置 failed、持久化，并返回工具错误响应。"""
+        report = ValidationReport(
+            passed=False,
+            summary=summary,
+            checks=[ValidationCheck(rule=rule, status="fail", details=details)],
+            suggestion=suggestion,
+        )
+        task.validation_report = report.model_dump()
+        task.status = "failed"
+        await self.update_task(task)
+        return {"task_id": task.task_id, "error": summary, **(extra or {}), "status": task.status}
 
     async def list_tasks(self, thread_id: str) -> list[ExtractionTask]:
         """列出某会话下的全部抽取任务。"""

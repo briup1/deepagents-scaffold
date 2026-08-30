@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from scaffold.infra.sandbox import get_sandbox
-from scaffold.infra.time import _now
 from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
@@ -29,8 +28,9 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
         task = await ws.get_task(task_id)
         if task is None:
             return {"error": f"抽取任务 {task_id} 不存在"}
-        if task.status not in ("goal_setting", "code_generated"):
-            return {"error": f"任务 {task_id} 当前状态为 {task.status}，无法执行"}
+        error = ws.check_task_transition(task, allowed=("goal_setting", "code_generated"), action="执行")
+        if error is not None:
+            return error
 
         if task.script_artifact_id is None:
             return {"error": f"任务 {task_id} 尚未生成脚本"}
@@ -65,52 +65,24 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
             )
 
             if result.exit_code != 0:
-                task.status = "failed"
-                task.updated_at = _now()
-                report = {
-                    "passed": False,
-                    "summary": "脚本执行失败",
-                    "checks": [
-                        {
-                            "rule": "脚本执行成功",
-                            "status": "fail",
-                            "details": (result.stderr or result.stdout)[:1000],
-                        }
-                    ],
-                    "suggestion": "请检查 requirements 是否与文件结构匹配，或回到 generate_extraction_code 重新生成脚本",
-                }
-                task.validation_report = report
-                await ws.update_task(task)
-                return {
-                    "task_id": task_id,
-                    "error": "脚本执行失败",
-                    "stderr": result.stderr,
-                    "stdout": result.stdout,
-                    "status": task.status,
-                }
+                return await ws.fail_task(
+                    task,
+                    summary="脚本执行失败",
+                    rule="脚本执行成功",
+                    details=(result.stderr or result.stdout)[:1000],
+                    suggestion="请检查 requirements 是否与文件结构匹配，或回到 generate_extraction_code 重新生成脚本",
+                    extra={"stderr": result.stderr, "stdout": result.stdout},
+                )
 
             csv_bytes = result.output_files.get("extracted.csv")
             if csv_bytes is None:
-                task.status = "failed"
-                task.updated_at = _now()
-                task.validation_report = {
-                    "passed": False,
-                    "summary": "脚本未输出 CSV 文件",
-                    "checks": [
-                        {
-                            "rule": "CSV 文件已生成",
-                            "status": "fail",
-                            "details": result.stdout or "无输出",
-                        }
-                    ],
-                    "suggestion": "检查脚本是否正确写入 /mnt/output/extracted.csv",
-                }
-                await ws.update_task(task)
-                return {
-                    "task_id": task_id,
-                    "error": "脚本未输出 CSV 文件",
-                    "status": task.status,
-                }
+                return await ws.fail_task(
+                    task,
+                    summary="脚本未输出 CSV 文件",
+                    rule="CSV 文件已生成",
+                    details=result.stdout or "无输出",
+                    suggestion="检查脚本是否正确写入 /mnt/output/extracted.csv",
+                )
 
         extraction_artifact = await ws.save_artifact(
             thread_id=task.thread_id,
@@ -126,9 +98,11 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
         columns, total_rows = _parse_csv_meta(csv_bytes)
 
         task.extracted_artifact_id = extraction_artifact.artifact_id
-        task.status = "validating"
-        task.updated_at = _now()
-        await ws.update_task(task)
+        transition_error = await ws.transition_task(
+            task, "validating", allowed=("goal_setting", "code_generated"), action="执行"
+        )
+        if transition_error is not None:
+            return transition_error
 
     return {
         "task_id": task_id,

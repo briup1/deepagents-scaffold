@@ -170,8 +170,9 @@ async def generate_extraction_code(
         )
 
         task.script_artifact_id = script_artifact.artifact_id
-        task.status = "code_generated"
-        await ws.update_task(task)
+        error = await ws.transition_task(task, "code_generated", allowed=("goal_setting",), action="生成脚本")
+        if error is not None:
+            return error
 
     return {
         "task_id": task_id,
