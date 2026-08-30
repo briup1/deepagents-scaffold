@@ -11,7 +11,7 @@ const OUTPUT_DIR = process.env.OUTPUT_DIR || '/tmp/verify-output';
 fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
 async function main() {
-  const targetUrl = process.env.TARGET_URL || 'http://localhost:3000';
+  const targetUrl = process.env.TARGET_URL || 'http://localhost:3002';
   const message = process.env.TEST_MESSAGE || '你好，请介绍一下自己';
 
   console.error(`[verify] Connecting to Chrome DevTools MCP for ${targetUrl}`);

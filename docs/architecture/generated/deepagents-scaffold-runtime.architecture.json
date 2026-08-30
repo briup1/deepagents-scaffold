@@ -1,0 +1,486 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DeepAgents Scaffold — High-Level Runtime Architecture",
+    "locale": "en",
+    "output": "deepagents-scaffold-runtime.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1385,
+      675
+    ],
+    "views": [
+      {
+        "id": "primary-runtime-path",
+        "label": "Primary runtime path",
+        "focus": [
+          "user",
+          "web-ui",
+          "api-gateway",
+          "ag-ui-adapter",
+          "agent-runtime",
+          "model-providers"
+        ],
+        "note": "Follow a browser request through AG-UI streaming, the compiled agent graph, and the selected model provider."
+      },
+      {
+        "id": "tools-and-data",
+        "label": "Tools and durable data",
+        "focus": [
+          "agent-runtime",
+          "tool-layer",
+          "sandbox",
+          "sqlite-stores",
+          "artifact-store"
+        ],
+        "note": "Inspect tool execution, subprocess isolation, checkpoints, history, and session-scoped artifacts."
+      },
+      {
+        "id": "trust-boundaries",
+        "label": "Trust boundaries",
+        "focus": [
+          "web-ui",
+          "api-gateway",
+          "ag-ui-adapter",
+          "sandbox",
+          "model-providers",
+          "external-integrations"
+        ],
+        "note": "Separate the client, HTTP ingress, agent process, local persistence, isolated execution, and external APIs."
+      }
+    ],
+    "repository": {
+      "url": "https://github.com/briup1/deepagents-scaffold",
+      "revision": "9be48ba5ee13e3cc2549beeaf16a5596311e56ff"
+    }
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User",
+      "sublabel": "Browser",
+      "pos": [
+        20,
+        260
+      ],
+      "size": [
+        110,
+        64
+      ]
+    },
+    {
+      "id": "web-ui",
+      "type": "frontend",
+      "label": "React + CopilotKit UI",
+      "sublabel": "Chat + file UI",
+      "pos": [
+        200,
+        260
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/web/src/App.tsx"
+        },
+        {
+          "path": "src/web/src/api/historyAgent.ts"
+        }
+      ]
+    },
+    {
+      "id": "api-gateway",
+      "type": "security",
+      "label": "FastAPI Gateway",
+      "sublabel": "Ingress controls",
+      "pos": [
+        440,
+        260
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": ":8000",
+      "sources": [
+        {
+          "path": "src/scaffold/api/app.py"
+        },
+        {
+          "path": "src/scaffold/api/middleware/auth.py"
+        }
+      ]
+    },
+    {
+      "id": "ag-ui-adapter",
+      "type": "backend",
+      "label": "AG-UI Streaming Adapter",
+      "sublabel": "SSE adapter",
+      "pos": [
+        680,
+        260
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "/agent/{name}",
+      "sources": [
+        {
+          "path": "src/scaffold/api/ag_ui.py"
+        }
+      ]
+    },
+    {
+      "id": "agent-assembly",
+      "type": "backend",
+      "label": "Agent Assembly & Registry",
+      "sublabel": "Startup compile",
+      "pos": [
+        920,
+        45
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "tag": "config.yaml",
+      "sources": [
+        {
+          "path": "src/scaffold/core/agents.py"
+        },
+        {
+          "path": "src/scaffold/infra/config/app_config.py"
+        }
+      ]
+    },
+    {
+      "id": "agent-runtime",
+      "type": "backend",
+      "label": "DeepAgents + LangGraph",
+      "sublabel": "Compiled agent graph",
+      "pos": [
+        920,
+        260
+      ],
+      "size": [
+        165,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/scaffold/core/agents.py"
+        },
+        {
+          "path": "src/scaffold/infra/middleware/factory.py"
+        }
+      ]
+    },
+    {
+      "id": "model-providers",
+      "type": "external",
+      "label": "Model Provider APIs",
+      "sublabel": "Configured LLM APIs",
+      "pos": [
+        1195,
+        260
+      ],
+      "size": [
+        165,
+        64
+      ],
+      "tag": "HTTPS",
+      "sources": [
+        {
+          "path": "src/scaffold/infra/models/factory.py"
+        },
+        {
+          "path": "config.yaml"
+        }
+      ]
+    },
+    {
+      "id": "external-integrations",
+      "type": "external",
+      "label": "Optional Integrations",
+      "sublabel": "Tracing + channels",
+      "pos": [
+        1195,
+        45
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "tag": "disabled by default",
+      "sources": [
+        {
+          "path": "src/scaffold/core/agents.py"
+        },
+        {
+          "path": "src/scaffold/infra/channels/registry.py"
+        }
+      ]
+    },
+    {
+      "id": "tool-layer",
+      "type": "backend",
+      "label": "Tool & Skill Layer",
+      "sublabel": "Plugins + tools",
+      "pos": [
+        920,
+        440
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "sources": [
+        {
+          "path": "src/scaffold/core/tools.py"
+        },
+        {
+          "path": "src/scaffold/plugins/tools/generative_ui.py"
+        }
+      ]
+    },
+    {
+      "id": "sqlite-stores",
+      "type": "database",
+      "label": "SQLite Stores",
+      "sublabel": "State + history",
+      "pos": [
+        680,
+        440
+      ],
+      "size": [
+        150,
+        70
+      ],
+      "tag": "./data/*.db",
+      "sources": [
+        {
+          "path": "src/scaffold/api/deps.py"
+        },
+        {
+          "path": "src/scaffold/infra/history/repository.py"
+        }
+      ]
+    },
+    {
+      "id": "artifact-store",
+      "type": "database",
+      "label": "Artifact Filesystem",
+      "sublabel": "Session files",
+      "pos": [
+        920,
+        570
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "tag": "thread-scoped",
+      "sources": [
+        {
+          "path": "src/scaffold/infra/artifacts/storage.py"
+        },
+        {
+          "path": "src/scaffold/infra/extraction/workspace.py"
+        }
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "security",
+      "label": "Restricted Subprocess",
+      "sublabel": "Guarded Python",
+      "pos": [
+        1195,
+        440
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "tag": "MVP sandbox",
+      "sources": [
+        {
+          "path": "src/scaffold/infra/sandbox/subprocess_sandbox.py"
+        },
+        {
+          "path": "docs/adr/0001-keep-subprocess-sandbox-for-demo.md"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Client device trust boundary",
+      "wraps": [
+        "user",
+        "web-ui"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "HTTP ingress controls",
+      "wraps": [
+        "api-gateway",
+        "ag-ui-adapter"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "Agent application process",
+      "wraps": [
+        "agent-assembly",
+        "agent-runtime",
+        "tool-layer"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "Restricted execution boundary",
+      "wraps": [
+        "sandbox"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "External provider trust boundary",
+      "wraps": [
+        "model-providers",
+        "external-integrations"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-to-ui",
+      "from": "user",
+      "to": "web-ui",
+      "label": "interacts",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ui-to-gateway",
+      "from": "web-ui",
+      "to": "api-gateway",
+      "label": "REST + upload",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-to-agui",
+      "from": "api-gateway",
+      "to": "ag-ui-adapter",
+      "label": "request context",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agui-to-runtime",
+      "from": "ag-ui-adapter",
+      "to": "agent-runtime",
+      "label": "AG-UI stream",
+      "variant": "emphasis"
+    },
+    {
+      "id": "runtime-to-model",
+      "from": "agent-runtime",
+      "to": "model-providers",
+      "label": "model calls",
+      "variant": "emphasis"
+    },
+    {
+      "id": "assembly-to-runtime",
+      "from": "agent-assembly",
+      "to": "agent-runtime",
+      "label": "compile at startup",
+      "labelDy": 24
+    },
+    {
+      "id": "runtime-to-tools",
+      "from": "agent-runtime",
+      "to": "tool-layer",
+      "label": "tool calls",
+      "labelAt": [
+        1003,
+        382
+      ]
+    },
+    {
+      "id": "tools-to-sandbox",
+      "from": "tool-layer",
+      "to": "sandbox",
+      "label": "execute code",
+      "variant": "security"
+    },
+    {
+      "id": "agui-to-sqlite",
+      "from": "ag-ui-adapter",
+      "to": "sqlite-stores",
+      "label": "persist state",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        755,
+        382
+      ]
+    },
+    {
+      "id": "tools-to-artifacts",
+      "from": "tool-layer",
+      "to": "artifact-store",
+      "label": "store artifacts",
+      "labelAt": [
+        1003,
+        540
+      ]
+    },
+    {
+      "id": "runtime-to-integrations",
+      "from": "agent-runtime",
+      "to": "external-integrations",
+      "label": "optional telemetry",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Primary request path",
+      "items": [
+        "CopilotKit sends thread-scoped runs to /agent/{name}; FastAPI streams AG-UI events back to the browser.",
+        "The selected compiled graph invokes a configured model provider and can emit generative UI actions."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust and isolation",
+      "items": [
+        "Ingress layers provide optional API-key authentication, IP rate limiting, request IDs, logging, and normalized errors.",
+        "Generated extraction code runs in a subprocess with AST checks, an import allowlist, and a timeout; the ADR marks this as an MVP boundary."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Durability and extension",
+      "items": [
+        "SQLite persists LangGraph checkpoints, thread history, extraction tasks, and artifact metadata; files remain session-scoped on the host filesystem.",
+        "YAML configuration assembles models, middleware, profiles, skills, tools, subagents, channels, and optional tracing providers."
+      ]
+    }
+  ]
+}

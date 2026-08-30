@@ -1,19 +1,31 @@
 #!/usr/bin/env node
 // Phase 3 全栈 UI 端到端验证（L3）：用真实浏览器驱动聊天界面
 // 1. 打开前端 → 选择 data_extractor Agent
-// 2. 上传 simple_quote.xlsx
+// 2. 生成并上传临时 Excel 样例
 // 3. 发送「抽取 + 分析 + data_table 展示」请求
 // 4. 等待生成式 UI（data_table）渲染，截图保存
 //
 // 前置：bash scripts/dev.sh 已启动（config.yaml 真实模型）
 // 运行：node scripts/ui_verify.mjs
 import { chromium } from 'playwright-core'
+import { execFileSync } from 'node:child_process'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const FRONTEND = 'http://localhost:3000'
-const XLSX = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'simple_quote.xlsx')
+const FRONTEND = 'http://localhost:3002'
+const SAMPLE_DIR = mkdtempSync(path.join(tmpdir(), 'deepagents-ui-verify-'))
+const XLSX = path.join(SAMPLE_DIR, 'simple_quote.xlsx')
 const SHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'superpowers', 'evidence')
+
+execFileSync('uv', [
+  'run',
+  'python',
+  '-c',
+  "import openpyxl,sys; w=openpyxl.Workbook(); s=w.active; s.append(['carrier','pol','pod','container_type','amount']); s.append(['MSC','Shanghai','Los Angeles','20GP',1200]); s.append(['COSCO','Ningbo','Los Angeles','40HQ',2300]); s.append(['ONE','Qingdao','Oakland','20GP',1350]); w.save(sys.argv[1])",
+  XLSX,
+])
 
 const fail = (msg) => {
   console.error('[FAIL] ' + msg)
@@ -35,7 +47,7 @@ try {
   await page.getByRole('option', { name: /data_extractor/i }).first().click()
   await page.waitForTimeout(1500)
 
-  console.log('[3/6] 上传 simple_quote.xlsx')
+  console.log('[3/6] 上传临时 Excel 样例')
   const fileInput = page.locator('input[type=file]')
   await fileInput.setInputFiles(XLSX)
   await page.waitForTimeout(2000)
@@ -88,5 +100,6 @@ try {
   await page.screenshot({ path: path.join(SHOT_DIR, 'phase3-l3-error.png'), fullPage: true })
 } finally {
   await browser.close()
+  rmSync(SAMPLE_DIR, { recursive: true, force: true })
 }
 console.log(process.exitCode ? '结论: L3 前端验证失败' : '结论: L3 前端验证通过 ✅')

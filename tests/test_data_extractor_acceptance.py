@@ -20,10 +20,10 @@ import openpyxl
 import pytest
 from fastapi.testclient import TestClient
 
-from scaffold.core.agents import _agent_registry
 from scaffold.core.skills import load_skills
 from scaffold.infra.config.app_config import get_app_config
 from scaffold.plugins.tools.preview_excel import preview_excel
+from scaffold.runtime.agents import _agent_registry
 
 
 class TestExtractionSkillLoading:
@@ -40,7 +40,7 @@ class TestExtractionSkillLoading:
 
     def test_data_extractor_agent_receives_extraction_skills(self, _reset_app_config: Any) -> None:
         """通过 mock _create_deep_agent 捕获 skills 参数，证明创建 data_extractor 时传入了技能目录。"""
-        from scaffold.core import agents as agents_module
+        from scaffold.runtime import agents as agents_module
 
         captured_skills: list[str] | None = None
 
@@ -65,7 +65,7 @@ class TestDataExtractorAgentTooling:
 
     def test_data_extractor_agent_has_extraction_tools_only(self, _reset_app_config: Any) -> None:
         """验证 data_extractor 只保留抽取相关工具，排除了代码审查类工具。"""
-        from scaffold.core import agents as agents_module
+        from scaffold.runtime import agents as agents_module
 
         captured_tools: list[Any] = []
 

@@ -20,7 +20,8 @@ logs/
 src/web/node_modules/
 src/web/dist
 .playwright-mcp/*
-# pi goal/loop 运行时状态
+
+# Pi agent local runtime state
 .pi-glla/
 .codegraph/
 .firecrawl/

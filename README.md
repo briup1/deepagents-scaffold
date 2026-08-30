@@ -10,7 +10,7 @@
 - **Deer-Flow 基础设施** — YAML 配置（热重载）、模型工厂、结构化日志、IM 通道
 - **中间件框架** — 可插拔 AgentMiddleware 链：循环检测、Token 追踪、动态上下文、工具错误处理
 - **FastAPI 网关** — 具备认证、限流、请求追踪、CORS、静态文件的 REST API
-- **提示词工程** — 基于模板的系统提示词组装（USER -> BASE -> CUSTOM -> SUFFIX）
+- **提示词工程** — 基于模板的系统提示词组装（USER -&gt; BASE -&gt; CUSTOM -&gt; SUFFIX）
 - **通道适配器** — Slack、飞书、Telegram 集成框架
 - **记忆系统** — DeepAgents MemoryMiddleware 配合持久化存储
 - **技能系统** — SKILL.md 发现与加载
@@ -38,9 +38,10 @@ chmod +x scripts/dev.sh
 ```
 
 打开：
-- **前端**：http://localhost:3000
-- **API 文档**：http://localhost:8000/docs
-- **健康检查**：http://localhost:8000/health
+
+- **前端**：[http://localhost:3002](http://localhost:3002)
+- **API 文档**：[http://localhost:8000/docs](http://localhost:8000/docs)
+- **健康检查**：[http://localhost:8000/health](http://localhost:8000/health)
 
 ## 项目结构
 
@@ -115,19 +116,21 @@ profiles:
 
 本脚手架支持 DeepAgents `AgentMiddleware` 与 Deer-Flow 适配器中间件：
 
-| 中间件 | 来源 | 用途 |
-|---|---|---|
-| `MemoryMiddleware` | DeepAgents | 将记忆上下文注入系统提示词 |
-| `SkillsMiddleware` | DeepAgents | 加载并注入技能指令 |
-| `SubAgentMiddleware` | DeepAgents | 启用子 Agent 委派 |
-| `FilesystemMiddleware` | DeepAgents | 文件操作工具 |
-| `LoopDetectionMiddleware` | Deer-Flow | 检测并中断重复性工具调用循环 |
-| `ToolErrorHandlingMiddleware` | Deer-Flow | 捕获工具异常并转换为错误消息 |
-| `DynamicContextMiddleware` | Deer-Flow | 将日期/时间与记忆注入上下文 |
-| `TokenUsageMiddleware` | Deer-Flow | 逐轮追踪并记录 Token 消耗 |
-| `SafetyTerminationMiddleware` | Deer-Flow | 检测提供商的安全拒绝信号 |
-| `TodoMiddleware` | Deer-Flow | 管理待办列表并检测上下文丢失 |
-| `TitleMiddleware` | Deer-Flow | 自动生成会话标题 |
+
+| 中间件                           | 来源         | 用途               |
+| ----------------------------- | ---------- | ---------------- |
+| `MemoryMiddleware`            | DeepAgents | 将记忆上下文注入系统提示词    |
+| `SkillsMiddleware`            | DeepAgents | 加载并注入技能指令        |
+| `SubAgentMiddleware`          | DeepAgents | 启用子 Agent 委派     |
+| `FilesystemMiddleware`        | DeepAgents | 文件操作工具           |
+| `LoopDetectionMiddleware`     | Deer-Flow  | 检测并中断重复性工具调用循环   |
+| `ToolErrorHandlingMiddleware` | Deer-Flow  | 捕获工具异常并转换为错误消息   |
+| `DynamicContextMiddleware`    | Deer-Flow  | 将日期/时间与记忆注入上下文   |
+| `TokenUsageMiddleware`        | Deer-Flow  | 逐轮追踪并记录 Token 消耗 |
+| `SafetyTerminationMiddleware` | Deer-Flow  | 检测提供商的安全拒绝信号     |
+| `TodoMiddleware`              | Deer-Flow  | 管理待办列表并检测上下文丢失   |
+| `TitleMiddleware`             | Deer-Flow  | 自动生成会话标题         |
+
 
 在 `config.yaml` 中声明中间件：
 
@@ -196,17 +199,19 @@ agent = create_agent(
 
 ## API 端点
 
-| 方法 | 路径 | 说明 |
-|--------|------|------|
-| GET | `/health` | 健康检查 |
-| GET | `/api/agents/` | 列出已注册的 agent |
-| GET | `/api/tools/` | 列出可用工具 |
-| POST | `/api/threads/` | 创建对话线程 |
-| GET | `/api/threads/{id}` | 获取线程信息 |
-| GET | `/api/threads/{id}/state` | 获取线程状态 |
-| POST | `/api/threads/{id}/state` | 更新线程状态 |
-| POST | `/api/runs/stream` | 流式响应（SSE） |
-| POST | `/api/runs/wait` | 阻塞等待响应 |
+
+| 方法   | 路径                        | 说明           |
+| ---- | ------------------------- | ------------ |
+| GET  | `/health`                 | 健康检查         |
+| GET  | `/api/agents/`            | 列出已注册的 agent |
+| GET  | `/api/tools/`             | 列出可用工具       |
+| POST | `/api/threads/`           | 创建对话线程       |
+| GET  | `/api/threads/{id}`       | 获取线程信息       |
+| GET  | `/api/threads/{id}/state` | 获取线程状态       |
+| POST | `/api/threads/{id}/state` | 更新线程状态       |
+| POST | `/api/runs/stream`        | 流式响应（SSE）    |
+| POST | `/api/runs/wait`          | 阻塞等待响应       |
+
 
 ## IM 通道集成
 

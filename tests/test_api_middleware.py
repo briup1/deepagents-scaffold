@@ -21,7 +21,6 @@ from scaffold.api.middleware.rate_limit import RateLimitMiddleware
 from scaffold.api.middleware.request_id import RequestIdMiddleware
 from scaffold.infra.logging.middleware import LoggingMiddleware
 
-
 # ---------------------------------------------------------------------------
 # AuthMiddleware
 # ---------------------------------------------------------------------------

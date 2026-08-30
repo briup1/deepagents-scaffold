@@ -7,13 +7,14 @@ user_id 一律取自 user_id_ctx（workspace 内部分离），工具本身不�
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
 
 
-async def save_extraction_template(task_id: str, name: str) -> dict:
+async def save_extraction_template(task_id: str, name: str, **kwargs: Any) -> dict:
     """把一次验证通过的抽取任务保存为可复用模板。
 
     Args:
@@ -28,7 +29,7 @@ async def save_extraction_template(task_id: str, name: str) -> dict:
         return await ws.save_template_from_task(task_id, name)
 
 
-async def match_extraction_template(artifact_id: str) -> dict:
+async def match_extraction_template(artifact_id: str, **kwargs: Any) -> dict:
     """按上传文件的结构指纹匹配当前用户的模板。
 
     Args:
@@ -44,14 +45,14 @@ async def match_extraction_template(artifact_id: str) -> dict:
         return await ws.match_template(artifact_id)
 
 
-async def list_extraction_templates() -> list[dict]:
+async def list_extraction_templates(**kwargs: Any) -> list[dict]:
     """列出当前用户已保存的抽取模板（不含脚本全文）。"""
     logger.info("list_extraction_templates 被调用")
     async with get_extraction_workspace() as ws:
         return await ws.list_templates()
 
 
-async def rename_extraction_template(template_id: str, name: str) -> dict:
+async def rename_extraction_template(template_id: str, name: str, **kwargs: Any) -> dict:
     """重命名模板（仅属主可操作）。
 
     Args:
@@ -63,7 +64,7 @@ async def rename_extraction_template(template_id: str, name: str) -> dict:
         return await ws.rename_template(template_id, name)
 
 
-async def delete_extraction_template(template_id: str) -> dict:
+async def delete_extraction_template(template_id: str, **kwargs: Any) -> dict:
     """删除模板（仅属主可操作）。
 
     Args:

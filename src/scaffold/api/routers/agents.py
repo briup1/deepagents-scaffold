@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from scaffold.api.deps import get_checkpointer, get_history_repo, get_request_user_id
-from scaffold.core.agents import list_agents
+from scaffold.runtime.agents import list_agents
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 

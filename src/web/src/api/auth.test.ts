@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch, clearToken, getToken, onUnauthorized, setToken } from './auth'
+import { apiFetch, apiFetchJson, clearToken, getToken, onUnauthorized, setToken } from './auth'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -72,5 +72,42 @@ describe('401 handling', () => {
     mockFetch.mockResolvedValueOnce({ status: 500, ok: false })
     await apiFetch('/api/threads/')
     expect(getToken()).toBe('tok-1')
+  })
+})
+
+describe('apiFetchJson error handling (merged from fetchJson)', () => {
+  it('throws 网络请求失败 on network error', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'))
+    await expect(apiFetchJson('/api/threads/')).rejects.toThrow('网络请求失败')
+  })
+
+  it('throws HTTP status error with detail', async () => {
+    mockFetch.mockResolvedValueOnce({ status: 403, ok: false, text: async () => 'forbidden' })
+    await expect(apiFetchJson('/api/threads/', undefined, '获取失败')).rejects.toThrow('获取失败 (403): forbidden')
+  })
+
+  it('throws HTTP status without prefix', async () => {
+    mockFetch.mockResolvedValueOnce({ status: 500, ok: false, text: async () => '' })
+    await expect(apiFetchJson('/api/threads/')).rejects.toThrow('HTTP 500')
+  })
+
+  it('throws 服务器返回了无效 JSON', async () => {
+    mockFetch.mockResolvedValueOnce({ status: 200, ok: true, json: async () => { throw new SyntaxError('bad') } })
+    await expect(apiFetchJson('/api/threads/')).rejects.toThrow('服务器返回了无效 JSON')
+  })
+
+  it('returns parsed JSON on success', async () => {
+    mockFetch.mockResolvedValueOnce({ status: 200, ok: true, json: async () => ({ threads: [] }) })
+    await expect(apiFetchJson<{ threads: unknown[] }>('/api/threads/')).resolves.toEqual({ threads: [] })
+  })
+
+  it('still notifies unauthorized listeners on 401 via apiFetch', async () => {
+    setToken('tok-1')
+    const listener = vi.fn()
+    onUnauthorized(listener)
+    mockFetch.mockResolvedValueOnce({ status: 401, ok: false, text: async () => '' })
+    await expect(apiFetchJson('/api/threads/')).rejects.toThrow('HTTP 401')
+    expect(getToken()).toBeNull()
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 })

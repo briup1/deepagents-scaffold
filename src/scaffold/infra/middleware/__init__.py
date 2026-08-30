@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from scaffold.infra.middleware.registry import MiddlewareRegistry, get_middleware_registry
 from scaffold.infra.middleware.factory import build_middleware_chain
+from scaffold.infra.middleware.registry import MiddlewareRegistry, get_middleware_registry
 
 __all__ = [
     "MiddlewareRegistry",

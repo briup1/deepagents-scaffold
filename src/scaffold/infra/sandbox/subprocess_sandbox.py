@@ -14,6 +14,13 @@ from scaffold.infra.sandbox.base import Sandbox, SandboxResult
 
 logger = logging.getLogger(__name__)
 
+SINGLE_THREAD_ENV = {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+}
+
 DEFAULT_ALLOWED_IMPORTS: set[str] = {
     "__future__",
     "os",
@@ -144,6 +151,7 @@ class SubprocessSandbox(Sandbox):
         env = os.environ.copy()
         env["INPUT_DIR"] = str(input_dir)
         env["OUTPUT_DIR"] = str(output_dir)
+        env.update(SINGLE_THREAD_ENV)
         if extra_env:
             env.update(extra_env)
         # 默认清空 PYTHONPATH，避免加载额外模块；保留 PATH 以便找到 pandas 等依赖。

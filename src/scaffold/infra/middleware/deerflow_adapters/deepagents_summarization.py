@@ -17,10 +17,13 @@ from deepagents.backends import StateBackend
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware.summarization import (
     DEFAULT_SUMMARY_PROMPT,
-    SummarizationMiddleware as _DeepAgentsSummarizationMiddleware,
     compute_summarization_defaults,
     count_tokens_approximately,
 )
+from deepagents.middleware.summarization import (
+    SummarizationMiddleware as _DeepAgentsSummarizationMiddleware,
+)
+
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.models.factory import create_chat_model
 

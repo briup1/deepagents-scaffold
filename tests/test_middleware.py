@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 

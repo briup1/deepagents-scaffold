@@ -11,7 +11,6 @@ import os
 from typing import Any
 
 import httpx
-
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from scaffold.infra.config.model_config import ModelConfig

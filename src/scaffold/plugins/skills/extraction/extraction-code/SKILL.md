@@ -23,6 +23,7 @@ allowed-tools: generate_extraction_code execute_extraction_code
 3. **错误处理**：
    - 缺少必要字段：调整 requirements 中对应字段的 `aliases` 或将其 `required` 设为 `false`。
    - 类型转换失败：调整字段类型（如 `number` → `string`），或在 constraints 中说明清洗规则。
+   - OpenBLAS / NumPy 初始化失败：不要盲目重试；沙箱已默认限制 BLAS 线程数。若仍失败且日志包含 `Cannot allocate memory`，检查文件及解压后体积，并改用分块处理。
    - 执行超时：检查文件是否过大，或要求用户分片上传。
 
 ## 输出格式

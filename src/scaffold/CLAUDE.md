@@ -14,7 +14,7 @@ src/scaffold/
 ├── core/          # 运行时层：DeepAgents SDK 集成
 ├── infra/         # 基础设施层：配置、模型、日志、通道、提示词
 ├── plugins/       # 扩展：自定义工具和 SKILL.md
-└── runtime/       # 空包（原 StreamBridge/Worker 已移除，保留目录占位）
+└── runtime/       # 运行时编排：Agent 工厂、注册表与通道路由
 ```
 
 ## 常用命令
@@ -61,7 +61,7 @@ core ↔ api    ✗（禁止直接调用）
 
 ## 核心模块说明
 
-### core/agents.py — Agent 工厂
+### runtime/agents.py — Agent 工厂
 
 核心函数：
 - `create_agent()`: 构建完整的 DeepAgents agent
@@ -186,7 +186,7 @@ middleware:
 3. 路由匹配到 ag-ui `/agent` 端点
 4. handler 解析 ag-ui 请求体并提取 `threadId`、`runId`、`messages` 等参数
 5. handler 通过 `deps.py` 获取 `checkpointer`
-6. `core/agents.py:create_agent()` 构建 DeepAgents agent
+6. `runtime/agents.py:create_agent()` 构建 DeepAgents agent
 7. ag-ui-langgraph 将 graph 包装为 LangGraphAgent 并暴露 `/agent` SSE 端点
 
 ## 日志与调试

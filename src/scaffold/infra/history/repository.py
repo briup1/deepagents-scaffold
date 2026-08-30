@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import aiosqlite
@@ -265,8 +266,6 @@ async def _assert_user_id_schema(conn: aiosqlite.Connection, table: str) -> None
 
 
 def _parse_json(value: str | None) -> list[dict[str, Any]] | None:
-    import json
-
     if not value:
         return None
     try:
@@ -276,8 +275,6 @@ def _parse_json(value: str | None) -> list[dict[str, Any]] | None:
 
 
 def _dump_json(value: list[dict[str, Any]] | None) -> str | None:
-    import json
-
     if value is None:
         return None
     return json.dumps(value, ensure_ascii=False)

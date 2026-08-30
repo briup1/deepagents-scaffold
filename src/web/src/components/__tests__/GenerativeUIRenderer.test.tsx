@@ -23,22 +23,26 @@ describe('GenerativeUIRenderer', () => {
     expect(screen.getByText('C')).toBeInTheDocument()
   })
 
-  it('渲染 DataTable', () => {
+  it('渲染包含空值的 DataTable', () => {
     render(
       <GenerativeUIRenderer
         envelope={{
           type: 'data_table',
           props: {
             title: 'Table',
-            columns: [{ key: 'k', label: 'K' }],
-            rows: [{ k: 'v' }],
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'value', label: 'Value' },
+            ],
+            rows: [{ name: 'A', value: null }],
           },
         }}
       />,
       { wrapper: Wrapper },
     )
     expect(screen.getByText('Table')).toBeInTheDocument()
-    expect(screen.getByText('v')).toBeInTheDocument()
+    expect(screen.getByText('A')).toBeInTheDocument()
+    expect(screen.getAllByRole('cell')[1]).toBeEmptyDOMElement()
   })
 
   it('渲染 Form 并传入 dispatch', () => {

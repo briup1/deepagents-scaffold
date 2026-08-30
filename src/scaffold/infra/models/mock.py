@@ -6,15 +6,15 @@ Avoids real LLM API calls by returning deterministic responses. Registered via
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
-from pydantic import PrivateAttr
-
-from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from pydantic import PrivateAttr
 
 
 class MockChatModel(BaseChatModel):
@@ -75,11 +75,9 @@ class MockChatModel(BaseChatModel):
         self,
         messages: list[BaseMessage],
         stop: list[str] | None = None,
-        run_manager: Any | None = None,
+        run_manager: AsyncCallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
-        import asyncio
-
         text = self._response_content(messages)
         chunk_size = 4
         for i in range(0, len(text), chunk_size):

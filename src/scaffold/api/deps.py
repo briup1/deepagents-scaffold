@@ -15,8 +15,8 @@ import aiosqlite
 from fastapi import FastAPI, HTTPException, Request
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.artifacts import ArtifactRepository
+from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.history import HistoryRepository
 
 if TYPE_CHECKING:

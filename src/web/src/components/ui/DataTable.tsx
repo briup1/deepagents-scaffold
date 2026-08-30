@@ -6,7 +6,7 @@ interface DataTableColumn {
 interface DataTableProps {
   title?: string
   columns: DataTableColumn[]
-  rows: Array<Record<string, string | number | boolean>>
+  rows: Array<Record<string, string | number | boolean | null>>
 }
 
 export function DataTable({ title, columns, rows }: DataTableProps) {

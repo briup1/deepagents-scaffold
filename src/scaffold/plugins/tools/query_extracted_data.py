@@ -23,6 +23,7 @@ async def query_extracted_data(
     limit: int = 100,
     thread_id: str | None = None,
     comparison_extraction_id: str | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """对抽取结果 CSV 执行 DuckDB SQL 查询。
 

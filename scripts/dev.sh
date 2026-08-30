@@ -20,7 +20,7 @@ PYTHONPATH=src uv run uvicorn scaffold.api.app:app --host 0.0.0.0 --port 8000 --
 BACKEND_PID=$!
 
 # Start frontend
-echo "[3/3] Starting Vite frontend on http://localhost:3000"
+echo "[3/3] Starting Vite frontend on http://localhost:3002"
 cd src/web
 npm install --silent 2>/dev/null || true
 npm run dev &
@@ -30,7 +30,7 @@ cd ../..
 
 echo ""
 echo "Backend:  http://localhost:8000"
-echo "Frontend: http://localhost:3000"
+echo "Frontend: http://localhost:3002"
 echo "Docs:     http://localhost:8000/docs"
 echo ""
 echo "Press Ctrl+C to stop both services."

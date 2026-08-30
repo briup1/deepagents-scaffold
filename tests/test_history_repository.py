@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import aiosqlite
+import pytest
 
 from scaffold.infra.history import HistoryRepository, ThreadMessage
 

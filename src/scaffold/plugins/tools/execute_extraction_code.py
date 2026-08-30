@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import logging
 import tempfile
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +15,7 @@ from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 logger = logging.getLogger(__name__)
 
 
-async def execute_extraction_code(task_id: str) -> dict[str, Any]:
+async def execute_extraction_code(task_id: str, **kwargs: Any) -> dict[str, Any]:
     """在沙箱中执行抽取脚本并生成 CSV 工件。
 
     Args:
@@ -115,11 +117,8 @@ async def execute_extraction_code(task_id: str) -> dict[str, Any]:
 
 def _parse_csv_meta(csv_bytes: bytes) -> tuple[list[str], int]:
     """解析 CSV 列名与行数。"""
-    import csv as csv_module
-    from io import StringIO
-
     text = csv_bytes.decode("utf-8", errors="replace")
-    reader = csv_module.DictReader(StringIO(text))
+    reader = csv.DictReader(StringIO(text))
     columns = reader.fieldnames or []
     total_rows = sum(1 for _ in reader)
     return columns, total_rows

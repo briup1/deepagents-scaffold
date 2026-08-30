@@ -129,6 +129,7 @@ async def generate_extraction_code(
     upload_artifact_id: str,
     requirements: dict[str, Any],
     script: str | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """根据上传文件和抽取目标生成抽取脚本。
 

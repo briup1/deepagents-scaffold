@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from io import BytesIO
+from typing import Any
 
 import openpyxl
 
@@ -20,6 +21,7 @@ async def preview_excel(
     artifact_id: str,
     sheet_index: int = 0,
     limit: int = 20,
+    **kwargs: Any,
 ) -> dict:
     """预览已上传 Excel 文件的结构。
 

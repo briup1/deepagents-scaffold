@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { listAgents, type AgentInfo } from './api/copilotkit'
 import { getToken, onUnauthorized, setToken } from './api/auth'
-import { type ThreadSummary } from './api/threads'
+import { deleteThread, type ThreadSummary } from './api/threads'
 import { HistoryHttpAgent } from './api/historyAgent'
 import { type UploadedFile } from './api/files'
 import { mergePendingThread, useThreads } from './hooks/useThreads'
@@ -12,6 +12,7 @@ import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadD
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
 import { useGenerativeUITool } from './hooks/useGenerativeUITool'
 import { useGenerativeUIAction } from './hooks/useGenerativeUIAction'
+import { randomUUID } from './lib/uuid'
 
 interface ChatShellProps {
   agents: AgentInfo[]
@@ -118,7 +119,7 @@ function ChatInner({ agentId, threadId, onFirstUserMessage, onRunStateChange }: 
         onFileUploaded={handleFileUploaded}
         onError={handleDropzoneError}
       >
-        <main className="flex h-full flex-1 flex-col overflow-hidden">
+        <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           {uploadError && (
             <div className="absolute right-4 top-4 z-50 rounded-lg bg-red-100 px-4 py-2 text-sm text-red-700 shadow">
               <button
@@ -133,20 +134,22 @@ function ChatInner({ agentId, threadId, onFirstUserMessage, onRunStateChange }: 
             </div>
           )}
           {uploadedFiles.length > 0 && (
-            <div className="border-b border-cream-200 bg-white px-4 py-3">
+            <div className="shrink-0 border-b border-cream-200 bg-white px-4 py-3">
               <FileAttachmentList files={uploadedFiles} onRemove={handleRemoveFile} />
             </div>
           )}
-          <CopilotChat
-            agentId={agentId}
-            threadId={threadId}
-            className="h-full"
-            labels={{
-              chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
-              welcomeMessageText: '有什么可以帮你的？',
-              modalHeaderTitle: 'DeepAgents Chat',
-            }}
-          />
+          <div className="min-h-0 flex-1">
+            <CopilotChat
+              agentId={agentId}
+              threadId={threadId}
+              className="h-full"
+              labels={{
+                chatInputPlaceholder: uploadedFiles.length > 0 ? '输入消息...' : '拖拽 Excel 到此处或输入消息...',
+                welcomeMessageText: '有什么可以帮你的？',
+                modalHeaderTitle: 'DeepAgents Chat',
+              }}
+            />
+          </div>
         </main>
       </FileUploadDropzone>
     </GenerativeUIContext.Provider>
@@ -185,7 +188,7 @@ function ChatShell({ agents, currentAgentId, threadId, token, onFirstUserMessage
 }
 
 export default function App() {
-  const [threadId, setThreadId] = useState(() => `thread-${crypto.randomUUID()}`)
+  const [threadId, setThreadId] = useState(() => `thread-${randomUUID()}`)
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [agentError, setAgentError] = useState<string | null>(null)
@@ -293,7 +296,7 @@ export default function App() {
     }
     // 旧占位已发消息但尚未收敛时，先刷新一次列表避免其从侧栏丢失
     if (pendingThread) void refetch()
-    const id = `thread-${crypto.randomUUID()}`
+    const id = `thread-${randomUUID()}`
     const now = new Date().toISOString()
     setThreadId(id)
     setPendingThread({
@@ -309,7 +312,7 @@ export default function App() {
   const handleAgentChange = (nextAgentId: string) => {
     if (nextAgentId === currentAgentId) return
     setAgentId(nextAgentId)
-    setThreadId(`thread-${crypto.randomUUID()}`)
+    setThreadId(`thread-${randomUUID()}`)
     // 切换 Agent 后清除占位条目，避免跨 Agent 泄漏
     setPendingThread(null)
   }
@@ -325,6 +328,20 @@ export default function App() {
     setThreadId(selectedThreadId)
   }
 
+  const handleDeleteThread = async (deletedThreadId: string) => {
+    try {
+      if (pendingThread?.thread_id === deletedThreadId) {
+        setPendingThread(null)
+      } else {
+        await deleteThread(deletedThreadId)
+        await refetch()
+      }
+      if (deletedThreadId === threadId) setThreadId(`thread-${randomUUID()}`)
+    } catch (err) {
+      window.alert(`删除会话失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cream-50">
       <Sidebar
@@ -338,6 +355,7 @@ export default function App() {
         onAgentChange={handleAgentChange}
         onNewChat={handleNewChat}
         onSelectThread={handleSelectThread}
+        onDeleteThread={handleDeleteThread}
       />
       <ChatShell
         key={threadId}

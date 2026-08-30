@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from scaffold.infra.config.app_config import AppConfig
 from scaffold.infra.config.profile_config import HarnessProfileConfig
 
@@ -123,8 +125,6 @@ def _parse_skill_frontmatter(content: str) -> dict[str, Any]:
         ---
         # Markdown content...
     """
-    import yaml
-
     meta: dict[str, Any] = {}
     if not content.startswith("---"):
         return meta

@@ -38,7 +38,7 @@ flowchart TB
         S --> T6["/api/runs/wait<br/>POST"]
     end
 
-    subgraph Agent 工厂 core/agents.py
+    subgraph Agent 工厂 runtime/agents.py
         U[get_agent / create_agent] --> V[resolve ModelConfig]
         V --> W[create_chat_model<br/>infra/models/factory.py]
         U --> X[get_available_tools<br/>core/tools.py]
@@ -116,7 +116,7 @@ flowchart TB
 |------|------|
 | FastAPI 入口 | `src/scaffold/api/app.py` |
 | 运行时依赖/单例 | `src/scaffold/api/deps.py` |
-| Agent 工厂 | `src/scaffold/core/agents.py` |
+| Agent 工厂 | `src/scaffold/runtime/agents.py` |
 | 工具加载 | `src/scaffold/core/tools.py` |
 | 子 Agent | `src/scaffold/core/subagents.py` |
 | Skill 扫描 | `src/scaffold/core/skills.py` |

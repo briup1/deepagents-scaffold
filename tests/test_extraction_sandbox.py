@@ -57,6 +57,16 @@ print('done')
             assert "done" in result.stdout
             assert "result.json" in result.output_files
 
+    async def test_numpy_import_with_default_memory_limit(self, sandbox: SubprocessSandbox) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            script = tmp / "numpy_import.py"
+            script.write_text("import numpy as np\nprint(np.__version__)\n", encoding="utf-8")
+
+            result = await sandbox.run(script, tmp / "in", tmp / "out")
+
+            assert result.exit_code == 0, result.stderr
+
     async def test_forbidden_import(self, sandbox: SubprocessSandbox) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
