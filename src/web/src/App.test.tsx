@@ -64,6 +64,8 @@ let serverThreads: ThreadSummary[] = []
 
 describe('App', () => {
   beforeEach(() => {
+    // 认证：测试环境预设有效 token，跳过 TokenGate
+    localStorage.setItem('scaffold_token', 'test-token')
     vi.stubGlobal('fetch', mockFetch)
     latestCopilotKitProps = {}
     latestCopilotChatProps = {}
@@ -342,5 +344,58 @@ describe('App', () => {
     await user.click(await screen.findByRole('option', { name: 'code_reviewer' }))
 
     await waitFor(() => expect(screen.queryByRole('button', { name: '新会话' })).not.toBeInTheDocument())
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 认证（R1-2）：token 输入页 + 401 回到输入页
+// ---------------------------------------------------------------------------
+
+describe('App auth', () => {
+  beforeEach(() => {
+    localStorage.removeItem('scaffold_token')
+    vi.stubGlobal('fetch', mockFetch)
+    mockFetch.mockReset()
+    mockFetch.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ agents: [], threads: [] }) }))
+  })
+
+  afterEach(() => {
+    localStorage.removeItem('scaffold_token')
+  })
+
+  it('A1: 无本地 token 时显示输入界面而非聊天界面', async () => {
+    render(<App />)
+    expect(screen.getByText('访问令牌')).toBeInTheDocument()
+    expect(screen.queryByTestId('copilot-chat')).not.toBeInTheDocument()
+  })
+
+  it('A2: 输入 token 后进入聊天界面，且会话列表请求带 X-API-Key', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(screen.getByPlaceholderText('粘贴 Token'), 'tok-abc')
+    await user.click(screen.getByRole('button', { name: '进入' }))
+
+    await waitFor(() => expect(screen.getByTestId('copilot-kit')).toBeInTheDocument())
+    expect(localStorage.getItem('scaffold_token')).toBe('tok-abc')
+    const agentsCalls = mockFetch.mock.calls.filter(([url]) => String(url) === '/api/agents/')
+    const agentsCall = agentsCalls[agentsCalls.length - 1]
+    expect(agentsCall).toBeTruthy()
+    expect(new Headers((agentsCall[1] as RequestInit | undefined)?.headers).get('X-API-Key')).toBe('tok-abc')
+  })
+
+  it('A3: 任意请求收到 401 后清空 token 并回到输入界面', async () => {
+    localStorage.setItem('scaffold_token', 'stale-token')
+
+    // 先装 401 响应再渲染：挂载后的首个请求（会话列表）即 401 → 回输入页
+    mockFetch.mockImplementation(async (url: string) => {
+      if (String(url) === '/api/agents/') {
+        return { ok: true, status: 200, json: async () => ({ agents: [{ name: 'default' }] }) }
+      }
+      return { ok: false, status: 401, json: async () => ({ detail: 'unauthorized' }) }
+    })
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('访问令牌')).toBeInTheDocument())
+    expect(localStorage.getItem('scaffold_token')).toBeNull()
   })
 })

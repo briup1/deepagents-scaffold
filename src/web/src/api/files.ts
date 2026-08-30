@@ -1,3 +1,4 @@
+import { apiFetch } from "./auth"
 export interface UploadedFile {
   artifact_id: string
   thread_id: string
@@ -14,7 +15,7 @@ export async function uploadFile(threadId: string, file: File): Promise<Uploaded
   formData.append('thread_id', threadId)
   formData.append('file', file)
 
-  const res = await fetch('/api/files/upload', {
+  const res = await apiFetch('/api/files/upload', {
     method: 'POST',
     body: formData,
   })
@@ -35,7 +36,7 @@ export async function listFiles(
   params.set('thread_id', threadId)
   if (artifactType) params.set('artifact_type', artifactType)
 
-  const res = await fetch(`/api/files/?${params.toString()}`)
+  const res = await apiFetch(`/api/files/?${params.toString()}`)
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`获取文件列表失败 (${res.status}): ${text}`)

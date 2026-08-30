@@ -35,7 +35,7 @@ describe('useThreads', () => {
 
   it('挂载后按 Agent 拉取会话列表', async () => {
     mockThreadsResponse([makeThread('t1')])
-    const { result } = renderHook(() => useThreads('default'))
+    const { result } = renderHook(() => useThreads('default', null))
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(mockFetch).toHaveBeenCalledWith('/api/threads/?agent_id=default')
@@ -44,7 +44,7 @@ describe('useThreads', () => {
   })
 
   it('agentId 为空时不发请求', async () => {
-    const { result } = renderHook(() => useThreads(''))
+    const { result } = renderHook(() => useThreads('', null))
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(mockFetch).not.toHaveBeenCalled()
@@ -53,7 +53,7 @@ describe('useThreads', () => {
 
   it('refetch 重新拉取并返回最新列表', async () => {
     mockThreadsResponse([makeThread('t1')])
-    const { result } = renderHook(() => useThreads('default'))
+    const { result } = renderHook(() => useThreads('default', null))
     await waitFor(() => expect(result.current.threads).toHaveLength(1))
 
     mockThreadsResponse([makeThread('t-new'), makeThread('t1')])
@@ -68,7 +68,7 @@ describe('useThreads', () => {
 
   it('refetch 期间保留旧数据，不闪回加载态', async () => {
     mockThreadsResponse([makeThread('t1')])
-    const { result } = renderHook(() => useThreads('default'))
+    const { result } = renderHook(() => useThreads('default', null))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     let resolveSecond: (value: unknown) => void = () => {}
@@ -105,7 +105,7 @@ describe('useThreads', () => {
           resolveFirst = resolve
         }),
     )
-    const { result, rerender } = renderHook(({ agentId }) => useThreads(agentId), {
+    const { result, rerender } = renderHook(({ agentId }) => useThreads(agentId, null), {
       initialProps: { agentId: 'default' },
     })
 
@@ -125,7 +125,7 @@ describe('useThreads', () => {
 
   it('拉取失败时暴露错误信息', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 })
-    const { result } = renderHook(() => useThreads('default'))
+    const { result } = renderHook(() => useThreads('default', null))
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.error).toBe('HTTP 500')

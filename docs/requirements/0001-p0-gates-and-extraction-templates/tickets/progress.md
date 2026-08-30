@@ -30,3 +30,11 @@
 - Ruling: 跨用户访问 REST 详情返 403（需求明确），列表过滤为空（不泄露存在性的同时满足"列表零条"验收）；仓储 get 不过滤、过滤在 workspace/路由层——REST 需要区分 404/403 — 错了的代价：直连仓储的新代码需自行比较 user_id。
 - 排障：① 删 data/ 后 tmp_tests 目录也被删（config.test.yaml sqlite_dir=./tmp_tests/data），aiosqlite 不建目录 → workspace.__aenter__ 补 mkdir parents；② REST 测试共享 session 级 DB 文件，固定 id 播种撞 UNIQUE → 改 uuid 后缀；③ conn fixture 漏 migrate extraction_tasks（delete_thread 级联依赖）。
 - 验证输出：`.venv/bin/ruff check src tests` → All checks passed!；`.venv/bin/pytest -q` → **409 passed**（新增 test_isolation.py 13 个：REST 403×4 场景/列表不可见/自有资源不受影响/仓储过滤×4/workspace ctx 隔离+拒绝日志×2/旧 schema 守卫×2）；`npm run build` ✓ built；`npm test` 84 passed。
+
+## 工单 04：前端 token 接入
+
+- 完成（待提交）。实现：src/api/auth.ts（localStorage 持久化 + apiFetch 统一注入 X-API-Key + 401 全局登出订阅）；threads/files/copilotkit 三个 API 模块全部改走 apiFetch；HistoryHttpAgent 构造传入 headers（SSE /agent 请求带 token）；App.tsx 无 token 即渲染 TokenGate 输入页（提交后清空错误态重拉）；useThreads 依赖 token 重拉；新增 A1-A3 认证测试（无 token 显示输入页、输入后进入且请求带头、401 清 token 回输入页）。
+- Ruling: 无 token 无条件显示输入页（而非仅 401 后）——按工单验收字面执行；后端 auth 关闭时请求头被忽略，两种模式都安全 — 代价：auth 关闭的纯开发模式也需先输入任意 token。
+- Ruling: apiFetch 在无 token 时保持原生 fetch 调用签名（不包 init），既有调用方测试零改动。
+- 排障：① 首次 /api/agents/ 在输入页期间即发起（无 token）→ effect 加 !token 早退；② A3 测试在 render 后才装 401 mock → 挂载期请求已用旧 mock 成功，改为 render 前安装。
+- 验证输出：`npm run build` ✓ built；`npm test` **94 passed**（新增 A1-A3 三个认证场景 + auth.test.ts 6 个单测）；后端 `.venv/bin/pytest -q` 409 passed 无回归。

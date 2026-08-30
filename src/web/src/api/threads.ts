@@ -1,3 +1,4 @@
+import { apiFetch } from "./auth"
 export interface ThreadSummary {
   thread_id: string
   agent_id: string
@@ -21,19 +22,19 @@ export interface ThreadMessage {
 export async function listThreads(agentId?: string): Promise<{ threads: ThreadSummary[]; total: number }> {
   const params = new URLSearchParams()
   if (agentId) params.set('agent_id', agentId)
-  const res = await fetch(`/api/threads/?${params.toString()}`)
+  const res = await apiFetch(`/api/threads/?${params.toString()}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function getThreadMessages(threadId: string): Promise<{ thread_id: string; messages: ThreadMessage[] }> {
-  const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`)
+  const res = await apiFetch(`/api/threads/${encodeURIComponent(threadId)}/messages`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function createThread(agentId?: string): Promise<{ thread_id: string }> {
-  const res = await fetch('/api/threads/', {
+  const res = await apiFetch('/api/threads/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ agent_id: agentId ?? 'default' }),

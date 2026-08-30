@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CopilotKit, CopilotChat, useAgent } from '@copilotkit/react-core/v2'
 import { listAgents, type AgentInfo } from './api/copilotkit'
+import { getToken, onUnauthorized, setToken } from './api/auth'
 import { type ThreadSummary } from './api/threads'
 import { HistoryHttpAgent } from './api/historyAgent'
 import { type UploadedFile } from './api/files'
 import { mergePendingThread, useThreads } from './hooks/useThreads'
 import { Sidebar } from './components/Sidebar'
+import { TokenGate } from './components/TokenGate'
 import { FileUploadDropzone, FileAttachmentList } from './components/FileUploadDropzone'
 import { GenerativeUIContext } from './catalog/GenerativeUIContext'
 import { useGenerativeUITool } from './hooks/useGenerativeUITool'
@@ -15,6 +17,7 @@ interface ChatShellProps {
   agents: AgentInfo[]
   currentAgentId: string
   threadId: string
+  token: string | null
   onFirstUserMessage: (threadId: string, content: string) => void
   onRunStateChange: (threadId: string, running: boolean) => void
 }
@@ -150,7 +153,7 @@ function ChatInner({ agentId, threadId, onFirstUserMessage, onRunStateChange }: 
   )
 }
 
-function ChatShell({ agents, currentAgentId, threadId, onFirstUserMessage, onRunStateChange }: ChatShellProps) {
+function ChatShell({ agents, currentAgentId, threadId, token, onFirstUserMessage, onRunStateChange }: ChatShellProps) {
   // 把所有已注册 Agent 都交给 CopilotKit，否则切换 Agent 时 useAgent
   // 内部 known agents 只有当前一个，导致报错。
   // HistoryHttpAgent 在 threadId 切换时从后端回放历史消息；
@@ -159,10 +162,15 @@ function ChatShell({ agents, currentAgentId, threadId, onFirstUserMessage, onRun
     const map: Record<string, HistoryHttpAgent> = {}
     for (const agent of agents) {
       const url = `/agent/${agent.name}`
-      map[agent.name] = new HistoryHttpAgent({ url, threadId, agentId: agent.name })
+      map[agent.name] = new HistoryHttpAgent({
+        url,
+        threadId,
+        agentId: agent.name,
+        headers: token ? { 'X-API-Key': token } : undefined,
+      })
     }
     return map
-  }, [agents, threadId])
+  }, [agents, threadId, token])
 
   return (
     <CopilotKit agents__unsafe_dev_only={agentMap}>
@@ -182,12 +190,18 @@ export default function App() {
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [agentError, setAgentError] = useState<string | null>(null)
   const [agentId, setAgentId] = useState<string | null>(null)
+  // 认证 token：无 token 即显示输入页（认证开启时后端校验，关闭时后端忽略请求头，
+  // 两种模式都安全）；收到 401 清空 token 回到输入页
+  const [token, setTokenState] = useState<string | null>(() => getToken())
   // 本地乐观占位条目：新建会话时设置，服务器条目落库后清除
   const [pendingThread, setPendingThread] = useState<ThreadSummary | null>(null)
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null)
 
+  // 任意 API 请求收到 401 → 清 token 并回到输入页
+  useEffect(() => onUnauthorized(() => setTokenState(null)), [])
+
   const currentAgentId = agentId ?? agents[0]?.name ?? ''
-  const { threads, loading: threadsLoading, error: threadsError, refetch } = useThreads(currentAgentId)
+  const { threads, loading: threadsLoading, error: threadsError, refetch } = useThreads(currentAgentId, token)
 
   // 渲染列表 = 服务器列表 + 本地占位（按 threadId 去重，占位置顶）
   const mergedThreads = useMemo(
@@ -196,6 +210,8 @@ export default function App() {
   )
 
   useEffect(() => {
+    // 无 token（输入页）时不发请求，避免无意义 401 噪声
+    if (!token) return
     listAgents()
       .then((data) => {
         setAgents(data.agents)
@@ -209,7 +225,8 @@ export default function App() {
       .finally(() => {
         setLoadingAgents(false)
       })
-  }, [agentId])
+    // token 变化（重新输入）后重新拉取，带上新的请求头
+  }, [agentId, token])
 
   // 首条用户消息：占位条目标题本地截取前 20 字，立即生效。
   // 历史回放的旧消息不会命中：占位条目只可能属于当前全新会话的 threadId。
@@ -231,6 +248,19 @@ export default function App() {
     },
     [refetch],
   )
+
+  if (!token) {
+    return (
+      <TokenGate
+        onSave={(t) => {
+          setToken(t)
+          setTokenState(t)
+          setLoadingAgents(true)
+          setAgentError(null)
+        }}
+      />
+    )
+  }
 
   if (loadingAgents) {
     return (
@@ -314,6 +344,7 @@ export default function App() {
         agents={agents}
         currentAgentId={effectiveAgentId}
         threadId={threadId}
+        token={token}
         onFirstUserMessage={handleFirstUserMessage}
         onRunStateChange={handleRunStateChange}
       />

@@ -5,7 +5,7 @@ import { listThreads, type ThreadSummary } from '../api/threads'
  * 会话列表 hook：按 Agent 过滤拉取，暴露 refetch 供外部在 run 完成后失效刷新。
  * refetch 期间保留旧数据，避免列表闪回加载态。
  */
-export function useThreads(agentId: string) {
+export function useThreads(agentId: string, token: string | null) {
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +37,8 @@ export function useThreads(agentId: string) {
         setLoading(false)
       }
     }
-  }, [agentId])
+    // token 参与依赖：重新输入 token 后重新拉取（请求头变化）
+  }, [agentId, token])
 
   useEffect(() => {
     setLoading(true)
