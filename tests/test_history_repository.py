@@ -39,7 +39,7 @@ async def test_add_message_is_idempotent(repo: HistoryRepository) -> None:
     )
     await repo.add_message(msg)
     await repo.add_message(msg)
-    messages = await repo.get_messages("thread-1")
+    messages = await repo.get_messages("thread-1", "default")
     assert len(messages) == 1
     assert messages[0].content == "hello"
 
@@ -77,7 +77,7 @@ async def test_add_message_upserts_tool_calls(repo: HistoryRepository) -> None:
             created_at="2026-08-18T10:00:00Z",
         )
     )
-    messages = await repo.get_messages("thread-1")
+    messages = await repo.get_messages("thread-1", "default")
     assert len(messages) == 1
     assert messages[0].tool_calls is not None
     assert messages[0].tool_calls[0]["function"]["name"] == "render_ui"
@@ -104,7 +104,7 @@ async def test_get_messages_returns_thread_id(repo: HistoryRepository) -> None:
             created_at="2026-08-18T10:00:00Z",
         )
     )
-    messages = await repo.get_messages("thread-1")
+    messages = await repo.get_messages("thread-1", "default")
     assert len(messages) == 1
     assert messages[0].thread_id == "thread-1"
 

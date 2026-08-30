@@ -144,12 +144,12 @@ class TestRepoIsolation:
         assert total_a == 1 and threads_a[0].thread_id == "t-a"
 
         # 属主信息可读
-        row = await repo.get_thread("t-a")
+        row = await repo.get_thread_owner("t-a")
         assert row is not None and row["user_id"] == "alice"
 
         # bob 删不了 alice 的会话
         assert await repo.delete_thread("t-a", "bob") is False
-        assert await repo.get_thread("t-a") is not None
+        assert await repo.get_thread_owner("t-a") is not None
         # alice 可以删
         assert await repo.delete_thread("t-a", "alice") is True
 
@@ -158,7 +158,7 @@ class TestRepoIsolation:
         await repo.migrate()
         await repo.ensure_thread("t-a", "default", "alice")
         await repo.ensure_thread("t-a", "default", "bob")  # bob 撞同 id
-        row = await repo.get_thread("t-a")
+        row = await repo.get_thread_owner("t-a")
         assert row["user_id"] == "alice"  # 属主不变
 
     async def test_artifact_repo_user_filtering(self, conn):
@@ -272,4 +272,112 @@ class TestLegacySchemaGuard:
             repo = HistoryRepository(c)
             await repo.migrate()
             await repo.ensure_thread("t-1", "default", "alice")
-            assert (await repo.get_thread("t-1"))["user_id"] == "alice"
+            assert (await repo.get_thread_owner("t-1"))["user_id"] == "alice"
+
+# ---------------------------------------------------------------------------
+# 审计补充（2026-08-30 复审）：/state 端点归属校验 + 仓储层 user_id 过滤契约
+# ---------------------------------------------------------------------------
+
+
+class TestStateEndpointIsolation:
+    def test_cross_user_state_access_forbidden(self, client: TestClient):
+        """bob 读/写 alice 线程的 /state 一律 403（与 messages/threads 同规则）。"""
+        tid, _ = TestRestIsolation._seed_alice(client)
+        assert client.get(f"/api/threads/{tid}/state").status_code == 403
+        assert (
+            client.post(f"/api/threads/{tid}/state", json={"state": {"x": 1}}).status_code
+            == 403
+        )
+
+    def test_unknown_thread_state_404(self, client: TestClient):
+        """不存在的线程访问 /state → 404（任何用户）。"""
+        assert client.get("/api/threads/thread-missing/state").status_code == 404
+        assert (
+            client.post(
+                "/api/threads/thread-missing/state", json={"state": {"x": 1}}
+            ).status_code
+            == 404
+        )
+
+    def test_owner_state_access_not_403(self, client: TestClient):
+        """属主访问 /state 不触发归属拒绝（default 建线程后访问，无 checkpoint 时为 404，绝不 403）。"""
+        resp = client.post("/api/threads/", json={"agent_id": "default"})
+        assert resp.status_code == 200
+        tid = resp.json()["thread_id"]
+        status = client.get(f"/api/threads/{tid}/state").status_code
+        assert status in (200, 404)
+
+
+class TestRepoUserFilteredGetters:
+    async def test_get_thread_user_filtered(self, conn):
+        repo = HistoryRepository(conn)
+        await repo.migrate()
+        await repo.ensure_thread("t-a", "default", "alice")
+
+        assert await repo.get_thread("t-a", "alice") is not None
+        assert await repo.get_thread("t-a", "bob") is None  # 非本人 → None（design 3.4）
+        # 原始行访问器仅授权层使用
+        assert (await repo.get_thread_owner("t-a"))["user_id"] == "alice"
+
+    async def test_get_messages_user_filtered(self, conn):
+        from scaffold.infra.history.models import ThreadMessage
+
+        repo = HistoryRepository(conn)
+        await repo.migrate()
+        await repo.ensure_thread("t-a", "default", "alice")
+        await repo.add_message(
+            ThreadMessage(
+                thread_id="t-a",
+                message_id="m1",
+                run_id="r1",
+                role="user",
+                content="alice 的私密消息",
+                created_at="2026-08-30T00:00:00+00:00",
+            )
+        )
+
+        alice_msgs = await repo.get_messages("t-a", "alice")
+        assert len(alice_msgs) == 1
+        assert await repo.get_messages("t-a", "bob") == []  # 非本人 → 空列表
+
+    async def test_artifact_get_user_filtered(self, conn):
+        from scaffold.infra.artifacts import Artifact
+
+        repo = ArtifactRepository(conn)
+        await repo.migrate()
+        await repo.create(
+            Artifact(
+                artifact_id="art-a",
+                thread_id="t-1",
+                user_id="alice",
+                artifact_type="upload",
+                stored_path="t-1/art-a.xlsx",
+                created_at="2026-08-30T00:00:00+00:00",
+            )
+        )
+        assert await repo.get("art-a", "alice") is not None
+        assert await repo.get("art-a", "bob") is None
+        assert (await repo.get_any("art-a")).user_id == "alice"
+
+    async def test_task_get_and_update_user_filtered(self, conn):
+        repo = ExtractionTaskRepository(conn)
+        await repo.migrate()
+        await repo.create(
+            ExtractionTask(
+                task_id="ext-a",
+                thread_id="t-1",
+                user_id="alice",
+                upload_artifact_id="up-1",
+                status="goal_setting",
+                created_at="2026-08-30T00:00:00+00:00",
+                updated_at="2026-08-30T00:00:00+00:00",
+            )
+        )
+        assert await repo.get("ext-a", "alice") is not None
+        assert await repo.get("ext-a", "bob") is None  # 非本人 → None
+
+        task = await repo.get_any("ext-a")
+        task.status = "code_generated"
+        assert await repo.update(task, "bob") is False  # 非本人无法更新
+        assert (await repo.get_any("ext-a")).status == "goal_setting"
+        assert await repo.update(task, "alice") is True

@@ -65,8 +65,19 @@ class ArtifactRepository:
         )
         await self._conn.commit()
 
-    async def get(self, artifact_id: str) -> Artifact | None:
-        """根据 artifact_id 查询工件。"""
+    async def get(self, artifact_id: str, user_id: str) -> Artifact | None:
+        """按用户查询工件（非本人 → None，design.md 3.4 契约）。"""
+        cursor = await self._conn.execute(
+            "SELECT * FROM artifacts WHERE artifact_id = ? AND user_id = ?",
+            (artifact_id, user_id),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_artifact(row)
+
+    async def get_any(self, artifact_id: str) -> Artifact | None:
+        """按 artifact_id 查询工件原始记录。授权层（workspace）专用：存在性探测 + 归属比对 + 拒绝日志。"""
         cursor = await self._conn.execute(
             "SELECT * FROM artifacts WHERE artifact_id = ?",
             (artifact_id,),

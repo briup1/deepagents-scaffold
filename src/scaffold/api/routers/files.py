@@ -45,7 +45,7 @@ async def upload_file(
     user_id = get_request_user_id(request)
     # 向他人会话上传文件 → 403
     history_repo = get_history_repo(request)
-    thread_row = await history_repo.get_thread(thread_id)
+    thread_row = await history_repo.get_thread_owner(thread_id)
     if thread_row is not None and thread_row["user_id"] != user_id:
         raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
 
@@ -137,7 +137,7 @@ async def get_file(
 ) -> dict[str, Any]:
     """获取单个工件元数据。"""
     repo = get_artifact_repo(request)
-    artifact = await repo.get(artifact_id)
+    artifact = await repo.get_any(artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail=f"工件 {artifact_id} 不存在")
     if artifact.user_id != get_request_user_id(request):
@@ -167,7 +167,7 @@ async def download_file(
     前端可直接触发浏览器下载。
     """
     repo = get_artifact_repo(request)
-    artifact = await repo.get(artifact_id)
+    artifact = await repo.get_any(artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail=f"工件 {artifact_id} 不存在")
     if artifact.user_id != get_request_user_id(request):

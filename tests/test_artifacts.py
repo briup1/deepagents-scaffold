@@ -100,13 +100,13 @@ class TestArtifactRepository:
         )
         await artifact_repo.create(artifact)
 
-        found = await artifact_repo.get("art-001")
+        found = await artifact_repo.get("art-001", "default")
         assert found is not None
         assert found.thread_id == "t-001"
         assert found.metadata["task_id"] == "ext-001"
 
     async def test_get_not_found(self, artifact_repo: ArtifactRepository) -> None:
-        found = await artifact_repo.get("art-missing")
+        found = await artifact_repo.get("art-missing", "default")
         assert found is None
 
     async def test_list_by_thread(self, artifact_repo: ArtifactRepository) -> None:

@@ -341,7 +341,7 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
         try:
             history_repo = get_history_repo(request)
             current_user = user_id_ctx.get()
-            existing_thread = await history_repo.get_thread(input_data.thread_id)
+            existing_thread = await history_repo.get_thread_owner(input_data.thread_id)
             if existing_thread is not None and existing_thread["user_id"] != current_user:
                 return JSONResponse(
                     status_code=403,

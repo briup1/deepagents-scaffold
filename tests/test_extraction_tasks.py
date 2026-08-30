@@ -33,7 +33,7 @@ class TestExtractionTaskRepository:
         )
         await task_repo.create(task)
 
-        found = await task_repo.get("ext-001")
+        found = await task_repo.get("ext-001", "default")
         assert found is not None
         assert found.thread_id == "t-001"
         assert found.status == "goal_setting"
@@ -54,10 +54,10 @@ class TestExtractionTaskRepository:
         task.status = "code_generated"
         task.script_artifact_id = "art-script"
         task.updated_at = "2025-01-02T00:00:00+00:00"
-        updated = await task_repo.update(task)
+        updated = await task_repo.update(task, "default")
         assert updated is True
 
-        found = await task_repo.get("ext-002")
+        found = await task_repo.get("ext-002", "default")
         assert found is not None
         assert found.status == "code_generated"
         assert found.script_artifact_id == "art-script"

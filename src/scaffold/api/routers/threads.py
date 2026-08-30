@@ -49,7 +49,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     user_id = get_request_user_id(request)
 
     # 显式 thread_id 撞占他人会话 → 403
-    existing = await history_repo.get_thread(thread_id)
+    existing = await history_repo.get_thread_owner(thread_id)
     if existing is not None and existing["user_id"] != user_id:
         raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
 
@@ -96,7 +96,7 @@ async def list_threads(
 async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     """获取线程元数据。"""
     history_repo = get_history_repo(request)
-    row = await history_repo.get_thread(thread_id)
+    row = await history_repo.get_thread_owner(thread_id)
     if row is not None and row["user_id"] != get_request_user_id(request):
         raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
     checkpointer = get_checkpointer(request)
@@ -112,10 +112,10 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
 async def get_thread_messages(thread_id: str, request: Request) -> ThreadMessagesResponse:
     """获取某会话的全部消息。"""
     history_repo = get_history_repo(request)
-    row = await history_repo.get_thread(thread_id)
+    row = await history_repo.get_thread_owner(thread_id)
     if row is not None and row["user_id"] != get_request_user_id(request):
         raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
-    messages = await history_repo.get_messages(thread_id)
+    messages = await history_repo.get_messages(thread_id, get_request_user_id(request))
     return ThreadMessagesResponse(thread_id=thread_id, messages=messages)
 
 
@@ -131,7 +131,7 @@ async def delete_thread(thread_id: str, request: Request) -> ThreadDeleteRespons
     checkpointer = get_checkpointer(request)
     user_id = get_request_user_id(request)
 
-    row = await history_repo.get_thread(thread_id)
+    row = await history_repo.get_thread_owner(thread_id)
     if row is not None and row["user_id"] != user_id:
         raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
     deleted = await history_repo.delete_thread(thread_id, user_id)

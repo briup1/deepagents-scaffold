@@ -72,11 +72,21 @@ class HistoryRepository:
         )
         await self._conn.commit()
 
-    async def get_thread(self, thread_id: str) -> dict[str, Any] | None:
-        """查询线程基础信息（含 user_id），用于归属校验。"""
+    async def get_thread(self, thread_id: str, user_id: str) -> dict[str, Any] | None:
+        """按用户查询线程基础信息（非本人 → None，design.md 3.4 契约）。"""
+        return await self._get_thread_row(thread_id, user_id=user_id)
+
+    async def get_thread_owner(self, thread_id: str) -> dict[str, Any] | None:
+        """查询线程原始行（含 user_id）。授权层专用：路由需区分 403（非属主）与 404（不存在）。"""
+        return await self._get_thread_row(thread_id, user_id=None)
+
+    async def _get_thread_row(
+        self, thread_id: str, *, user_id: str | None
+    ) -> dict[str, Any] | None:
         cursor = await self._conn.execute(
-            "SELECT thread_id, agent_id, user_id, title, created_at, updated_at FROM threads WHERE thread_id = ?",
-            (thread_id,),
+            "SELECT thread_id, agent_id, user_id, title, created_at, updated_at FROM threads WHERE thread_id = ?"
+            + (" AND user_id = ?" if user_id is not None else ""),
+            (thread_id,) if user_id is None else (thread_id, user_id),
         )
         row = await cursor.fetchone()
         if row is None:
@@ -147,17 +157,18 @@ class HistoryRepository:
         ]
         return summaries, total
 
-    async def get_messages(self, thread_id: str) -> list[ThreadMessage]:
-        """返回某线程全部消息，按时间正序。"""
+    async def get_messages(self, thread_id: str, user_id: str) -> list[ThreadMessage]:
+        """返回某用户在某线程的全部消息（非本人线程 → 空列表，design.md 3.4 契约）。"""
         cursor = await self._conn.execute(
             """
             SELECT
-                thread_id, message_id, run_id, role, content, name, tool_call_id, tool_calls, created_at
-            FROM messages
-            WHERE thread_id = ?
-            ORDER BY created_at ASC, rowid ASC
+                m.thread_id, m.message_id, m.run_id, m.role, m.content, m.name, m.tool_call_id, m.tool_calls, m.created_at
+            FROM messages m
+            JOIN threads t ON t.thread_id = m.thread_id
+            WHERE m.thread_id = ? AND t.user_id = ?
+            ORDER BY m.created_at ASC, m.rowid ASC
             """,
-            (thread_id,),
+            (thread_id, user_id),
         )
         rows = await cursor.fetchall()
         return [
@@ -340,8 +351,25 @@ class ExtractionTaskRepository:
         )
         await self._conn.commit()
 
-    async def get(self, task_id: str) -> ExtractionTask | None:
-        """根据 task_id 查询抽取任务（归属校验由调用方比较 task.user_id）。"""
+    async def get(self, task_id: str, user_id: str) -> ExtractionTask | None:
+        """按用户查询抽取任务（非本人 → None，design.md 3.4 契约）。"""
+        cursor = await self._conn.execute(
+            """
+            SELECT
+                task_id, thread_id, user_id, upload_artifact_id, status, requirements,
+                script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
+            FROM extraction_tasks
+            WHERE task_id = ? AND user_id = ?
+            """,
+            (task_id, user_id),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_task(row)
+
+    async def get_any(self, task_id: str) -> ExtractionTask | None:
+        """按 task_id 查询任务原始记录。授权层（workspace）专用：存在性探测 + 归属比对 + 拒绝日志。"""
         cursor = await self._conn.execute(
             """
             SELECT
@@ -357,8 +385,8 @@ class ExtractionTaskRepository:
             return None
         return self._row_to_task(row)
 
-    async def update(self, task: ExtractionTask) -> bool:
-        """更新抽取任务记录；返回是否更新成功。"""
+    async def update(self, task: ExtractionTask, user_id: str) -> bool:
+        """更新抽取任务记录（仅属主，非本人 → False）；返回是否更新成功。"""
         cursor = await self._conn.execute(
             """
             UPDATE extraction_tasks
@@ -368,7 +396,7 @@ class ExtractionTaskRepository:
                 extracted_artifact_id = ?,
                 validation_report = ?,
                 updated_at = ?
-            WHERE task_id = ?
+            WHERE task_id = ? AND user_id = ?
             """,
             (
                 task.status,
@@ -378,6 +406,7 @@ class ExtractionTaskRepository:
                 _dump_json(task.validation_report),
                 task.updated_at,
                 task.task_id,
+                user_id,
             ),
         )
         await self._conn.commit()

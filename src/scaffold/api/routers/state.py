@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from scaffold.api.deps import get_checkpointer
+from scaffold.api.deps import get_checkpointer, get_history_repo, get_request_user_id
 
 router = APIRouter(prefix="/api/threads", tags=["state"])
 
@@ -24,9 +24,20 @@ class ThreadStateUpdateRequest(BaseModel):
     state: dict[str, Any] = Field(default_factory=dict)
 
 
+async def _require_owner(thread_id: str, request: Request) -> None:
+    """归属校验：线程不存在 → 404；非当前用户 → 403（与 threads.py 同规则）。"""
+    history_repo = get_history_repo(request)
+    row = await history_repo.get_thread_owner(thread_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+    if row["user_id"] != get_request_user_id(request):
+        raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
+
+
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
 async def get_thread_state(thread_id: str, request: Request) -> ThreadStateResponse:
     """获取线程的当前状态。"""
+    await _require_owner(thread_id, request)
     checkpointer = get_checkpointer(request)
     config = {"configurable": {"thread_id": thread_id}}
     checkpoint = await checkpointer.aget_tuple(config)
@@ -48,6 +59,7 @@ async def update_thread_state(
     request: Request,
 ) -> ThreadStateResponse:
     """更新线程状态（与现有状态合并）。"""
+    await _require_owner(thread_id, request)
     checkpointer = get_checkpointer(request)
     config = {"configurable": {"thread_id": thread_id}}
     checkpoint = await checkpointer.aget_tuple(config)

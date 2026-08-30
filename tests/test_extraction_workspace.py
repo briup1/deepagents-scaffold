@@ -119,7 +119,7 @@ class _FakeTaskRepo:
     def __init__(self) -> None:
         self.saved: list[ExtractionTask] = []
 
-    async def update(self, task: ExtractionTask) -> bool:
+    async def update(self, task: ExtractionTask, user_id: str = "default") -> bool:
         self.saved.append(task)
         return True
 

@@ -105,7 +105,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         if self._template_repo is None or self._task_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
         user_id = get_current_user_id()
-        task = await self._task_repo.get(task_id)
+        task = await self._task_repo.get_any(task_id)
         if task is None or task.user_id != user_id:
             return {"error": f"任务 {task_id} 不存在"}
         if task.status != "success":
@@ -113,12 +113,12 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         if task.script_artifact_id is None:
             return {"error": f"任务 {task_id} 没有抽取脚本工件，无法保存模板"}
 
-        script_artifact = await self._artifact_repo.get(task.script_artifact_id) if self._artifact_repo else None
+        script_artifact = await self._artifact_repo.get_any(task.script_artifact_id) if self._artifact_repo else None
         if script_artifact is None or script_artifact.user_id != user_id:
             return {"error": f"任务 {task_id} 的脚本工件不存在"}
         script = (await self.read_artifact(script_artifact.artifact_id)).decode("utf-8", errors="replace")
 
-        upload = await self._artifact_repo.get(task.upload_artifact_id) if self._artifact_repo else None
+        upload = await self._artifact_repo.get_any(task.upload_artifact_id) if self._artifact_repo else None
         if upload is None or upload.user_id != user_id:
             return {"error": f"任务 {task_id} 的来源文件不存在"}
         content = await self.read_artifact(upload.artifact_id)
@@ -213,7 +213,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         """根据 task_id 查询抽取任务（非当前用户的任务视为不存在）。"""
         if self._task_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
-        task = await self._task_repo.get(task_id)
+        task = await self._task_repo.get_any(task_id)
         if task is not None and task.user_id != get_current_user_id():
             logger.warning(
                 "cross-user access denied: task_id=%s owner=%s requester=%s",
@@ -229,7 +229,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         if self._task_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
         task.updated_at = _now()
-        return await self._task_repo.update(task)
+        return await self._task_repo.update(task, get_current_user_id())
 
     def check_task_transition(
         self,
@@ -335,7 +335,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         """查询工件元数据（非当前用户的工件视为不存在）。"""
         if self._artifact_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
-        artifact = await self._artifact_repo.get(artifact_id)
+        artifact = await self._artifact_repo.get_any(artifact_id)
         if artifact is not None and artifact.user_id != get_current_user_id():
             logger.warning(
                 "cross-user access denied: artifact_id=%s owner=%s requester=%s",
