@@ -158,7 +158,7 @@ function ChatShell({ agents, currentAgentId, threadId, onFirstUserMessage, onRun
   const agentMap = useMemo(() => {
     const map: Record<string, HistoryHttpAgent> = {}
     for (const agent of agents) {
-      const url = agents.length === 1 ? '/agent' : `/agent/${agent.name}`
+      const url = `/agent/${agent.name}`
       map[agent.name] = new HistoryHttpAgent({ url, threadId, agentId: agent.name })
     }
     return map

@@ -34,6 +34,11 @@ def get_config() -> AppConfig:
         raise HTTPException(status_code=503, detail="Configuration not available") from exc
 
 
+def get_request_user_id(request: Request) -> str:
+    """从 request.state 读取 AuthMiddleware 写入的 user_id（缺失时为 'default'）。"""
+    return getattr(request.state, "user_id", None) or "default"
+
+
 @asynccontextmanager
 async def scaffold_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
     """启动 LangGraph 运行时：checkpointer、store 等。

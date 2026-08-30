@@ -134,7 +134,7 @@ def _make_text_event_sequence() -> list[tuple[float, Any]]:
 
 def test_agent_stream_returns_run_lifecycle(client: TestClient) -> None:
     payload = _agent_payload("thread-test-001", "run-test-001", "msg-001", "hello")
-    response = client.post("/agent", json=payload, headers={"Accept": "text/event-stream"})
+    response = client.post("/agent/default", json=payload, headers={"Accept": "text/event-stream"})
     assert response.status_code == 200
 
     events = _parse_ag_ui_events(response)
@@ -151,7 +151,7 @@ def test_agent_stream_persists_user_message(client: TestClient) -> None:
     thread_id = f"thread-persist-{uuid.uuid4()}"
     message_id = f"msg-persist-{uuid.uuid4()}"
     payload = _agent_payload(thread_id, f"run-persist-{uuid.uuid4()}", message_id, "persist me")
-    response = client.post("/agent", json=payload, headers={"Accept": "text/event-stream"})
+    response = client.post("/agent/default", json=payload, headers={"Accept": "text/event-stream"})
     assert response.status_code == 200
 
     # 消费完整 SSE 流，确保后台 producer 完成
@@ -169,14 +169,14 @@ def test_agent_stream_persists_user_message(client: TestClient) -> None:
 def test_agent_stream_continues_thread(client: TestClient) -> None:
     thread_id = "thread-test-002"
     r1 = client.post(
-        "/agent",
+        "/agent/default",
         json=_agent_payload(thread_id, "run-test-002-a", "msg-001", "hello"),
         headers={"Accept": "text/event-stream"},
     )
     assert r1.status_code == 200
 
     r2 = client.post(
-        "/agent",
+        "/agent/default",
         json=_agent_payload(thread_id, "run-test-002-b", "msg-002", "what did i say"),
         headers={"Accept": "text/event-stream"},
     )

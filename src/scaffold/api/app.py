@@ -6,8 +6,6 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -103,11 +101,12 @@ def create_app() -> FastAPI:
     )
     # Request ID 用于链路追踪
     app.add_middleware(RequestIdMiddleware)
-    # 认证
+    # 认证（多用户 token → user_id，来自 config.yaml auth 段）
+    auth_config = get_app_config().auth
     app.add_middleware(
         AuthMiddleware,
-        api_key=os.getenv("SCAFFOLD_API_KEY"),
-        enabled=os.getenv("SCAFFOLD_API_KEY") is not None,
+        token_users=auth_config.token_user_map(),
+        enabled=auth_config.enabled,
     )
     # CORS
     app.add_middleware(

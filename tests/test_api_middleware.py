@@ -37,53 +37,72 @@ class TestAuthMiddleware:
             return {"status": "ok"}
 
         @app.get("/api/data")
-        def data():
-            return {"data": "value"}
+        def data(request: Request):
+            return {"data": "value", "user_id": getattr(request.state, "user_id", None)}
+
+        @app.post("/agent/default")
+        def agent_sse():
+            return {"ok": True}
 
         return app
 
-    def test_disabled_allows_all(self):
-        app = self._make_app(enabled=False, api_key="test-secret")
-        client = TestClient(app)
-        assert client.get("/api/data").status_code == 200
+    USERS = {"token-alice": "alice", "token-bob": "bob"}
 
-    def test_enabled_no_api_key_allows_all(self):
-        app = self._make_app(enabled=True, api_key=None)
+    def test_disabled_allows_all_with_default_user(self):
+        app = self._make_app(enabled=False, token_users=self.USERS)
+        client = TestClient(app)
+        resp = client.get("/api/data")
+        assert resp.status_code == 200
+        assert resp.json()["user_id"] == "default"
+
+    def test_enabled_empty_users_allows_all(self):
+        app = self._make_app(enabled=True, token_users={})
         client = TestClient(app)
         assert client.get("/api/data").status_code == 200
 
     def test_enabled_missing_header_returns_401(self):
-        app = self._make_app(enabled=True, api_key="test-secret")
+        app = self._make_app(enabled=True, token_users=self.USERS)
         client = TestClient(app)
         resp = client.get("/api/data")
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid or missing API key"
 
-    def test_enabled_wrong_header_returns_401(self):
-        app = self._make_app(enabled=True, api_key="test-secret")
+    def test_enabled_wrong_token_returns_401(self):
+        app = self._make_app(enabled=True, token_users=self.USERS)
         client = TestClient(app)
         resp = client.get("/api/data", headers={"X-API-Key": "wrong"})
         assert resp.status_code == 401
-        assert resp.json()["detail"] == "Invalid or missing API key"
 
-    def test_enabled_correct_header_returns_200(self):
-        app = self._make_app(enabled=True, api_key="test-secret")
+    def test_alice_token_maps_to_alice_user_id(self):
+        app = self._make_app(enabled=True, token_users=self.USERS)
         client = TestClient(app)
-        resp = client.get("/api/data", headers={"X-API-Key": "test-secret"})
+        resp = client.get("/api/data", headers={"X-API-Key": "token-alice"})
         assert resp.status_code == 200
+        assert resp.json()["user_id"] == "alice"
+
+    def test_bob_token_maps_to_bob_user_id(self):
+        app = self._make_app(enabled=True, token_users=self.USERS)
+        client = TestClient(app)
+        resp = client.get("/api/data", headers={"X-API-Key": "token-bob"})
+        assert resp.status_code == 200
+        assert resp.json()["user_id"] == "bob"
+
+    def test_agent_sse_endpoint_requires_auth(self):
+        """/agent 不再豁免：无凭证必须 401。"""
+        app = self._make_app(enabled=True, token_users=self.USERS)
+        client = TestClient(app)
+        assert client.post("/agent/default").status_code == 401
+        assert client.post("/agent/default", headers={"X-API-Key": "token-alice"}).status_code == 200
 
     def test_health_skips_auth(self):
-        app = self._make_app(enabled=True, api_key="test-secret")
+        app = self._make_app(enabled=True, token_users=self.USERS)
         client = TestClient(app)
         assert client.get("/health").status_code == 200
 
     @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
     def test_docs_and_openapi_skip_auth(self, path: str):
-        app = self._make_app(enabled=True, api_key="test-secret")
+        app = self._make_app(enabled=True, token_users=self.USERS)
         client = TestClient(app)
-        # FastAPI auto-generates these; we just verify auth does not block them.
-        # /docs and /redoc return 200; /openapi.json returns 200 once docs have
-        # triggered schema generation.
         resp = client.get(path)
         assert resp.status_code == 200
 
@@ -393,14 +412,14 @@ class TestIntegrationStackOrder:
         return app
 
     def test_authenticated_request_returns_200_with_request_id(self):
-        app = self._build_app(enabled=True, api_key="test-secret")
+        app = self._build_app(enabled=True, token_users={"test-secret": "alice"})
         client = TestClient(app)
         resp = client.get("/api/data", headers={"X-API-Key": "test-secret"})
         assert resp.status_code == 200
         assert "X-Request-ID" in resp.headers
 
     def test_exception_returns_500_with_request_id_and_json(self):
-        app = self._build_app(enabled=True, api_key="test-secret")
+        app = self._build_app(enabled=True, token_users={"test-secret": "alice"})
         client = TestClient(app)
         resp = client.get("/error", headers={"X-API-Key": "test-secret"})
         assert resp.status_code == 500
@@ -418,7 +437,7 @@ class TestIntegrationStackOrder:
         assert body["request_id"] == resp.headers["X-Request-ID"]
 
     def test_health_bypasses_auth_through_full_stack(self):
-        app = self._build_app(enabled=True, api_key="test-secret")
+        app = self._build_app(enabled=True, token_users={"test-secret": "alice"})
         client = TestClient(app)
         resp = client.get("/health")
         assert resp.status_code == 200

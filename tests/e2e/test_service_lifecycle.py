@@ -113,7 +113,7 @@ def test_agent_stream_live_server(live_server: dict) -> None:
         "forwardedProps": {},
     }
     response = httpx.post(
-        f"{base_url}/agent",
+        f"{base_url}/agent/default",
         json=payload,
         headers={"Accept": "text/event-stream"},
         timeout=30.0,

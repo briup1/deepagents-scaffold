@@ -13,7 +13,7 @@ from typing import Any, Self
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scaffold.infra.config.backend_config import BackendConfig
 from scaffold.infra.config.middleware_config import MiddlewareChainConfig
@@ -101,6 +101,40 @@ class AgentConfig(BaseModel):
     )
 
 
+class AuthUserConfig(BaseModel):
+    """单个认证用户：token → user_id 映射。"""
+
+    user_id: str = Field(..., description="用户标识，贯穿会话/工件/任务/模板的数据隔离")
+    token: str = Field(..., description="认证 token，支持 $ENV_VAR 引用（缺失时启动失败）")
+
+
+class AuthConfig(BaseModel):
+    """多用户认证配置。enabled=false 或 users 为空时全放行，user_id 一律为 'default'。"""
+
+    enabled: bool = Field(default=False, description="是否启用多用户认证")
+    users: list[AuthUserConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_users(self) -> Self:
+        if self.enabled:
+            seen_tokens: set[str] = set()
+            seen_ids: set[str] = set()
+            for user in self.users:
+                if not user.token:
+                    raise ValueError(f"auth user '{user.user_id}' has empty token（检查 config.yaml auth 段的 $ENV_VAR 引用）")
+                if user.token in seen_tokens:
+                    raise ValueError(f"auth users have duplicate token（user_id='{user.user_id}'）")
+                if user.user_id in seen_ids:
+                    raise ValueError(f"auth users have duplicate user_id '{user.user_id}'")
+                seen_tokens.add(user.token)
+                seen_ids.add(user.user_id)
+        return self
+
+    def token_user_map(self) -> dict[str, str]:
+        """token → user_id 映射。"""
+        return {u.token: u.user_id for u in self.users}
+
+
 class SandboxExecutionConfig(BaseModel):
     """代码执行沙箱配置。"""
 
@@ -144,6 +178,7 @@ class AppConfig(BaseModel):
     subagent_definitions: SubAgentsDefinitionsConfig = Field(default_factory=SubAgentsDefinitionsConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     execution_sandbox: SandboxExecutionConfig = Field(default_factory=SandboxExecutionConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
 
     def get_model_config(self, name: str) -> ModelConfig | None:
         return next((m for m in self.models if m.name == name), None)
@@ -191,18 +226,21 @@ class AppConfig(BaseModel):
         return cls.model_validate(data)
 
     @classmethod
-    def _resolve_env_variables(cls, config: Any) -> Any:
+    def _resolve_env_variables(cls, config: Any, _path: str = "") -> Any:
         if isinstance(config, str) and config.startswith("$"):
             env_name = config[1:]
             env_value = os.getenv(env_name)
             if env_value is None:
+                # auth 段的 token 缺失属于安全配置错误，必须启动失败并指出变量名
+                if _path.startswith("auth"):
+                    raise ValueError(f"Environment variable {env_name} not found for auth config at '{_path}'")
                 logger.warning("Environment variable %s not found, using empty string", env_name)
                 return ""
             return env_value
         if isinstance(config, dict):
-            return {k: cls._resolve_env_variables(v) for k, v in config.items()}
+            return {k: cls._resolve_env_variables(v, f"{_path}.{k}" if _path else k) for k, v in config.items()}
         if isinstance(config, list):
-            return [cls._resolve_env_variables(item) for item in config]
+            return [cls._resolve_env_variables(item, _path) for item in config]
         return config
 
 

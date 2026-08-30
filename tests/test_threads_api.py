@@ -41,7 +41,7 @@ def test_get_thread_messages_returns_messages(client: TestClient) -> None:
         "context": [],
         "forwardedProps": {},
     }
-    response = client.post("/agent", json=payload, headers={"Accept": "text/event-stream"})
+    response = client.post("/agent/default", json=payload, headers={"Accept": "text/event-stream"})
     assert response.status_code == 200
     # 消费完整 SSE 流，确保后台 producer 完成
     for _ in response.iter_lines():
