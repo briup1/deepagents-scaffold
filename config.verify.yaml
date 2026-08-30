@@ -17,6 +17,13 @@ models:
     model: mock
     response_text: "你好！我是 DeepAgents Scaffold 的默认助手。这是一条来自 mock 模型的固定回复，用于端到端验证。"
     sleep_ms: 30
+  # 供 ModelFallbackMiddleware 验证用的备用 mock 模型
+  - name: mock-fallback
+    display_name: Mock Fallback Model
+    use: scaffold.infra.models.mock:MockChatModel
+    model: mock-fallback
+    response_text: "这是来自备用 mock 模型的固定回复（主模型失败后的回退）。"
+    sleep_ms: 30
 
 # ---------------------------------------------------------------------------
 # Agent 行为配置
@@ -129,30 +136,29 @@ middleware:
     #     summary_prompt: null
     #     trim_tokens_to_summarize: 4000
     #     token_counter: null
-    # 韧性中间件（模型重试、工具重试、模型回退）
-    # 按需取消注释并调整 fallback_models 为你的实际模型名称。
-    # - name: ModelFallbackMiddleware
-    #   enabled: true
-    #   kwargs:
-    #     models: $config.models
-    #     fallback_models:
-    #       - fallback-model-name
-    # - name: ModelRetryMiddleware
-    #   enabled: true
-    #   kwargs:
-    #     max_retries: 2
-    #     backoff_factor: 2.0
-    #     initial_delay: 1.0
-    #     max_delay: 60.0
-    #     jitter: true
-    #     retry_on_status_codes: [429, 502, 503, 504]
-    # - name: ToolRetryMiddleware
-    #   enabled: true
-    #   kwargs:
-    #     max_retries: 1
-    #     backoff_factor: 2.0
-    #     initial_delay: 1.0
-    #     max_delay: 60.0
+    # 韧性中间件（模型重试、工具重试、模型回退）——验证模式启用，fallback 指向 mock-fallback
+    - name: ModelFallbackMiddleware
+      enabled: true
+      kwargs:
+        models: $config.models
+        fallback_models:
+          - mock-fallback
+    - name: ModelRetryMiddleware
+      enabled: true
+      kwargs:
+        max_retries: 2
+        backoff_factor: 2.0
+        initial_delay: 0.1
+        max_delay: 5.0
+        jitter: true
+        retry_on_status_codes: [429, 502, 503, 504]
+    - name: ToolRetryMiddleware
+      enabled: true
+      kwargs:
+        max_retries: 1
+        backoff_factor: 2.0
+        initial_delay: 0.1
+        max_delay: 5.0
     #     jitter: true
     #     retry_on_status_codes: [429, 502, 503, 504]
 

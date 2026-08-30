@@ -63,3 +63,20 @@ def _extract_thread_id(request: Any) -> str | None:
     if isinstance(context, dict):
         return context.get("thread_id")
     return None
+
+
+def _extract_model_name(request: Any) -> str:
+    """Extract the model name from a ModelRequest, if available."""
+    model = getattr(request, "model", None)
+    if model is None:
+        return "unknown"
+    return getattr(model, "model", getattr(model, "model_name", "unknown"))
+
+
+def _extract_tool_name(request: Any) -> str:
+    """Extract the tool name from a ToolCallRequest, if available."""
+    tool_call = getattr(request, "tool_call", None)
+    if isinstance(tool_call, dict):
+        name = tool_call.get("name")
+        return str(name) if name else "unknown"
+    return "unknown"

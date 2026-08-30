@@ -44,6 +44,22 @@ Skill 3 对抽取结果进行校验后输出的报告，包含各项检查是否
 
 不同用户之间的工件和数据完全隔离。当前系统通过 `thread_id` 实现初步隔离，未来将通过 `user_id` 实现严格隔离。
 
+### User ID / 用户标识
+
+一级数据隔离维度。每个用户拥有独立的 `user_id`，其下所有会话、工件、抽取任务与模板均归属该标识；`thread_id` 退为用户之下的二级维度。
+
+### Extraction Template / 抽取模板
+
+归属于某一用户的可复用抽取资产，内容包含验证通过的 Extraction Goal、对应的 Extraction Script，以及来源文件的 Structure Fingerprint。仅创建者可见可用。
+
+### Structure Fingerprint / 结构指纹
+
+描述上传文件结构特征的签名（sheet 名、列头签名等），用于判断新上传文件是否可复用已有 Extraction Template。匹配方向保守：宁可误判不匹配走完整流程，也不套错模板。
+
+### Sandbox Provider / 沙箱提供者
+
+Extraction Script 执行环境的实现选型，由配置驱动切换。本地开发默认使用 subprocess；生产隔离的具体实现（容器 / 托管沙箱 / 其他方案）在方案设计阶段确定。
+
 ### Data Query / 数据查询
 
 对抽取结果 CSV 执行 SQL 或 Python 分析，以回答用户问题或生成报表。

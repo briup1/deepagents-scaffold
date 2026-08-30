@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>需求 0001 · P0 三道闸门 + 抽取模板复用</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F7F6F3; --surface:#FFFFFF; --ink:#2F3437; --sub:#787774; --faint:#A8A49C;
+  --line:#EAE7E0; --accent:#9F2F2D; --accent-soft:#FDEBEC;
+  --ok:#346538; --ok-soft:#EDF3EC; --warn:#956400; --warn-soft:#FBF3DB;
+  --info:#1F6C9F; --info-soft:#E1F3FE; --code-bg:#26221E; --code-ink:#EDE8E0;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans','PingFang SC','Microsoft YaHei',sans-serif;line-height:1.7;font-size:15px}
+.layout{display:flex;max-width:1240px;margin:0 auto;min-height:100vh}
+aside{width:290px;flex-shrink:0;padding:56px 32px 56px 40px;position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line)}
+.eyebrow{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+aside h1{font-family:'Instrument Serif','Songti SC','SimSun',serif;font-size:30px;line-height:1.25;letter-spacing:-.02em;font-weight:400;margin-bottom:26px}
+.meta-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:36px}
+.chip{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--sub)}
+.chip.status{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+nav{display:flex;flex-direction:column;gap:2px}
+nav button{display:flex;align-items:baseline;gap:12px;padding:10px 14px;border:none;border-left:2px solid transparent;background:none;text-align:left;cursor:pointer;font-family:inherit;font-size:14px;color:var(--sub);border-radius:0 6px 6px 0;transition:background .15s}
+nav button .no{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--faint)}
+nav button:hover{background:#FBFAF7}
+nav button.active{background:var(--accent-soft);border-left-color:var(--accent);color:var(--ink);font-weight:600}
+nav button.active .no{color:var(--accent)}
+.side-note{margin-top:40px;font-size:12px;color:var(--faint);line-height:1.6}
+main{flex:1;padding:64px 56px 96px;min-width:0}
+.panel{display:none}
+.panel.show{display:block;animation:fadeUp .5s cubic-bezier(.16,1,.3,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.crumb{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:16px}
+.crumb::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.panel h2{font-family:'Instrument Serif','Songti SC','SimSun',serif;font-size:34px;letter-spacing:-.02em;font-weight:400;margin-bottom:8px}
+.panel .lede{color:var(--sub);font-size:15px;margin-bottom:36px;max-width:640px}
+dl.kv{margin-bottom:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.kv .row{display:flex;border-bottom:1px solid var(--line)}
+dl.kv .row:last-child{border-bottom:none}
+dl.kv dt{flex-shrink:0;width:130px;padding:16px 18px;font-weight:700;font-size:13px;background:#FBFAF7;border-right:1px solid var(--line)}
+dl.kv dd{padding:16px 20px;min-width:0}
+dl.kv dd p{margin-bottom:10px}
+dl.kv dd p:last-child{margin-bottom:0}
+dl.kv ol{margin:6px 0 6px 20px}
+dl.kv li{margin-bottom:8px}
+.hl{color:var(--accent);font-weight:600}
+.badge{display:inline-block;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:999px;vertical-align:middle}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.info{background:var(--info-soft);color:var(--info)}
+.story{background:var(--surface);border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:0 8px 8px 0;padding:14px 20px;margin-bottom:10px;font-size:14.5px}
+.story b{color:var(--accent)}
+.oos{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:13px 20px;margin-bottom:8px;font-size:14.5px;display:flex;gap:12px}
+.oos .dash{color:var(--faint);font-family:'JetBrains Mono',ui-monospace,monospace}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:14px}
+thead th{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);background:#FBFAF7;text-align:left;padding:12px 16px;border-bottom:1px solid var(--line)}
+tbody td{padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+tbody tr:last-child td{border-bottom:none}
+td.dim{white-space:nowrap;font-weight:600;width:130px}
+td .tag{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--accent)}
+code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.88em;background:#FBFAF7;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.pager{display:flex;justify-content:space-between;gap:14px;margin-top:56px}
+.pager button{flex:1;max-width:300px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 18px;cursor:pointer;text-align:left;font-family:inherit;transition:border-color .15s}
+.pager button:hover{border-color:var(--accent)}
+.pager button .dir{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:4px}
+.pager button .t{font-size:14px;font-weight:600;color:var(--ink)}
+.pager button.next{text-align:right}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager button:disabled:hover{border-color:var(--line)}
+.kbd-hint{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--faint);text-align:center;margin-top:24px}
+@media (max-width:860px){
+  .layout{flex-direction:column}
+  aside{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line);padding:36px 24px}
+  main{padding:40px 24px 72px}
+  dl.kv .row{flex-direction:column}
+  dl.kv dt{width:100%;border-right:none;border-bottom:1px solid var(--line);padding:10px 18px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="eyebrow">Requirement Doc</div>
+    <h1>P0 三道闸门 + 抽取模板复用</h1>
+    <div class="meta-chips">
+      <span class="chip">ID 0001</span>
+      <span class="chip status">Implementing · 实施中</span>
+      <span class="chip">2026-08-30</span>
+      <span class="chip">来源 · 产品 PRD</span>
+    </div>
+    <nav id="nav"></nav>
+    <div class="side-note">Markdown 为唯一事实来源，本页由 requirement.md 生成。本文档只规定需求与验收，实现方案一律留待方案设计阶段。已于 2026-08-30 批准，可进入方案设计。</div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+const sections = [
+{
+  id:'redefine', no:'01', title:'需求重定义', lede:'质疑"这是不是最佳路径"——先对齐最终目标，再谈四件事；方案细节一律不进入本文档。',
+  html:`
+  <dl class="kv">
+    <div class="row"><dt>原始诉求</dt><dd><p>在 Excel 抽取与分析三阶段能力已就绪的基础上，补齐四个 P0 缺口——多用户数据隔离（R1）、生产级沙箱（R2）、韧性中间件启用（R3）、抽取目标模板复用（R4），使系统达到可对外交付的状态。</p></dd></div>
+    <div class="row"><dt>最终目标</dt><dd><p>提出需求的人要的不是"四个功能"，而是一个结果——<span class="hl">把系统从单机 Demo 推进到可安全地面向真实多用户演示/交付</span>：数据不互见、生成的代码伤不到宿主机、模型抖动不死 Agent；同时消除报价单这一最高频场景中"每个会话重复对齐抽取目标"的体验损耗。</p></dd></div>
+    <div class="row"><dt>异议</dt><dd>
+      <p><span class="badge ok">已求证</span> 整体路径为最佳路径：三道闸门均是对已核实阻断级缺陷的正面解法；R4 直击报价单类文件格式高度重复的场景，且误判方向保守（宁走完整流程不套错模板）。四件事打包为一个需求与 PRD 自带的 M1–M4 里程碑拆分不冲突，实施按里程碑拆工单。</p>
+      <p><span class="badge info">确认结论</span> 需求确认过程中形成三条结论（覆盖原 PRD 中的方案层表述，具体实现一律留待方案设计阶段）：</p>
+      <ol>
+        <li><b>/agent 等全部业务端点必须纳入身份校验</b>（需求方已确认）。现状认证中间件对 /agent 整路径豁免；若维持豁免，任何人持他人 thread_id 即可驱动 Agent 读取其会话历史与工件，R1 隔离从 Agent 通道被整体绕过，且 Agent 工具层的用户过滤将无从依附。凭证如何传递（前端连接层改造）属于方案设计范畴。</li>
+        <li><b>沙箱实现方案不在需求阶段指定</b>。约束：目标部署环境当前无 Docker。需求只规定隔离底线（文件系统、网络、资源限额、结构化错误）与验收标准；容器 / 托管沙箱 / 其他隔离方案的选型留待方案设计阶段。</li>
+        <li><b>存量数据不做迁移，启用隔离时直接删除</b>（需求方已确认），移入 Out of Scope。</li>
+      </ol>
+    </dd></div>
+    <div class="row"><dt>重定义后</dt><dd><p>以"可安全对外交付的多用户 Excel 抽取分析系统"为目标，落地四件事：用户级身份认证与数据隔离（含 Agent 工具层过滤）、抽取脚本的隔离执行环境、默认启用的模型/工具韧性能力、归属用户的抽取模板保存与复用。验收以 PRD 四个 G 级目标为准。</p></dd></div>
+  </dl>`
+},
+{
+  id:'stories', no:'02', title:'用户故事', lede:'Matt 式穷举——每条讲清角色、能力与价值；写不出 so that 的故事已被剔除。',
+  html:`
+  <div class="story">1. As a <b>部署方</b>, I want <b>为每个用户提供独立身份凭证，且认证机制保持轻量</b>, so that <b>我可以把系统交给多人使用，而不必搭建账号体系</b>。</div>
+  <div class="story">2. As a <b>部署方</b>, I want <b>所有业务端点（含 Agent SSE 端点）在校验身份后再校验资源归属</b>, so that <b>任何用户拿到他人的 thread_id 或 artifact_id 也读不到数据</b>。</div>
+  <div class="story">3. As a <b>部署方</b>, I want <b>Agent 工具在数据访问层同样按用户过滤</b>, so that <b>隔离不会被 Agent 侧工具调用绕过</b>。</div>
+  <div class="story">4. As a <b>终端用户</b>, I want <b>我的上传文件与抽取结果他人不可见</b>, so that <b>我可以放心上传含商业敏感信息的报价单</b>。</div>
+  <div class="story">5. As a <b>部署方</b>, I want <b>AI 生成的抽取代码在文件系统与网络隔离的环境中执行</b>, so that <b>恶意或出错代码不会损害宿主机和其他用户数据</b>。</div>
+  <div class="story">6. As a <b>终端用户</b>, I want <b>模型限流/超时/5xx 时系统自动重试或切换备用模型</b>, so that <b>我不会看到 Agent 直接死掉的错误页</b>。</div>
+  <div class="story">7. As a <b>运维人员</b>, I want <b>所有重试与回退事件写入结构化日志（模型、次数、耗时、成败）</b>, so that <b>我能排查故障，并为后续成本看板积累数据</b>。</div>
+  <div class="story">8. As a <b>货代/采购用户</b>, I want <b>首次抽取验证通过后一键把抽取目标与脚本保存为模板</b>, so that <b>后续同格式报价单无需逐字段重新对齐</b>。</div>
+  <div class="story">9. As a <b>货代/采购用户</b>, I want <b>上传新文件时系统判断其是否与已有模板同格式并让我确认复用</b>, so that <b>从上传到拿到验证通过的结果只需 ≤2 次交互</b>。</div>
+  <div class="story">10. As a <b>货代/采购用户</b>, I want <b>格式不匹配或复用失败时自动回退完整抽取流程并告知原因</b>, so that <b>我永远不会拿到套错模板的错误数据</b>。</div>
+  <div class="story">11. As a <b>部署方</b>, I want <b>模板严格归属创建者（列出/重命名/删除最小管理集）</b>, so that <b>模板这一新资产不成为新的越权面</b>。</div>`
+},
+{
+  id:'oos', no:'03', title:'不做什么（Out of Scope）', lede:'逐项列明本期不做的事；被否决的方案方向一并封存，防止下游讨论滑回旧方案。',
+  html:`
+  <div class="oos"><span class="dash">—</span><span>企业级 RBAC / 组织架构权限——本期只做用户级数据隔离</span></div>
+  <div class="oos"><span class="dash">—</span><span>OAuth / 账号注册体系——认证机制保持轻量（具体方案留待设计）</span></div>
+  <div class="oos"><span class="dash">—</span><span>存量数据迁移——启用隔离时历史数据直接删除（需求方已确认）</span></div>
+  <div class="oos"><span class="dash">—</span><span>多租户 SaaS 计费</span></div>
+  <div class="oos"><span class="dash">—</span><span>模板市场 / 跨用户模板共享——模板仅归属创建者</span></div>
+  <div class="oos"><span class="dash">—</span><span>模板字段级编辑与版本化——修改 = 另存新模板；版本化观察复用失败率后再立项</span></div>
+  <div class="oos"><span class="dash">—</span><span>新文件类型（PDF/DOCX 抽取）——另行立项</span></div>
+  <div class="oos"><span class="dash">—</span><span>通道（飞书/Slack）侧身份映射与权限——后续单独处理；通道接入前必须补齐，否则等于绕过隔离的侧门</span></div>
+  <div class="oos"><span class="dash">—</span><span>改造 thread_id 作用域语义——它保留为用户之下的二级维度，不做废弃或重定义</span></div>`
+},
+{
+  id:'verify', no:'04', title:'验证方案', lede:'只覆盖交付验收维度：接口验证 / 单元测试 / E2E，不做业务成效度量。',
+  html:`
+  <table>
+    <thead><tr><th>维度</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td class="dim">接口验证 <span class="tag">R1</span></td><td>用户 A 持合法凭证请求用户 B 的会话消息 / 工件下载 / 抽取查询，全部 403；无凭证请求业务端点全部 401（<code>/health</code> 除外）；含 Agent SSE 端点</td></tr>
+      <tr><td class="dim">单元测试 <span class="tag">R1</span></td><td>数据访问层按用户过滤的单测；覆盖 Agent 工具层越权读取场景</td></tr>
+      <tr><td class="dim">单元测试 <span class="tag">R2</span></td><td>隔离环境内读宿主机敏感文件（如 <code>/etc/passwd</code>）、访问外网、写工作区外路径三者均失败且返回结构化错误；超内存报 OOM 类错误、超时被终止；本地开发模式下现有沙箱测试全部回归通过</td></tr>
+      <tr><td class="dim">接口验证 <span class="tag">R3</span></td><td>mock 模型注入 429 → 自动重试成功且用户侧无错误；主模型持续失败 → 切换备用模型完成响应且日志记录切换事件；主备全失败 → 用户收到可读「服务暂时不可用」而非栈信息</td></tr>
+      <tr><td class="dim">E2E <span class="tag">R4</span></td><td>首次抽取成功 → 一键保存模板；二次上传同格式文件 → 选模板 + 确认共 ≤2 次交互拿到验证通过结果；列结构不同的文件 → 判定格式不匹配走完整流程；复用执行/验证失败 → 自动回退完整流程并向用户说明原因；模板列表/删除正确且他人不可见</td></tr>
+    </tbody>
+  </table>`
+}
+];
+
+const nav = document.getElementById('nav');
+const main = document.getElementById('main');
+let cur = 0;
+
+sections.forEach((s,i)=>{
+  const b = document.createElement('button');
+  b.innerHTML = `<span class="no">${s.no}</span><span>${s.title}</span>`;
+  b.onclick = ()=>show(i);
+  nav.appendChild(b);
+
+  const p = document.createElement('section');
+  p.className='panel';
+  p.innerHTML = `
+    <div class="crumb">SEC ${s.no} / ${String(sections.length).padStart(2,'0')}</div>
+    <h2>${s.title}</h2>
+    <p class="lede">${s.lede}</p>
+    ${s.html}
+    <div class="pager">
+      <button class="prev" ${i===0?'disabled':''} onclick="show(${i-1})"><span class="dir">上一节</span><span class="t">${i>0?sections[i-1].title:'—'}</span></button>
+      <button class="next" ${i===sections.length-1?'disabled':''} onclick="show(${i+1})"><span class="dir">下一节</span><span class="t">${i<sections.length-1?sections[i+1].title:'—'}</span></button>
+    </div>
+    <div class="kbd-hint">↑ ↓ 键切换章节</div>`;
+  main.appendChild(p);
+});
+
+function show(i){
+  if(i<0||i>=sections.length) return;
+  cur = i;
+  document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('active',j===i));
+  document.querySelectorAll('.panel').forEach((p,j)=>p.classList.toggle('show',j===i));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();show(cur+1);}
+  if(e.key==='ArrowUp'){e.preventDefault();show(cur-1);}
+});
+show(0);
+</script>
+</body>
+</html>

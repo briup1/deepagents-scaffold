@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案设计 0001 · P0 三道闸门 + 抽取模板复用</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F7F6F3; --surface:#FFFFFF; --ink:#2F3437; --sub:#787774; --faint:#A8A49C;
+  --line:#EAE7E0; --accent:#9F2F2D; --accent-soft:#FDEBEC;
+  --ok:#346538; --ok-soft:#EDF3EC; --warn:#956400; --warn-soft:#FBF3DB;
+  --info:#1F6C9F; --info-soft:#E1F3FE; --code-bg:#26221E; --code-ink:#EDE8E0;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans','PingFang SC','Microsoft YaHei',sans-serif;line-height:1.7;font-size:15px}
+.layout{display:flex;max-width:1280px;margin:0 auto;min-height:100vh}
+aside{width:290px;flex-shrink:0;padding:56px 32px 56px 40px;position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line)}
+.eyebrow{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+aside h1{font-family:'Instrument Serif','Songti SC','SimSun',serif;font-size:30px;line-height:1.25;letter-spacing:-.02em;font-weight:400;margin-bottom:26px}
+.meta-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:36px}
+.chip{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--sub)}
+.chip.status{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+nav{display:flex;flex-direction:column;gap:2px}
+nav button{display:flex;align-items:baseline;gap:12px;padding:10px 14px;border:none;border-left:2px solid transparent;background:none;text-align:left;cursor:pointer;font-family:inherit;font-size:14px;color:var(--sub);border-radius:0 6px 6px 0;transition:background .15s}
+nav button .no{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--faint)}
+nav button:hover{background:#FBFAF7}
+nav button.active{background:var(--accent-soft);border-left-color:var(--accent);color:var(--ink);font-weight:600}
+nav button.active .no{color:var(--accent)}
+.side-note{margin-top:40px;font-size:12px;color:var(--faint);line-height:1.6}
+main{flex:1;padding:64px 56px 96px;min-width:0}
+.panel{display:none}
+.panel.show{display:block;animation:fadeUp .5s cubic-bezier(.16,1,.3,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.crumb{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:16px}
+.crumb::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.panel h2{font-family:'Instrument Serif','Songti SC','SimSun',serif;font-size:34px;letter-spacing:-.02em;font-weight:400;margin-bottom:8px}
+.panel .lede{color:var(--sub);font-size:15px;margin-bottom:36px;max-width:680px}
+.panel h3{font-size:17px;font-weight:700;margin:32px 0 14px}
+.panel p{margin-bottom:12px}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13.5px;margin-bottom:16px}
+thead th{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);background:#FBFAF7;text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.6}
+tbody tr:last-child td{border-bottom:none}
+td.dim{white-space:nowrap;font-weight:600}
+code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86em;background:#FBFAF7;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.badge{display:inline-block;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.info{background:var(--info-soft);color:var(--info)}
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+.ba .col{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+.ba .col.after{border-color:var(--accent);background:var(--accent-soft)}
+.ba .tag{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:10px}
+.ba .after .tag{color:var(--accent)}
+.ba ul{margin-left:18px}
+.ba li{margin-bottom:8px;font-size:14px}
+details.acc{border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:14px 0;overflow:hidden}
+details.acc summary{cursor:pointer;list-style:none;padding:13px 18px;font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px;user-select:none}
+details.acc summary::before{content:'+';font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--accent);font-size:15px}
+details.acc[open] summary::before{content:'−'}
+details.acc .acc-body{padding:4px 18px 18px;border-top:1px solid var(--line)}
+pre.code{background:var(--code-bg);color:var(--code-ink);border-radius:6px;padding:16px 18px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;line-height:1.7;overflow-x:auto;margin:12px 0;white-space:pre}
+pre.code .new{color:#E8B4B3;font-weight:600}
+.review{display:flex;align-items:center;gap:12px;margin:22px 0 10px}
+.review .dim-name{font-weight:700;font-size:15px}
+.evidence{background:#FBFAF7;border:1px solid var(--line);border-radius:6px;padding:12px 16px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;line-height:1.7;overflow-x:auto;margin:8px 0 14px;white-space:pre-wrap;color:var(--sub)}
+dl.kv{margin-bottom:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.kv .row{display:flex;border-bottom:1px solid var(--line)}
+dl.kv .row:last-child{border-bottom:none}
+dl.kv dt{flex-shrink:0;width:110px;padding:14px 18px;font-weight:700;font-size:13px;background:#FBFAF7;border-right:1px solid var(--line)}
+dl.kv dd{padding:14px 20px;min-width:0}
+.callout{border:1px solid var(--accent);background:var(--accent-soft);border-radius:8px;padding:16px 20px;margin:18px 0;font-size:14.5px}
+.pager{display:flex;justify-content:space-between;gap:14px;margin-top:56px}
+.pager button{flex:1;max-width:300px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 18px;cursor:pointer;text-align:left;font-family:inherit;transition:border-color .15s}
+.pager button:hover{border-color:var(--accent)}
+.pager button .dir{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:4px}
+.pager button .t{font-size:14px;font-weight:600;color:var(--ink)}
+.pager button.next{text-align:right}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager button:disabled:hover{border-color:var(--line)}
+.kbd-hint{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--faint);text-align:center;margin-top:24px}
+a.req-link{color:var(--info);text-decoration:none;border-bottom:1px dotted var(--info)}
+@media (max-width:860px){
+  .layout{flex-direction:column}
+  aside{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line);padding:36px 24px}
+  main{padding:40px 24px 72px}
+  .ba{grid-template-columns:1fr}
+  dl.kv .row{flex-direction:column}
+  dl.kv dt{width:100%;border-right:none;border-bottom:1px solid var(--line);padding:10px 18px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="eyebrow">Design Doc</div>
+    <h1>P0 三道闸门 + 抽取模板复用</h1>
+    <div class="meta-chips">
+      <span class="chip">ID 0001</span>
+      <span class="chip status">Approved · 已批准</span>
+      <span class="chip">2026-08-30</span>
+      <span class="chip">Chosen · 方案 A</span>
+    </div>
+    <nav id="nav"></nav>
+    <div class="side-note">Markdown 为唯一事实来源，本页由 design.md 生成。需求文档：<a class="req-link" href="requirement.html">requirement.html</a>（已批准）。沙箱方案已选定：方案 A（bubblewrap），端到端验证通过。</div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+const sections = [
+{
+  id:'mapping', no:'01', title:'需求↔方案映射', lede:'多对多允许，遗漏不允许；每条需求子项可回溯到已批准的需求文档。',
+  html:`
+  <table>
+    <thead><tr><th>需求子项</th><th>方案模块</th><th>覆盖</th></tr></thead>
+    <tbody>
+      <tr><td><a class="req-link" href="requirement.html">R1-1</a> 用户级身份凭证（轻量，配置驱动）</td><td>M1a 多用户认证中间件（扩展 AuthMiddleware + auth.users 配置）</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R1-2</a> 全部业务端点身份校验 + 归属 403</td><td>M1a（移除 /agent 豁免）+ M1b 路由层归属校验</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R1-3</a> Agent 工具层按用户过滤</td><td>M1c user_id_ctx 上下文 + 仓储层 user_id 过滤</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R1-4</a> 存量数据直接删除</td><td>M1d 清空 data/ 重建 schema（无迁移脚本）</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R2-1</a> 隔离执行环境（fs/网络/资源底线）</td><td>M2 新沙箱 provider（候选 bwrap / e2b，见 05 节）</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R2-2</a> 工件经仓储流转，沙箱不直连 DB</td><td>沿用现状架构（工具层读写仓储，沙箱只收 input/output 目录）</td><td><span class="badge info">复用</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R2-3</a> 启动失败/超时/OOM 结构化错误</td><td>M2 SandboxResult 错误映射（沿用 execute_extraction_code 转换层）</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R3-1</a> 模型重试默认启用</td><td>M3 config.yaml 启用 ModelRetryMiddleware（代码/测试已就绪）</td><td><span class="badge info">复用</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R3-2</a> 主模型失败回退备用模型</td><td>M3 启用 ModelFallbackMiddleware + fallback_models 配置</td><td><span class="badge info">复用</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R3-3</a> 工具重试收敛 1 次</td><td>M3 启用 ToolRetryMiddleware（max_retries: 1）</td><td><span class="badge info">复用</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R3-4</a> 重试/回退事件结构化日志</td><td>M3a 三个 adapter 增加事件日志（model/attempt/latency/outcome）</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R4-1</a> 抽取模板实体（目标+脚本+指纹，归属用户）</td><td>M4a extraction_templates 表 + ExtractionTemplateRepository</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R4-2</a> 验证通过后询问保存（UI 按钮确认）</td><td>M4b save_extraction_template 工具 + 现有 button_group</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R4-3</a> 上传后指纹匹配→确认→复用→验证</td><td>M4c match_extraction_template 工具 + 复用现有执行/验证链路</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R4-4</a> 模板管理最小集（列出/重命名/删除）</td><td>M4b list/rename/delete_extraction_template 工具</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R4-5</a> 模板用户隔离</td><td>M4a 表含 user_id，仓储强制过滤</td><td><span class="badge ok">覆盖</span></td></tr>
+      <tr><td><a class="req-link" href="requirement.html">R4-6</a> 不匹配/复用失败回退完整流程</td><td>M4c Agent 流程规则（skill 提示词）+ 工具返回结构化失败原因</td><td><span class="badge ok">覆盖</span></td></tr>
+    </tbody>
+  </table>
+  <p>无遗漏；M1a 覆盖 R1-1/R1-2，M4a 覆盖 R4-1/R4-5，方案与需求为多对多关系。</p>`
+},
+{
+  id:'beforeafter', no:'02', title:'前后对比', lede:'用户视角看路径变化，系统视角看链路增减——新增高亮，复用普通样式。',
+  html:`
+  <h3>用户视角</h3>
+  <table>
+    <thead><tr><th>场景</th><th>现在</th><th>设计后</th></tr></thead>
+    <tbody>
+      <tr><td class="dim">多人使用</td><td>无身份概念，知道 thread_id 即可看他人全部数据</td><td>每人一个 token；只能操作自己的会话、工件、模板；他人资源 403</td></tr>
+      <tr><td class="dim">模型 429/超时</td><td>Agent 直接报错死亡</td><td>自动重试 → 自动切备用模型 → 全失败才显示「服务暂时不可用」</td></tr>
+      <tr><td class="dim">同格式报价单二次抽取</td><td>重新走 6-8 次交互的目标对齐</td><td>选模板 + 确认，≤2 次交互出验证通过结果</td></tr>
+      <tr><td class="dim">生成代码执行</td><td>直接在宿主机跑（能读 /etc、能联网）</td><td>隔离环境：只读输入 + 可写输出，禁网，超限即杀</td></tr>
+    </tbody>
+  </table>
+  <h3>系统视角 · 链路图</h3>
+  <details class="acc">
+    <summary>现状链路（标注无此能力）</summary>
+    <div class="acc-body"><pre class="code">浏览器 ──无认证──► /agent SSE ──► Agent ──► 六工具 ──► 仓储(thread_id 隔离)
+                        │                      └────► SubprocessSandbox(宿主机裸奔)
+浏览器 ──单key(豁免/agent)──► /api/files/{id}/download ──► 无归属校验
+config.yaml: 韧性中间件整段注释（未启用）</pre></div>
+  </details>
+  <details class="acc" open>
+    <summary>设计后链路（新增节点已高亮）</summary>
+    <div class="acc-body"><pre class="code">浏览器 ──token──► AuthMiddleware(token→user_id, /agent 不再豁免)
+                        │ request.state.user_id
+                        ├─────► /agent SSE ──► <span class="new">user_id_ctx</span> ──► Agent 工具 ──► 仓储(<span class="new">user_id</span>+thread_id 两级过滤)
+                        │                                          │
+                        │                                          ├────► <span class="new">【BwrapSandbox / E2BSandbox】</span>(隔离执行)
+                        │                                          └────► <span class="new">【模板工具组】</span>(save/match/list/rename/delete)
+                        ├─────► /api/threads|files|agents ──► <span class="new">归属校验(403)</span>
+                        └─────► /api/files/{id}/download ──► <span class="new">归属校验(403)</span>
+Agent 链路内: <span class="new">ModelRetry → ModelFallback → ToolRetry（默认启用）</span> → <span class="new">【事件结构化日志】</span>
+DB: threads/artifacts/extraction_tasks 增 <span class="new">user_id</span> 列；<span class="new">【extraction_templates 新表】</span>；存量清空重建</pre></div>
+  </details>`
+},
+{
+  id:'contract', no:'03', title:'接口与契约设计', lede:'批准后前后端/各模块按契约并行开发；契约改动需重新批准。',
+  html:`
+  <h3>3.1 认证配置（config.yaml 新增 auth 段）</h3>
+  <pre class="code">auth:
+  enabled: true
+  users:
+    - user_id: alice
+      token: $env.SCAFFOLD_TOKEN_ALICE   # token 支持 $env. 前缀，启动时解析
+    - user_id: bob
+      token: $env.SCAFFOLD_TOKEN_BOB</pre>
+  <p><code>enabled: false</code> 或 users 为空 → 全放行，user_id 一律为 <code>"default"</code>（本地开发向后兼容）。SCAFFOLD_API_KEY 单 key 模式由 auth.users 取代。</p>
+  <h3>3.2 AuthMiddleware 行为契约</h3>
+  <table>
+    <thead><tr><th>情况</th><th>行为</th></tr></thead>
+    <tbody>
+      <tr><td>无 X-API-Key 或 token 未注册</td><td>401 <code>{"detail": "Invalid or missing API key"}</code></td></tr>
+      <tr><td>token 已注册</td><td><code>request.state.user_id = 对应 user_id</code>，放行</td></tr>
+      <tr><td>豁免路径</td><td>仅 /health、/docs、/redoc、/openapi.json（<b>移除 /agent 豁免</b>）</td></tr>
+    </tbody>
+  </table>
+  <h3>3.3 用户上下文透传</h3>
+  <pre class="code"># infra/context.py（与 request_id 同一 contextvars 模式）
+user_id_ctx: ContextVar[str] = ContextVar("scaffold_user_id", default="default")
+def get_current_user_id() -> str: ...
+
+# /agent* SSE 端点在创建流式任务之前 set；工具层经 get_current_user_id() 读取</pre>
+  <h3>3.4 仓储层契约（user_id 一级维度，v2 schema 重建，无迁移）</h3>
+  <details class="acc">
+    <summary>仓储签名（点击展开）</summary>
+    <div class="acc-body"><pre class="code"># HistoryRepository
+async def ensure_thread(self, thread_id: str, agent_id: str, user_id: str) -> None
+async def get_thread(self, thread_id: str, user_id: str) -> ThreadDetail | None  # 非本人 → None → 403
+async def list_threads(self, user_id: str, ...) -> ThreadsListResponse
+async def get_messages(self, thread_id: str, user_id: str) -> list[ThreadMessage]
+
+# Artifact / ArtifactRepository
+Artifact 增字段 user_id: str
+async def list_by_thread(self, thread_id: str, user_id: str, ...)
+
+# ExtractionTaskRepository：create / list / get 均带 user_id
+# 归属校验集中在 api/deps.py 依赖函数，避免每个端点各写一份</pre></div>
+  </details>
+  <h3>3.5 抽取模板（新增实体 + 工具组）</h3>
+  <details class="acc" open>
+    <summary>表结构与指纹格式</summary>
+    <div class="acc-body"><pre class="code">CREATE TABLE extraction_templates (
+    template_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    goal TEXT NOT NULL,          -- Extraction Goal JSON（字段/类型/约束/示例行）
+    script TEXT NOT NULL,        -- 验证通过的抽取脚本源码
+    fingerprint TEXT NOT NULL,   -- 结构指纹 JSON
+    source_file_name TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_templates_user ON extraction_templates(user_id);
+
+-- 指纹（复用 preview_excel 已返回的 sheet_names/columns 计算）
+{"sheets": ["报价单"],
+ "columns": {"报价单": ["品名","单价","数量"]},
+ "signature": "sha256(sheets+columns) 前 16 位"}
+-- 匹配规则：signature 完全一致才算候选（保守方向，需求方已确认）</pre></div>
+  </details>
+  <details class="acc">
+    <summary>模板工具组签名（全部 async + 关键字参数，user_id 取自 user_id_ctx）</summary>
+    <div class="acc-body"><pre class="code">async def save_extraction_template(task_id: str, name: str) -> dict
+    # 仅当 task.status == success；从任务取 goal + script + 来源文件指纹
+async def match_extraction_template(artifact_id: str) -> dict
+    # → {"matched": true, "template": {...}} 或 {"matched": false, "reason": "..."}
+async def list_extraction_templates() -> list[dict]
+async def rename_extraction_template(template_id: str, name: str) -> dict
+async def delete_extraction_template(template_id: str) -> dict
+
+# 复用执行：Agent 取 template.script 写入工作区 → 走现有 execute_extraction_code
+# → validate_extraction_result；任一步失败 → 结构化原因 + 回退完整六步流程
+# 保存确认沿用现有 Generative UI button_group（前端零新增组件）</pre></div>
+  </details>
+  <h3>3.6 沙箱 provider（新增 BwrapSandbox，与 Sandbox ABC 签名完全对齐）</h3>
+  <details class="acc">
+    <summary>命令骨架与错误映射</summary>
+    <div class="acc-body"><pre class="code">bwrap --unshare-all --unshare-net --die-with-parent \
+  --ro-bind &lt;python 运行时目录&gt; ... \
+  --ro-bind &lt;input_dir&gt; /work/in --bind &lt;output_dir&gt; /work/out \
+  --tmpfs /tmp --chdir /work \
+  /usr/bin/python3 /work/in/&lt;script&gt;
+
+# 内存：RLIMIT_AS（与 SubprocessSandbox 相同机制，子进程继承）
+# 超时：沿用现有 asyncio timeout + kill
+# factory: execution_sandbox.provider = bwrap 注册；docker/e2b 占位保持
+# 错误映射：bwrap 启动失败 / RLIMIT 触发 / 超时 kill
+#   → SandboxResult(exit_code, stderr) → execute_extraction_code 转换层 → 可读信息
+# 部署前置（一次性提权，三选一）：
+#   chmod u+s /usr/bin/bwrap
+#   安装放行 bwrap 的 AppArmor profile
+#   sysctl kernel.apparmor_restrict_unprivileged_userns=0</pre></div>
+  </details>
+  <h3>3.7 韧性中间件（启用 + 日志增强）</h3>
+  <details class="acc">
+    <summary>config.yaml 启用配置</summary>
+    <div class="acc-body"><pre class="code">- name: ModelFallbackMiddleware
+  enabled: true
+  kwargs:
+    models: $config.models
+    fallback_models: [&lt;config.models 中真实备用模型名&gt;]
+- name: ModelRetryMiddleware
+  enabled: true
+  kwargs: {max_retries: 2, backoff_factor: 2.0, initial_delay: 1.0,
+           max_delay: 60.0, jitter: true,
+           retry_on_status_codes: [429, 502, 503, 504]}
+- name: ToolRetryMiddleware
+  enabled: true
+  kwargs: {max_retries: 1, ...}   # 幂等未知工具收敛为 1 次
+
+# 事件日志字段：event=model_retry|model_fallback|tool_retry、
+#   model、attempt、latency_ms、outcome；复用 infra/logging
+# config.verify.yaml 以 mock 模型覆盖 fallback 目标</pre></div>
+  </details>
+  <h3>3.8 前端契约</h3>
+  <table>
+    <tbody>
+      <tr><td class="dim">token 存储</td><td>localStorage 键 <code>scaffold_token</code>；无 token 显示一次性输入界面</td></tr>
+      <tr><td class="dim">REST 请求</td><td>全部 fetch（threads.ts、上传/下载）带 <code>X-API-Key</code> 头</td></tr>
+      <tr><td class="dim">SSE Agent</td><td>HistoryHttpAgent 构造传 <code>headers: {"X-API-Key": token}</code>（已验证 @ag-ui/client 支持，见 06 节）</td></tr>
+      <tr><td class="dim">401 处理</td><td>清空 localStorage 回到 token 输入界面</td></tr>
+    </tbody>
+  </table>`
+},
+{
+  id:'reuse', no:'04', title:'历史资产复用分析', lede:'复用是默认，从零需要理由。每项附真实路径，均经读取核实。',
+  html:`
+  <table>
+    <thead><tr><th>资产</th><th>路径</th><th>复用方式</th></tr></thead>
+    <tbody>
+      <tr><td class="dim">AuthMiddleware</td><td><code>src/scaffold/api/middleware/auth.py</code></td><td>扩展：单 key → token 映射 + user_id 注入</td></tr>
+      <tr><td class="dim">contextvars 透传</td><td><code>src/scaffold/infra/context.py</code></td><td>新增 user_id_ctx，与 request_id 同款机制，零新机制</td></tr>
+      <tr><td class="dim">Sandbox ABC + 工厂占位</td><td><code>src/scaffold/infra/sandbox/base.py</code>、<code>factory.py</code></td><td>docker/e2b 槽位已在，新增 provider 实现即可，接口不动</td></tr>
+      <tr><td class="dim">RLIMIT/超时机制</td><td><code>src/scaffold/infra/sandbox/subprocess_sandbox.py</code></td><td>BwrapSandbox 照搬限制机制</td></tr>
+      <tr><td class="dim">韧性 adapter + 注册表 + 测试</td><td><code>infra/middleware/deerflow_adapters/</code>、<code>registry.py</code>、<code>tests/test_middleware.py</code></td><td>代码就绪，仅启用 + 日志增强</td></tr>
+      <tr><td class="dim">$config / $env 引用解析</td><td><code>src/scaffold/infra/middleware/factory.py</code></td><td>fallback_models 与 auth token 复用该语义</td></tr>
+      <tr><td class="dim">preview_excel 输出</td><td><code>src/scaffold/plugins/tools/preview_excel.py</code></td><td>已返回 sheet_names/columns，指纹计算现成输入，工具不改</td></tr>
+      <tr><td class="dim">错误转换层</td><td><code>src/scaffold/plugins/tools/execute_extraction_code.py</code></td><td>模板复用与沙箱错误的可读化出口，不改</td></tr>
+      <tr><td class="dim">button_group 组件</td><td><code>src/web/src/catalog/</code></td><td>模板保存/复用确认，零新增前端组件</td></tr>
+      <tr><td class="dim">ExtractionWorkspace</td><td><code>src/scaffold/infra/extraction/workspace.py</code></td><td>模板仓储并入同一生命周期</td></tr>
+    </tbody>
+  </table>
+  <p><b>从零开发仅两项，均有理由</b>：extraction_templates 表与仓储（新实体，无既有资产）；BwrapSandbox（既有 docker/e2b 仅为 NotImplementedError 占位，无可复用实现）。</p>`
+},
+{
+  id:'options', no:'05', title:'多方案并列：R2 沙箱选型', lede:'取舍如下，推荐方案 A；最终选择权在用户，选定后记入 frontmatter chosen。',
+  html:`
+  <table>
+    <thead><tr><th>维度</th><th>方案 A：bubblewrap 本地沙箱</th><th>方案 B：e2b 托管沙箱</th></tr></thead>
+    <tbody>
+      <tr><td class="dim">隔离能力</td><td>fs/网络/资源全隔离（Linux namespaces）</td><td>全隔离（云端 microVM）</td></tr>
+      <tr><td class="dim">本机可用性</td><td><span class="badge ok">已验证通过</span> 经一次性 AppArmor profile 配置后七项探针全过（06 节实测）</td><td><span class="badge ok">不受本机限制</span> 注册即得 API key</td></tr>
+      <tr><td class="dim">成本</td><td>零</td><td>按量计费（免费额度有限）</td></tr>
+      <tr><td class="dim">网络依赖</td><td>无（完全离线）</td><td>每次执行依赖外网</td></tr>
+      <tr><td class="dim">数据出域</td><td>不出本机</td><td>文件需上传第三方云（报价单含商业敏感）</td></tr>
+      <tr><td class="dim">新增依赖</td><td>无（bwrap 已装于 /usr/bin/bwrap）</td><td><code>uv add e2b</code></td></tr>
+      <tr><td class="dim">部署耦合</td><td>目标机需同款提权配置</td><td>目标机需外网 + key 管理</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>已选定：方案 A</b>（用户指定，2026-08-30 经端到端验证通过，见 06/07 节）。方案 B 作为配置可切换的备选保留（Sandbox ABC 已隔离差异），适用于完全拿不到提权条件的部署环境。</div>`
+},
+{
+  id:'review', no:'06', title:'审查结论（附证据）', lede:'每条结论必须附证据；未执行的项目如实标注。没有证据的"通过"就是谎言。',
+  html:`
+  <div class="review"><span class="dim-name">可行性</span><span class="badge ok">通过</span></div>
+  <p>韧性中间件代码与测试就绪：</p>
+  <div class="evidence">$ uv run pytest tests/test_middleware.py -q
+25 passed, 1 warning in 0.05s</div>
+  <p>bwrap 端到端验证通过（2026-08-30 实测）。前置配置：经 sudo 安装 AppArmor 放行 profile <code>/etc/apparmor.d/bwrap-userns</code>（<code>/usr/bin/bwrap flags=(unconfined) { userns, }</code>，apparmor_parser -r 加载）——三条提权路径中侵入最小（不关全局限制、不给 bwrap setuid）。配置后探针结果（输出原文）：</p>
+  <div class="evidence">read_etc_passwd: BLOCKED (FileNotFoundError)   # /etc 未挂载
+network: BLOCKED (URLError)                    # --unshare-net 生效
+write_input_dir: BLOCKED (OSError)             # --ro-bind 只读输入
+read_host_project: BLOCKED (FileNotFoundError) # 宿主机项目目录未挂载
+write_output_dir: OK  /  read_input_dir: OK    # 工作区语义正确
+mem_512mb: BLOCKED (MemoryError)               # prlimit --as=256MB 生效
+timeout 3s kill: exit=124，无残留进程            # --die-with-parent 生效</div>
+  <p>结论：方案 A 成立。目标部署机需同款一次性配置（Ubuntu 24.04：安装同款 AppArmor profile 即可）。</p>
+  <div class="evidence">$ grep headers node_modules/@ag-ui/client/dist/index.d.ts
+  headers?: Record&lt;string, string&gt;;        ← HttpAgent 支持自定义 headers ✅
+$ python3 -c "import e2b"
+ImportError                                    ← e2b 未安装，选 B 时 uv add e2b</div>
+  <div class="review"><span class="dim-name">复用性</span><span class="badge ok">通过</span></div>
+  <p>第 04 节每项资产均附真实路径并经读取核实；从零开发仅 2 项（模板实体、BwrapSandbox），理由已写明。</p>
+  <div class="review"><span class="dim-name">规范性</span><span class="badge ok">通过</span><span class="badge warn">前端验证未执行</span></div>
+  <p>分层依赖：新代码落在 infra/sandbox、infra/context、infra/extraction、plugins/tools、api/middleware——符合 core→infra、api→infra，无反向依赖。新工具全部 async + 关键字参数；全类型注解；ruff line-length=120；token 走 $env. 引用不落盘。<b>未执行</b>：前端构建/测试（设计阶段未改前端代码，留待实施期验证）。</p>`
+},
+{
+  id:'verify', no:'07', title:'最小验证', lede:'最悬的假设先用最小实验暴露，结论用大白话写。',
+  html:`
+  <dl class="kv">
+    <div class="row"><dt>风险点</dt><dd>方案里最悬的假设是"bwrap 能在目标机器上跑起来"——Linux 沙箱隔离依赖 unprivileged user namespaces，而 Ubuntu 23.10+ 默认用 AppArmor 限制它。若不可行，方案 A 就是空中楼阁。</dd></div>
+    <div class="row"><dt>验证方法</dt><dd>第一步复现拦截（三种 unshare 入口均被拒，根因 apparmor_restrict_unprivileged_userns=1）；第二步用侵入最小的提权路径（安装放行 bwrap 的 AppArmor profile）解除限制；第三步跑完整探针——读 /etc/passwd、联网、写只读输入目录、读宿主机项目目录、写工作区、256MB 内存限额、3 秒超时 kill。实验代码在 /tmp/bwrap_poc，用完即弃。</dd></div>
+    <div class="row"><dt>结果与证据</dt><dd>见 06 节——七项隔离底线全部符合预期（敏感资源 BLOCKED、工作区读写 OK、限额与超时生效、无残留进程）。</dd></div>
+    <div class="row"><dt>结论</dt><dd><b>可行。</b>这台机器的门锁是 Ubuntu 默认的 AppArmor 规则，装一条只放行 bwrap 的规则（不动全局设置）就开了。开门后沙箱表现完全符合要求：恶意脚本读不到宿主机文件、连不了网、写不出工作区、吃多了内存会被杀、超时会被杀干净。目标部署机照抄这一条规则即可。</dd></div>
+  </dl>`
+}
+];
+
+const nav = document.getElementById('nav');
+const main = document.getElementById('main');
+let cur = 0;
+
+sections.forEach((s,i)=>{
+  const b = document.createElement('button');
+  b.innerHTML = `<span class="no">${s.no}</span><span>${s.title}</span>`;
+  b.onclick = ()=>show(i);
+  nav.appendChild(b);
+
+  const p = document.createElement('section');
+  p.className='panel';
+  p.innerHTML = `
+    <div class="crumb">SEC ${s.no} / ${String(sections.length).padStart(2,'0')}</div>
+    <h2>${s.title}</h2>
+    <p class="lede">${s.lede}</p>
+    ${s.html}
+    <div class="pager">
+      <button class="prev" ${i===0?'disabled':''} onclick="show(${i-1})"><span class="dir">上一节</span><span class="t">${i>0?sections[i-1].title:'—'}</span></button>
+      <button class="next" ${i===sections.length-1?'disabled':''} onclick="show(${i+1})"><span class="dir">下一节</span><span class="t">${i<sections.length-1?sections[i+1].title:'—'}</span></button>
+    </div>
+    <div class="kbd-hint">↑ ↓ 键切换章节</div>`;
+  main.appendChild(p);
+});
+
+function show(i){
+  if(i<0||i>=sections.length) return;
+  cur = i;
+  document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('active',j===i));
+  document.querySelectorAll('.panel').forEach((p,j)=>p.classList.toggle('show',j===i));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();show(cur+1);}
+  if(e.key==='ArrowUp'){e.preventDefault();show(cur-1);}
+});
+show(0);
+</script>
+</body>
+</html>

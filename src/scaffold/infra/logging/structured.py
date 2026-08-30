@@ -21,6 +21,10 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
+# logging.LogRecord 的标准属性；其余 record 属性（即 extra={...} 注入的）全部并入 JSON
+_RESERVED_ATTRS = frozenset(logging.makeLogRecord({}).__dict__)
+
+
 class JSONFormatter(logging.Formatter):
     """将日志记录格式化为 JSON 行。"""
 
@@ -39,7 +43,11 @@ class JSONFormatter(logging.Formatter):
             payload["request_id"] = record.request_id
         if record.exc_info:
             payload["exception"] = traceback.format_exception(*record.exc_info)
-        if hasattr(record, "extra"):
+        # 合入 extra={...} 注入的结构化字段（如 event/model/attempt）
+        for key, value in record.__dict__.items():
+            if key not in _RESERVED_ATTRS and key not in payload and key != "extra":
+                payload[key] = value
+        if hasattr(record, "extra") and isinstance(record.extra, dict):
             payload.update(record.extra)
 
         return json.dumps(payload, indent=self.indent, ensure_ascii=False, default=str)

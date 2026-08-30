@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from langchain.agents.middleware.tool_retry import ToolRetryMiddleware
@@ -11,6 +12,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 from scaffold.infra.middleware.deerflow_adapters._retry_utils import (
     _build_retry_predicate,
     _extract_thread_id,
+    _extract_tool_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,36 +61,104 @@ class ToolRetryAdapter(AgentMiddleware):
 
     def _wrap_sync_handler(self, request: Any, handler: Any) -> Any:
         thread_id = _extract_thread_id(request)
+        tool = _extract_tool_name(request)
+        state = {"attempt": 0}
 
         def wrapped(req: Any) -> Any:
+            state["attempt"] += 1
+            started = time.monotonic()
             try:
-                return handler(req)
+                result = handler(req)
             except Exception as exc:
+                latency_ms = round((time.monotonic() - started) * 1000, 1)
                 status_code = getattr(exc, "status_code", None)
                 logger.warning(
-                    "Tool call failed and will be retried: thread_id=%s status_code=%s exc=%s",
+                    "tool call attempt %d failed: thread_id=%s tool=%s status_code=%s exc=%s",
+                    state["attempt"],
                     thread_id,
+                    tool,
                     status_code,
                     type(exc).__name__,
+                    extra={
+                        "event": "tool_retry",
+                        "tool": tool,
+                        "thread_id": thread_id,
+                        "attempt": state["attempt"],
+                        "latency_ms": latency_ms,
+                        "status_code": status_code,
+                        "error": type(exc).__name__,
+                        "outcome": "failed",
+                    },
                 )
                 raise
+            if state["attempt"] > 1:
+                latency_ms = round((time.monotonic() - started) * 1000, 1)
+                logger.info(
+                    "tool call recovered on attempt %d: thread_id=%s tool=%s",
+                    state["attempt"],
+                    thread_id,
+                    tool,
+                    extra={
+                        "event": "tool_retry",
+                        "tool": tool,
+                        "thread_id": thread_id,
+                        "attempt": state["attempt"],
+                        "latency_ms": latency_ms,
+                        "outcome": "recovered",
+                    },
+                )
+            return result
 
         return wrapped
 
     def _wrap_async_handler(self, request: Any, handler: Any) -> Any:
         thread_id = _extract_thread_id(request)
+        tool = _extract_tool_name(request)
+        state = {"attempt": 0}
 
         async def wrapped(req: Any) -> Any:
+            state["attempt"] += 1
+            started = time.monotonic()
             try:
-                return await handler(req)
+                result = await handler(req)
             except Exception as exc:
+                latency_ms = round((time.monotonic() - started) * 1000, 1)
                 status_code = getattr(exc, "status_code", None)
                 logger.warning(
-                    "Tool call failed and will be retried: thread_id=%s status_code=%s exc=%s",
+                    "tool call attempt %d failed: thread_id=%s tool=%s status_code=%s exc=%s",
+                    state["attempt"],
                     thread_id,
+                    tool,
                     status_code,
                     type(exc).__name__,
+                    extra={
+                        "event": "tool_retry",
+                        "tool": tool,
+                        "thread_id": thread_id,
+                        "attempt": state["attempt"],
+                        "latency_ms": latency_ms,
+                        "status_code": status_code,
+                        "error": type(exc).__name__,
+                        "outcome": "failed",
+                    },
                 )
                 raise
+            if state["attempt"] > 1:
+                latency_ms = round((time.monotonic() - started) * 1000, 1)
+                logger.info(
+                    "tool call recovered on attempt %d: thread_id=%s tool=%s",
+                    state["attempt"],
+                    thread_id,
+                    tool,
+                    extra={
+                        "event": "tool_retry",
+                        "tool": tool,
+                        "thread_id": thread_id,
+                        "attempt": state["attempt"],
+                        "latency_ms": latency_ms,
+                        "outcome": "recovered",
+                    },
+                )
+            return result
 
         return wrapped

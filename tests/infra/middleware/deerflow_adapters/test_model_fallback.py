@@ -78,3 +78,65 @@ class TestModelFallbackAdapter:
 
         result = await mw.awrap_model_call(request, handler)
         assert result is expected
+
+
+class TestModelFallbackStructuredLogging:
+    def test_fallback_emits_structured_event(self, monkeypatch, caplog):
+        """主模型持续失败：切换到备用模型并输出 event=model_fallback 结构化日志。"""
+        import logging
+
+        def fake_create_chat_model(config, **kwargs):
+            return type(f"Fake{config.name}", (), {"model": config.model})()
+
+        monkeypatch.setattr(
+            "scaffold.infra.middleware.deerflow_adapters.model_fallback.create_chat_model",
+            fake_create_chat_model,
+        )
+
+        models = [
+            ModelConfig(name="primary", display_name="Primary", use="fake:Primary", model="primary"),
+            ModelConfig(name="fallback-1", display_name="Fallback 1", use="fake:Fallback1", model="fallback-1"),
+        ]
+        mw = ModelFallbackAdapter(models=models, fallback_models=["fallback-1"])
+
+        primary = type("FakePrimary", (), {"model": "primary"})()
+        calls = []
+
+        def handler(req):
+            calls.append(req.model.model)
+            if req.model.model == "primary":
+                raise RuntimeError("primary down")
+            return AIMessage(content="recovered by fallback")
+
+        request = ModelRequest(model=primary, messages=[])
+        with caplog.at_level(logging.DEBUG):
+            result = mw.wrap_model_call(request, handler)
+
+        assert result.content == "recovered by fallback"
+        assert calls == ["primary", "fallback-1"]
+
+        records = [r for r in caplog.records if getattr(r, "event", None) == "model_fallback"]
+        assert len(records) == 1
+        assert records[0].model == "fallback-1"
+        assert records[0].attempt == 2
+        assert records[0].outcome == "activated"
+
+    def test_all_models_failed_reraises(self, monkeypatch):
+        """主备全部失败：最后异常原样抛出（由上层转为可读错误）。"""
+        def fake_create_chat_model(config, **kwargs):
+            return type(f"Fake{config.name}", (), {"model": config.model})()
+
+        monkeypatch.setattr(
+            "scaffold.infra.middleware.deerflow_adapters.model_fallback.create_chat_model",
+            fake_create_chat_model,
+        )
+
+        models = [
+            ModelConfig(name="primary", display_name="Primary", use="fake:Primary", model="primary"),
+            ModelConfig(name="fallback-1", display_name="Fallback 1", use="fake:Fallback1", model="fallback-1"),
+        ]
+        mw = ModelFallbackAdapter(models=models, fallback_models=["fallback-1"])
+
+        request = ModelRequest(model=type("FakePrimary", (), {"model": "primary"})(), messages=[])
+        with pytest.raises(RuntimeError, match="all down"):
+            mw.wrap_model_call(request, lambda req: (_ for _ in ()).throw(RuntimeError("all down")))

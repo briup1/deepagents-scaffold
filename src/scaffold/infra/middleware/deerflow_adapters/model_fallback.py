@@ -55,30 +55,35 @@ class ModelFallbackAdapter(AgentMiddleware):
     def _wrap_handler(self, request: Any, handler: Any) -> Any:
         """Wrap handler to log when falling back to a non-primary model."""
         thread_id = _extract_thread_id(request)
-        is_first = True
+        state = {"attempt": 0}
+
+        def log_fallback(model_name: str) -> None:
+            logger.warning(
+                "model fallback activated: thread_id=%s model=%s attempt=%d",
+                thread_id,
+                model_name,
+                state["attempt"],
+                extra={
+                    "event": "model_fallback",
+                    "model": model_name,
+                    "thread_id": thread_id,
+                    "attempt": state["attempt"],
+                    "outcome": "activated",
+                },
+            )
 
         def wrapped(req: Any) -> Any:
-            nonlocal is_first
+            state["attempt"] += 1
             model_name = self._model_name(req)
-            if not is_first:
-                logger.warning(
-                    "Falling back to model '%s' for thread_id=%s",
-                    model_name,
-                    thread_id,
-                )
-            is_first = False
+            if state["attempt"] > 1:
+                log_fallback(model_name)
             return handler(req)
 
         async def awrapped(req: Any) -> Any:
-            nonlocal is_first
+            state["attempt"] += 1
             model_name = self._model_name(req)
-            if not is_first:
-                logger.warning(
-                    "Falling back to model '%s' for thread_id=%s",
-                    model_name,
-                    thread_id,
-                )
-            is_first = False
+            if state["attempt"] > 1:
+                log_fallback(model_name)
             return await handler(req)
 
         return awrapped if inspect.iscoroutinefunction(handler) else wrapped

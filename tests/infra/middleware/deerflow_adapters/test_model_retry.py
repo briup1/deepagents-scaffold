@@ -99,3 +99,61 @@ class TestModelRetryAdapter:
 
         assert "thread-abc" in caplog.text
         assert "429" in caplog.text
+
+
+class TestModelRetryStructuredLogging:
+    def test_retry_emits_structured_events(self, caplog):
+        """429 失败两次后成功：attempt 递增、字段齐全、最终 outcome=recovered。"""
+        import logging
+
+        from langchain_core.messages import AIMessage
+
+        mw = ModelRetryAdapter(max_retries=2, initial_delay=0, jitter=False)
+        calls = []
+
+        class FakeException(Exception):
+            status_code = 429
+
+        fake_model = type("FakeModel", (), {"model": "primary-model"})()
+
+        def handler(req):
+            calls.append(1)
+            if len(calls) < 3:
+                raise FakeException("rate limited")
+            return AIMessage(content="ok")
+
+        request = ModelRequest(model=fake_model, messages=[])
+        with caplog.at_level(logging.DEBUG):
+            result = mw.wrap_model_call(request, handler)
+
+        assert result.content == "ok"
+        assert len(calls) == 3
+
+        records = [r for r in caplog.records if getattr(r, "event", None) == "model_retry"]
+        assert [r.attempt for r in records] == [1, 2, 3]
+        assert [r.outcome for r in records] == ["failed", "failed", "recovered"]
+        for r in records:
+            assert r.model == "primary-model"
+            assert isinstance(r.latency_ms, float)
+        assert records[0].status_code == 429
+        assert records[0].error == "FakeException"
+
+    def test_exhaustion_logs_each_failed_attempt(self, caplog):
+        """重试耗尽：每次失败都有结构化事件，attempt 递增到 max_retries+1。"""
+        import logging
+
+        mw = ModelRetryAdapter(max_retries=2, initial_delay=0, jitter=False)
+
+        class FakeException(Exception):
+            status_code = 429
+
+        def handler(req):
+            raise FakeException("rate limited")
+
+        request = ModelRequest(model=None, messages=[])
+        with caplog.at_level(logging.DEBUG):
+            mw.wrap_model_call(request, handler)  # on_failure="continue" → 返回错误消息而非抛出
+
+        records = [r for r in caplog.records if getattr(r, "event", None) == "model_retry"]
+        assert [r.attempt for r in records] == [1, 2, 3]
+        assert all(r.outcome == "failed" for r in records)
