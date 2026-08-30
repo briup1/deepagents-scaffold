@@ -130,7 +130,7 @@ class TestArtifactRepository:
             )
         )
 
-        t1_artifacts = await artifact_repo.list_by_thread("t-001")
+        t1_artifacts = await artifact_repo.list_by_thread("t-001", "default")
         assert len(t1_artifacts) == 3
         assert all(a.thread_id == "t-001" for a in t1_artifacts)
 
@@ -154,6 +154,6 @@ class TestArtifactRepository:
             )
         )
 
-        uploads = await artifact_repo.list_by_thread("t-001", "upload")
+        uploads = await artifact_repo.list_by_thread("t-001", "default", "upload")
         assert len(uploads) == 1
         assert uploads[0].artifact_type == "upload"

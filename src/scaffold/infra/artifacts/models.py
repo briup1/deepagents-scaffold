@@ -12,6 +12,7 @@ class Artifact(BaseModel):
 
     artifact_id: str
     thread_id: str
+    user_id: str = "default"
     artifact_type: Literal["upload", "script", "extraction", "report"]
     original_name: str | None = None
     stored_path: str

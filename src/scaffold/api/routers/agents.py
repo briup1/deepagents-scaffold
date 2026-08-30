@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from scaffold.api.deps import get_checkpointer, get_history_repo
+from scaffold.api.deps import get_checkpointer, get_history_repo, get_request_user_id
 from scaffold.core.agents import list_agents
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -27,11 +27,11 @@ async def list_registered_agents() -> AgentsListResponse:
 
 @router.delete("/{agent_id}/threads", response_model=AgentThreadsDeleteResponse)
 async def delete_agent_threads(agent_id: str, request: Request) -> AgentThreadsDeleteResponse:
-    """清空指定 Agent 的全部会话（历史消息 + checkpoint 状态）。"""
+    """清空指定 Agent 下当前用户的全部会话（历史消息 + checkpoint 状态）。"""
     history_repo = get_history_repo(request)
     checkpointer = get_checkpointer(request)
 
-    thread_ids = await history_repo.delete_threads_by_agent(agent_id)
+    thread_ids = await history_repo.delete_threads_by_agent(agent_id, get_request_user_id(request))
     for thread_id in thread_ids:
         await checkpointer.adelete_thread(thread_id)
     return AgentThreadsDeleteResponse(

@@ -22,11 +22,14 @@ class HistoryRepository:
 
     async def migrate(self) -> None:
         """创建历史消息表结构。"""
+        await _assert_user_id_schema(self._conn, "threads")
+        await _assert_user_id_schema(self._conn, "extraction_tasks")
         await self._conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS threads (
                 thread_id TEXT PRIMARY KEY,
                 agent_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
                 title TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -48,35 +51,61 @@ class HistoryRepository:
             CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
             CREATE INDEX IF NOT EXISTS idx_threads_updated_at ON threads(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_threads_agent_id ON threads(agent_id);
+            CREATE INDEX IF NOT EXISTS idx_threads_user_id ON threads(user_id);
             """
         )
+        await self._conn.execute("PRAGMA user_version = 2")
         await self._conn.commit()
 
-    async def ensure_thread(self, thread_id: str, agent_id: str) -> None:
-        """确保线程记录存在；不存在则创建。"""
+    async def ensure_thread(self, thread_id: str, agent_id: str, user_id: str) -> None:
+        """确保线程记录存在；不存在则创建。已存在时不变更属主。"""
         now = _now()
         await self._conn.execute(
             """
-            INSERT INTO threads (thread_id, agent_id, title, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO threads (thread_id, agent_id, user_id, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(thread_id) DO UPDATE SET updated_at = excluded.updated_at
             """,
-            (thread_id, agent_id, None, now, now),
+            (thread_id, agent_id, user_id, None, now, now),
         )
         await self._conn.commit()
 
+    async def get_thread(self, thread_id: str) -> dict[str, Any] | None:
+        """查询线程基础信息（含 user_id），用于归属校验。"""
+        cursor = await self._conn.execute(
+            "SELECT thread_id, agent_id, user_id, title, created_at, updated_at FROM threads WHERE thread_id = ?",
+            (thread_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "thread_id": row[0],
+            "agent_id": row[1],
+            "user_id": row[2],
+            "title": row[3],
+            "created_at": row[4],
+            "updated_at": row[5],
+        }
+
     async def list_threads(
         self,
+        user_id: str,
         agent_id: str | None = None,
         *,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[ThreadSummary], int]:
-        """返回线程列表和总数。"""
-        where_clause = "WHERE agent_id = ?" if agent_id else ""
-        params: tuple[Any, ...] = (agent_id,) if agent_id else ()
+        """返回某用户的线程列表和总数。"""
+        where_clause = "WHERE t.user_id = ?"
+        params: list[Any] = [user_id]
+        if agent_id:
+            where_clause += " AND t.agent_id = ?"
+            params.append(agent_id)
 
-        cursor = await self._conn.execute(f"SELECT COUNT(*) FROM threads {where_clause}", params)
+        cursor = await self._conn.execute(
+            f"SELECT COUNT(*) FROM threads t {where_clause}", tuple(params)
+        )
         row = await cursor.fetchone()
         total = row[0] if row else 0
 
@@ -195,18 +224,22 @@ class HistoryRepository:
         )
         await self._conn.commit()
 
-    async def delete_thread(self, thread_id: str) -> bool:
-        """删除单个会话及其消息、抽取任务；返回是否存在。"""
-        cursor = await self._conn.execute("SELECT 1 FROM threads WHERE thread_id = ?", (thread_id,))
+    async def delete_thread(self, thread_id: str, user_id: str) -> bool:
+        """删除单个会话及其消息、抽取任务；仅属主可删，返回是否删除。"""
+        cursor = await self._conn.execute(
+            "SELECT 1 FROM threads WHERE thread_id = ? AND user_id = ?", (thread_id, user_id)
+        )
         if await cursor.fetchone() is None:
             return False
         await self._delete_thread_rows(thread_id)
         await self._conn.commit()
         return True
 
-    async def delete_threads_by_agent(self, agent_id: str) -> list[str]:
-        """删除某 Agent 的全部会话；返回被删除的 thread_id 列表。"""
-        cursor = await self._conn.execute("SELECT thread_id FROM threads WHERE agent_id = ?", (agent_id,))
+    async def delete_threads_by_agent(self, agent_id: str, user_id: str) -> list[str]:
+        """删除某用户在某 Agent 下的全部会话；返回被删除的 thread_id 列表。"""
+        cursor = await self._conn.execute(
+            "SELECT thread_id FROM threads WHERE agent_id = ? AND user_id = ?", (agent_id, user_id)
+        )
         thread_ids = [row[0] for row in await cursor.fetchall()]
         for thread_id in thread_ids:
             await self._delete_thread_rows(thread_id)
@@ -218,6 +251,16 @@ class HistoryRepository:
         await self._conn.execute("DELETE FROM messages WHERE thread_id = ?", (thread_id,))
         await self._conn.execute("DELETE FROM extraction_tasks WHERE thread_id = ?", (thread_id,))
         await self._conn.execute("DELETE FROM threads WHERE thread_id = ?", (thread_id,))
+
+
+async def _assert_user_id_schema(conn: aiosqlite.Connection, table: str) -> None:
+    """若表已存在但缺 user_id 列（旧版存量库），拒绝启动并指引删除 data/。"""
+    cursor = await conn.execute(f"PRAGMA table_info({table})")
+    cols = [row[1] for row in await cursor.fetchall()]
+    if cols and "user_id" not in cols:
+        raise RuntimeError(
+            f"表 {table} 为旧版 schema（缺 user_id 列）。存量数据不迁移，请删除 data/ 目录后重启服务。"
+        )
 
 
 def _parse_json(value: str | None) -> list[dict[str, Any]] | None:
@@ -247,11 +290,13 @@ class ExtractionTaskRepository:
 
     async def migrate(self) -> None:
         """创建抽取任务表（通常由 HistoryRepository.migrate 统一调用）。"""
+        await _assert_user_id_schema(self._conn, "extraction_tasks")
         await self._conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS extraction_tasks (
                 task_id TEXT PRIMARY KEY,
                 thread_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
                 upload_artifact_id TEXT NOT NULL,
                 status TEXT NOT NULL,
                 requirements TEXT,
@@ -267,6 +312,7 @@ class ExtractionTaskRepository:
             );
 
             CREATE INDEX IF NOT EXISTS idx_extraction_tasks_thread_id ON extraction_tasks(thread_id);
+            CREATE INDEX IF NOT EXISTS idx_extraction_tasks_user_id ON extraction_tasks(user_id);
             """
         )
         await self._conn.commit()
@@ -276,13 +322,14 @@ class ExtractionTaskRepository:
         await self._conn.execute(
             """
             INSERT INTO extraction_tasks
-            (task_id, thread_id, upload_artifact_id, status, requirements,
+            (task_id, thread_id, user_id, upload_artifact_id, status, requirements,
              script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task.task_id,
                 task.thread_id,
+                task.user_id,
                 task.upload_artifact_id,
                 task.status,
                 _dump_json(task.requirements),
@@ -296,11 +343,11 @@ class ExtractionTaskRepository:
         await self._conn.commit()
 
     async def get(self, task_id: str) -> ExtractionTask | None:
-        """根据 task_id 查询抽取任务。"""
+        """根据 task_id 查询抽取任务（归属校验由调用方比较 task.user_id）。"""
         cursor = await self._conn.execute(
             """
             SELECT
-                task_id, thread_id, upload_artifact_id, status, requirements,
+                task_id, thread_id, user_id, upload_artifact_id, status, requirements,
                 script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
             FROM extraction_tasks
             WHERE task_id = ?
@@ -338,34 +385,35 @@ class ExtractionTaskRepository:
         await self._conn.commit()
         return cursor.rowcount > 0
 
-    async def list_by_thread(self, thread_id: str) -> list[ExtractionTask]:
-        """列出某会话的全部抽取任务。"""
+    async def list_by_thread(self, thread_id: str, user_id: str) -> list[ExtractionTask]:
+        """列出某用户在某会话的全部抽取任务。"""
         cursor = await self._conn.execute(
             """
             SELECT
-                task_id, thread_id, upload_artifact_id, status, requirements,
+                task_id, thread_id, user_id, upload_artifact_id, status, requirements,
                 script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
             FROM extraction_tasks
-            WHERE thread_id = ?
+            WHERE thread_id = ? AND user_id = ?
             ORDER BY created_at DESC
             """,
-            (thread_id,),
+            (thread_id, user_id),
         )
         rows = await cursor.fetchall()
         return [self._row_to_task(row) for row in rows]
 
     def _row_to_task(self, row: Any) -> ExtractionTask:
-        requirements_json = row[4] or "{}"
-        validation_json = row[7] or "{}"
+        requirements_json = row[5] or "{}"
+        validation_json = row[8] or "{}"
         return ExtractionTask(
             task_id=row[0],
             thread_id=row[1],
-            upload_artifact_id=row[2],
-            status=row[3],
+            user_id=row[2],
+            upload_artifact_id=row[3],
+            status=row[4],
             requirements=_parse_json(requirements_json),
-            script_artifact_id=row[5],
-            extracted_artifact_id=row[6],
+            script_artifact_id=row[6],
+            extracted_artifact_id=row[7],
             validation_report=_parse_json(validation_json),
-            created_at=row[8],
-            updated_at=row[9],
+            created_at=row[9],
+            updated_at=row[10],
         )

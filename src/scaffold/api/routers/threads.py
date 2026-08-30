@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from langgraph.checkpoint.base import Checkpoint
 from pydantic import BaseModel, Field
 
-from scaffold.api.deps import get_checkpointer, get_history_repo
+from scaffold.api.deps import get_checkpointer, get_history_repo, get_request_user_id
 from scaffold.infra.history import ThreadMessage, ThreadSummary
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -46,6 +46,12 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     thread_id = body.thread_id or str(uuid.uuid4())
     checkpointer = get_checkpointer(request)
     history_repo = get_history_repo(request)
+    user_id = get_request_user_id(request)
+
+    # 显式 thread_id 撞占他人会话 → 403
+    existing = await history_repo.get_thread(thread_id)
+    if existing is not None and existing["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
 
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
     checkpoint = Checkpoint(
@@ -66,7 +72,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     )
 
     # 同步写入历史线程表
-    await history_repo.ensure_thread(thread_id, body.agent_id)
+    await history_repo.ensure_thread(thread_id, body.agent_id, user_id)
 
     return ThreadResponse(thread_id=thread_id, metadata=checkpoint_metadata)
 
@@ -80,17 +86,23 @@ async def list_threads(
 ) -> ThreadsListResponse:
     """列出历史会话。"""
     history_repo = get_history_repo(request)
-    threads, total = await history_repo.list_threads(agent_id=agent_id, limit=limit, offset=offset)
+    threads, total = await history_repo.list_threads(
+        get_request_user_id(request), agent_id=agent_id, limit=limit, offset=offset
+    )
     return ThreadsListResponse(threads=threads, total=total)
 
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
 async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     """获取线程元数据。"""
+    history_repo = get_history_repo(request)
+    row = await history_repo.get_thread(thread_id)
+    if row is not None and row["user_id"] != get_request_user_id(request):
+        raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
     checkpointer = get_checkpointer(request)
     config = {"configurable": {"thread_id": thread_id}}
     checkpoint = await checkpointer.aget_tuple(config)
-    if checkpoint is None:
+    if checkpoint is None and row is None:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
     thread_metadata = checkpoint.metadata if hasattr(checkpoint, "metadata") and checkpoint.metadata else {}
     return ThreadResponse(thread_id=thread_id, metadata=thread_metadata)
@@ -100,6 +112,9 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
 async def get_thread_messages(thread_id: str, request: Request) -> ThreadMessagesResponse:
     """获取某会话的全部消息。"""
     history_repo = get_history_repo(request)
+    row = await history_repo.get_thread(thread_id)
+    if row is not None and row["user_id"] != get_request_user_id(request):
+        raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
     messages = await history_repo.get_messages(thread_id)
     return ThreadMessagesResponse(thread_id=thread_id, messages=messages)
 
@@ -114,8 +129,12 @@ async def delete_thread(thread_id: str, request: Request) -> ThreadDeleteRespons
     """删除单个会话（历史消息 + checkpoint 状态）。"""
     history_repo = get_history_repo(request)
     checkpointer = get_checkpointer(request)
+    user_id = get_request_user_id(request)
 
-    deleted = await history_repo.delete_thread(thread_id)
+    row = await history_repo.get_thread(thread_id)
+    if row is not None and row["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
+    deleted = await history_repo.delete_thread(thread_id, user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
     await checkpointer.adelete_thread(thread_id)

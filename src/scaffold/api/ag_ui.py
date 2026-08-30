@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ag_ui.core import RunErrorEvent
 from ag_ui.core.types import RunAgentInput
@@ -336,11 +336,18 @@ def _register_endpoint(app: FastAPI, base_agent: LangGraphAgent, path: str, *, o
             extra=_stream_extra(endpoint_ctx),
         )
 
-        # 持久化用户消息
+        # 持久化用户消息（含会话归属校验：防止用他人 thread_id 劫持会话）
         history_repo: HistoryRepository | None = None
         try:
             history_repo = get_history_repo(request)
-            await history_repo.ensure_thread(input_data.thread_id, base_agent.name)
+            current_user = user_id_ctx.get()
+            existing_thread = await history_repo.get_thread(input_data.thread_id)
+            if existing_thread is not None and existing_thread["user_id"] != current_user:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": f"Thread {input_data.thread_id} 属于其他用户"},
+                )
+            await history_repo.ensure_thread(input_data.thread_id, base_agent.name, current_user)
             persisted = 0
             for msg in input_data.messages or []:
                 tm = _ag_ui_message_to_thread_message(

@@ -19,8 +19,8 @@ async def repo():
 
 @pytest.mark.asyncio
 async def test_ensure_thread_creates_record(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
-    summaries, total = await repo.list_threads()
+    await repo.ensure_thread("thread-1", "default", "default")
+    summaries, total = await repo.list_threads("default")
     assert total == 1
     assert summaries[0].thread_id == "thread-1"
     assert summaries[0].agent_id == "default"
@@ -28,7 +28,7 @@ async def test_ensure_thread_creates_record(repo: HistoryRepository) -> None:
 
 @pytest.mark.asyncio
 async def test_add_message_is_idempotent(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
+    await repo.ensure_thread("thread-1", "default", "default")
     msg = ThreadMessage(
         thread_id="thread-1",
         message_id="msg-1",
@@ -46,16 +46,16 @@ async def test_add_message_is_idempotent(repo: HistoryRepository) -> None:
 
 @pytest.mark.asyncio
 async def test_list_threads_filtered_by_agent(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
-    await repo.ensure_thread("thread-2", "code_reviewer")
-    summaries, total = await repo.list_threads(agent_id="default")
+    await repo.ensure_thread("thread-1", "default", "default")
+    await repo.ensure_thread("thread-2", "code_reviewer", "default")
+    summaries, total = await repo.list_threads("default", agent_id="default")
     assert total == 1
     assert summaries[0].thread_id == "thread-1"
 
 
 @pytest.mark.asyncio
 async def test_add_message_upserts_tool_calls(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
+    await repo.ensure_thread("thread-1", "default", "default")
     await repo.add_message(
         ThreadMessage(
             thread_id="thread-1",
@@ -85,15 +85,15 @@ async def test_add_message_upserts_tool_calls(repo: HistoryRepository) -> None:
 
 @pytest.mark.asyncio
 async def test_update_title(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
+    await repo.ensure_thread("thread-1", "default", "default")
     await repo.update_title("thread-1", "测试标题")
-    summaries, _ = await repo.list_threads()
+    summaries, _ = await repo.list_threads("default")
     assert summaries[0].title == "测试标题"
 
 
 @pytest.mark.asyncio
 async def test_get_messages_returns_thread_id(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
+    await repo.ensure_thread("thread-1", "default", "default")
     await repo.add_message(
         ThreadMessage(
             thread_id="thread-1",
@@ -111,7 +111,7 @@ async def test_get_messages_returns_thread_id(repo: HistoryRepository) -> None:
 
 @pytest.mark.asyncio
 async def test_list_threads_last_message_preview(repo: HistoryRepository) -> None:
-    await repo.ensure_thread("thread-1", "default")
+    await repo.ensure_thread("thread-1", "default", "default")
     long_content = "a" * 120
     await repo.add_message(
         ThreadMessage(
@@ -123,5 +123,5 @@ async def test_list_threads_last_message_preview(repo: HistoryRepository) -> Non
             created_at="2026-08-18T10:00:00Z",
         )
     )
-    summaries, _ = await repo.list_threads()
+    summaries, _ = await repo.list_threads("default")
     assert summaries[0].last_message_preview == long_content[:80] + "..."

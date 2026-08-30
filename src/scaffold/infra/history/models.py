@@ -40,6 +40,7 @@ class ExtractionTask(BaseModel):
 
     task_id: str
     thread_id: str
+    user_id: str = "default"
     upload_artifact_id: str
     status: TaskStatus
     requirements: dict[str, Any] | None = None

@@ -85,6 +85,6 @@ class TestExtractionTaskRepository:
             )
         )
 
-        tasks = await task_repo.list_by_thread("t-1")
+        tasks = await task_repo.list_by_thread("t-1", "default")
         assert len(tasks) == 2
         assert all(t.thread_id == "t-1" for t in tasks)

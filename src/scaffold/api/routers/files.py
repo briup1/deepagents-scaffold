@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
-from scaffold.api.deps import get_artifact_repo
+from scaffold.api.deps import get_artifact_repo, get_history_repo, get_request_user_id
 from scaffold.infra.artifacts import Artifact, ArtifactStorage
 from scaffold.infra.config.app_config import get_app_config
 
@@ -42,6 +42,13 @@ async def upload_file(
     if not thread_id:
         raise HTTPException(status_code=422, detail="thread_id 不能为空")
 
+    user_id = get_request_user_id(request)
+    # 向他人会话上传文件 → 403
+    history_repo = get_history_repo(request)
+    thread_row = await history_repo.get_thread(thread_id)
+    if thread_row is not None and thread_row["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail=f"Thread {thread_id} 属于其他用户")
+
     if file.size is None:
         content = await file.read()
     else:
@@ -71,6 +78,7 @@ async def upload_file(
     artifact = Artifact(
         artifact_id=artifact_id,
         thread_id=thread_id,
+        user_id=user_id,
         artifact_type="upload",
         original_name=original_name,
         stored_path=stored_path,
@@ -102,7 +110,7 @@ async def list_files(
         raise HTTPException(status_code=422, detail="thread_id 不能为空")
 
     repo = get_artifact_repo(request)
-    artifacts = await repo.list_by_thread(thread_id, artifact_type)
+    artifacts = await repo.list_by_thread(thread_id, get_request_user_id(request), artifact_type)
 
     return {
         "thread_id": thread_id,
@@ -132,6 +140,8 @@ async def get_file(
     artifact = await repo.get(artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail=f"工件 {artifact_id} 不存在")
+    if artifact.user_id != get_request_user_id(request):
+        raise HTTPException(status_code=403, detail=f"工件 {artifact_id} 属于其他用户")
 
     return {
         "artifact_id": artifact.artifact_id,
@@ -160,6 +170,8 @@ async def download_file(
     artifact = await repo.get(artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail=f"工件 {artifact_id} 不存在")
+    if artifact.user_id != get_request_user_id(request):
+        raise HTTPException(status_code=403, detail=f"工件 {artifact_id} 属于其他用户")
 
     storage = _get_storage()
     try:

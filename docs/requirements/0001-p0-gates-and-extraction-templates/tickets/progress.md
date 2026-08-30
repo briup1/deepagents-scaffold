@@ -22,3 +22,11 @@
 - Ruling: BwrapSandbox 继承而非并列 SubprocessSandbox——零成本复用 AST 白名单作第一道闸（实测探针脚本 import urllib 被拦），bwrap 为第二道 — 错了的代价：两层耦合，若未来要纯 bwrap 无 AST 需拆分。
 - 验证输出：`.venv/bin/pytest tests/infra/test_bwrap_sandbox.py -v` → **7 passed**（正常脚本产出一致 / 隔离探针 etc+输入写+宿主机项目全 BLOCKED / AST 拒 urllib / 256MB 限额 MemoryError / 2s 超时 kill exit=-1 / extra_env 路径映射 / bwrap 缺失可读错误）；`sudo bash scripts/setup_bwrap_apparmor.sh` 两次执行均 OK 且冒烟通过（幂等实测）；全量 `.venv/bin/ruff check src tests` 通过、`.venv/bin/pytest -q` → **396 passed**。
 - 排障记录：_bindings_ok 初版只挂 /usr 导致 /bin/true 的动态链接器（/lib64）缺失误判 skip，补齐 /bin /lib /lib64 后正常。
+
+## 工单 03：用户级数据隔离落地（后端）
+
+- 完成（待提交）。实现：threads/artifacts/extraction_tasks 三表增 user_id NOT NULL 列 + 索引；旧 schema 守卫（缺 user_id 列即 RuntimeError 指引删 data/，PRAGMA user_version=2）；HistoryRepository.ensure_thread/get_thread(新)/list_threads(user_id)/delete_thread(user)/delete_threads_by_agent(user)；Artifact/ExtractionTask 模型增 user_id（默认 default）；仓储 list/delete 全部 user 过滤；workspace 工具层经 get_current_user_id() 过滤（get_task/get_artifact 跨用户→None + logger.warning 拒绝日志）；REST 路由归属校验（threads 详情/消息/删除、files 详情/下载 403，列表过滤，上传撞他人会话 403，create_thread 显式 ID 撞占 403）；ag_ui SSE 端点 ensure_thread 带 user + 劫持校验（他人 thread_id → 403 不流式）；存量 data/ 已删（其中 AGENTS.md/skills 为运行时再生文件，已确认非 git 跟踪）。
+- Ruling: workspace 内部直接读 get_current_user_id() 而非工具逐个传参——调用点 5 个工具零改动 — 为什么：与 request_id 透传同模式，ctx 已是既定机制 — 错了的代价：后台任务无 ctx 时归 default 用户，auth 关闭环境行为与现状一致。
+- Ruling: 跨用户访问 REST 详情返 403（需求明确），列表过滤为空（不泄露存在性的同时满足"列表零条"验收）；仓储 get 不过滤、过滤在 workspace/路由层——REST 需要区分 404/403 — 错了的代价：直连仓储的新代码需自行比较 user_id。
+- 排障：① 删 data/ 后 tmp_tests 目录也被删（config.test.yaml sqlite_dir=./tmp_tests/data），aiosqlite 不建目录 → workspace.__aenter__ 补 mkdir parents；② REST 测试共享 session 级 DB 文件，固定 id 播种撞 UNIQUE → 改 uuid 后缀；③ conn fixture 漏 migrate extraction_tasks（delete_thread 级联依赖）。
+- 验证输出：`.venv/bin/ruff check src tests` → All checks passed!；`.venv/bin/pytest -q` → **409 passed**（新增 test_isolation.py 13 个：REST 403×4 场景/列表不可见/自有资源不受影响/仓储过滤×4/workspace ctx 隔离+拒绝日志×2/旧 schema 守卫×2）；`npm run build` ✓ built；`npm test` 84 passed。

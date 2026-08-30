@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from contextlib import AbstractAsyncContextManager
 from pathlib import Path
@@ -18,9 +19,12 @@ import aiosqlite
 
 from scaffold.infra.artifacts import Artifact, ArtifactRepository, ArtifactStorage
 from scaffold.infra.config.app_config import AppConfig, get_app_config
+from scaffold.infra.context import get_current_user_id
 from scaffold.infra.history.models import ExtractionTask, TaskStatus, ValidationCheck, ValidationReport
 from scaffold.infra.history.repository import ExtractionTaskRepository
 from scaffold.infra.time import _now
+
+logger = logging.getLogger(__name__)
 
 
 class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
@@ -46,6 +50,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         self._storage: ArtifactStorage | None = None
 
     async def __aenter__(self) -> ExtractionWorkspace:
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = await aiosqlite.connect(str(self._db_path))
         self._artifact_repo = ArtifactRepository(self._conn)
         self._task_repo = ExtractionTaskRepository(self._conn)
@@ -81,6 +86,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         task = ExtractionTask(
             task_id=task_id,
             thread_id=thread_id,
+            user_id=get_current_user_id(),
             upload_artifact_id=upload_artifact_id,
             status="goal_setting",
             requirements=requirements,
@@ -91,10 +97,19 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         return task
 
     async def get_task(self, task_id: str) -> ExtractionTask | None:
-        """根据 task_id 查询抽取任务。"""
+        """根据 task_id 查询抽取任务（非当前用户的任务视为不存在）。"""
         if self._task_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
-        return await self._task_repo.get(task_id)
+        task = await self._task_repo.get(task_id)
+        if task is not None and task.user_id != get_current_user_id():
+            logger.warning(
+                "cross-user access denied: task_id=%s owner=%s requester=%s",
+                task_id,
+                task.user_id,
+                get_current_user_id(),
+            )
+            return None
+        return task
 
     async def update_task(self, task: ExtractionTask) -> bool:
         """更新抽取任务；自动刷新 updated_at。"""
@@ -154,10 +169,10 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         return {"task_id": task.task_id, "error": summary, **(extra or {}), "status": task.status}
 
     async def list_tasks(self, thread_id: str) -> list[ExtractionTask]:
-        """列出某会话下的全部抽取任务。"""
+        """列出当前用户在某会话下的全部抽取任务。"""
         if self._task_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
-        return await self._task_repo.list_by_thread(thread_id)
+        return await self._task_repo.list_by_thread(thread_id, get_current_user_id())
 
     async def save_artifact(
         self,
@@ -182,6 +197,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         artifact = Artifact(
             artifact_id=artifact_id,
             thread_id=thread_id,
+            user_id=get_current_user_id(),
             artifact_type=artifact_type,  # type: ignore[arg-type]
             original_name=original_name or filename,
             stored_path=stored_path,
@@ -203,20 +219,29 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         return await asyncio.to_thread(self._storage.read, artifact.stored_path)
 
     async def get_artifact(self, artifact_id: str) -> Artifact | None:
-        """查询工件元数据。"""
+        """查询工件元数据（非当前用户的工件视为不存在）。"""
         if self._artifact_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
-        return await self._artifact_repo.get(artifact_id)
+        artifact = await self._artifact_repo.get(artifact_id)
+        if artifact is not None and artifact.user_id != get_current_user_id():
+            logger.warning(
+                "cross-user access denied: artifact_id=%s owner=%s requester=%s",
+                artifact_id,
+                artifact.user_id,
+                get_current_user_id(),
+            )
+            return None
+        return artifact
 
     async def list_artifacts(
         self,
         thread_id: str,
         artifact_type: str | None = None,
     ) -> list[Artifact]:
-        """列出某会话下的工件；可指定类型过滤。"""
+        """列出当前用户在某会话下的工件；可指定类型过滤。"""
         if self._artifact_repo is None:
             raise RuntimeError("Workspace 未进入上下文")
-        return await self._artifact_repo.list_by_thread(thread_id, artifact_type)
+        return await self._artifact_repo.list_by_thread(thread_id, get_current_user_id(), artifact_type)
 
 
 def _new_task_id() -> str:
