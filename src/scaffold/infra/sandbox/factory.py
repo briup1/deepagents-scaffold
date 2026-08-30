@@ -7,6 +7,7 @@ from typing import Any
 
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.sandbox.base import Sandbox
+from scaffold.infra.sandbox.bwrap_sandbox import BwrapSandbox
 from scaffold.infra.sandbox.subprocess_sandbox import SubprocessSandbox
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,8 @@ def get_sandbox(app_config: AppConfig | None = None) -> Sandbox:
     """根据配置返回对应的代码执行沙箱实例。
 
     当前支持的 provider：
-    - ``subprocess``：受限子进程沙箱（MVP 默认）
+    - ``subprocess``：受限子进程沙箱（AST 扫描，无系统级隔离）
+    - ``bwrap``：bubblewrap 本地隔离沙箱（推荐；需一次性 AppArmor 配置）
     - ``docker`` / ``e2b``：占位，尚未实现；传入会抛出 NotImplementedError
     """
     if app_config is None:
@@ -31,6 +33,10 @@ def get_sandbox(app_config: AppConfig | None = None) -> Sandbox:
             python_executable=None,
             allowed_imports=allowed_imports,
         )
+
+    if provider == "bwrap":
+        allowed_imports = set(config.allowed_imports) if config.allowed_imports else None
+        return BwrapSandbox(allowed_imports=allowed_imports)
 
     if provider == "docker":
         raise NotImplementedError(
@@ -60,6 +66,12 @@ def create_sandbox(
 
     if provider == "subprocess":
         return SubprocessSandbox(
+            python_executable=kwargs.get("python_executable"),
+            allowed_imports=set(allowed_imports) if allowed_imports else None,
+        )
+
+    if provider == "bwrap":
+        return BwrapSandbox(
             python_executable=kwargs.get("python_executable"),
             allowed_imports=set(allowed_imports) if allowed_imports else None,
         )

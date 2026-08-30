@@ -140,7 +140,7 @@ class SandboxExecutionConfig(BaseModel):
 
     provider: str = Field(
         default="subprocess",
-        description="沙箱实现：subprocess / docker / e2b（后两者需额外安装与配置）",
+        description="沙箱实现：bwrap（推荐，需一次性 AppArmor 配置）/ subprocess / docker / e2b（后两者需额外安装与配置）",
     )
     timeout_seconds: int = Field(default=60, description="脚本执行超时")
     memory_limit_mb: int = Field(default=512, description="内存限制（MB）")

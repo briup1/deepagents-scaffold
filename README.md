@@ -106,6 +106,11 @@ profiles:
 
 **热重载**：`config.yaml` 的修改在下一次 API 请求时自动生效，无需重启服务。
 
+## 部署前置
+
+- **多用户认证**：`config.yaml` 的 `auth` 段配置 token → user_id 映射（token 用 `$ENV_VAR` 引用，缺失时启动失败）。`enabled: false` 时全放行（仅限本地开发）。
+- **代码执行沙箱**：默认 `execution_sandbox.provider: bwrap`（bubblewrap 本地隔离）。Ubuntu 23.10+ 需先执行一次 `sudo bash scripts/setup_bwrap_apparmor.sh` 放行 unprivileged userns（幂等）。无 bwrap 的环境可退回 `provider: subprocess`（仅 AST 扫描，无系统级隔离）。
+
 ## 中间件
 
 本脚手架支持 DeepAgents `AgentMiddleware` 与 Deer-Flow 适配器中间件：

@@ -15,3 +15,10 @@
 - Ruling: 全局 $env 解析对 auth 段改为严格报错（带路径跟踪 ~6 行），而非全局限错——其余 $VAR（如未配置的 ANTHROPIC_API_KEY）仍允许缺失 — 为什么：生产配置引用不存在的 provider key 不应阻断启动，但 token 缺失是安全事故 — 错了的代价：若未来有其他安全配置段需同样严格，需扩展路径判断。
 - Ruling: /agent 别名移除波及测试 5 处 + 前端 1 处（App.tsx 单 agent 场景恒用 /agent/default），同步修掉 — 需求文档未列此项，依据用户此前拍板决策执行。
 - 验证输出：`.venv/bin/ruff check src tests` → All checks passed!；`.venv/bin/pytest -q` → **389 passed**, 20 warnings in 50.43s；`npm run build` → ✓ built in 23.56s；`npm test` → 84 passed。新增测试：AuthMiddleware 10 个（多用户映射/401/豁免/“/agent 不豁免”）、AuthConfig 7 个（校验/严格 env 解析）。
+
+## 工单 05：bubblewrap 沙箱 provider
+
+- 完成（待提交）。实现：BwrapSandbox（继承 SubprocessSandbox 复用 AST 扫描；--unshare-all --unshare-net --die-with-parent --clearenv + ro-bind /usr//lib//lib64//bin + venv 根目录 + ro-bind 输入/脚本 + bind 输出 + tmpfs /tmp + chdir /work/out；内存沿用 RLIMIT_AS preexec_fn；超时沿用 asyncio kill）；extra_env 宿主机路径前缀自动映射为沙箱内路径；factory 注册 bwrap；config.yaml/config.verify.yaml provider=bwrap（config.test.yaml 保持 subprocess 保证测试密闭）；scripts/setup_bwrap_apparmor.sh（幂等，含冒烟验证）；README 部署前置说明。
+- Ruling: BwrapSandbox 继承而非并列 SubprocessSandbox——零成本复用 AST 白名单作第一道闸（实测探针脚本 import urllib 被拦），bwrap 为第二道 — 错了的代价：两层耦合，若未来要纯 bwrap 无 AST 需拆分。
+- 验证输出：`.venv/bin/pytest tests/infra/test_bwrap_sandbox.py -v` → **7 passed**（正常脚本产出一致 / 隔离探针 etc+输入写+宿主机项目全 BLOCKED / AST 拒 urllib / 256MB 限额 MemoryError / 2s 超时 kill exit=-1 / extra_env 路径映射 / bwrap 缺失可读错误）；`sudo bash scripts/setup_bwrap_apparmor.sh` 两次执行均 OK 且冒烟通过（幂等实测）；全量 `.venv/bin/ruff check src tests` 通过、`.venv/bin/pytest -q` → **396 passed**。
+- 排障记录：_bindings_ok 初版只挂 /usr 导致 /bin/true 的动态链接器（/lib64）缺失误判 skip，补齐 /bin /lib /lib64 后正常。

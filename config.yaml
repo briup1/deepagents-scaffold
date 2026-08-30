@@ -75,9 +75,10 @@ auth:
 # 代码执行沙箱
 # ---------------------------------------------------------------------------
 # 控制抽取脚本在哪个沙箱中执行。
-# provider: subprocess（默认） / docker / e2b
+# provider: bwrap（默认，bubblewrap 本地隔离，Ubuntu 23.10+ 需先执行 scripts/setup_bwrap_apparmor.sh）
+#           subprocess（AST 扫描，无系统级隔离，仅用于无 bwrap 的环境）
 execution_sandbox:
-  provider: subprocess
+  provider: bwrap
   timeout_seconds: 60
   memory_limit_mb: 512
   allowed_imports: []

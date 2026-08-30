@@ -49,9 +49,9 @@ auth:
 # 代码执行沙箱
 # ---------------------------------------------------------------------------
 # 控制抽取脚本在哪个沙箱中执行。
-# provider: subprocess（默认） / docker / e2b
+# provider: bwrap（bubblewrap 本地隔离） / subprocess
 execution_sandbox:
-  provider: subprocess
+  provider: bwrap
   timeout_seconds: 60
   memory_limit_mb: 512
   allowed_imports: []
