@@ -46,3 +46,14 @@
 - Ruling: 模板 fingerprint 由 workspace 现场计算（复用 preview_excel 同源 openpyxl 逻辑但独立实现）——预览不落库结构信息，避免改 preview 返回值契约。
 - 排障：① find_by_signature 同时间戳并列 → ORDER BY 追加 created_at DESC, rowid DESC；② HistoryRepository.migrate 现在对 extraction_templates 也做 _assert_user_id_schema（新表天然通过，旧库无此表直接跳过）。
 - 验证输出：`.venv/bin/ruff check src tests` → All checks passed!；`.venv/bin/pytest -q` → **418 passed**（新增 test_extraction_templates.py 9 个：指纹稳定性/列序敏感/仓储 CRUD+签名取最新+隔离/workspace 保存需 success/保存-命中-未命中回环/跨用户不可见）；config.yaml 加载验证：5 工具已注册、data_extractor profile 存在。
+
+## 工单 07：集成验收与收尾
+
+- 完成。全量验证：`.venv/bin/ruff check src tests` All checks passed!；`.venv/bin/pytest -q` **418 passed**；`npm run build` ✓ built；`npm test` **94 passed**。
+- 端到端验收（config.verify.yaml + mock 模型，实测 curl 输出）：
+  - 无凭证 /api/threads=401、/api/agents=401、/agent/coding SSE=401；错误 token=401；/health 无凭证=200
+  - alice 建会话+传 xlsx 后：bob get thread=403、bob get messages=403、bob download=403、bob 列表 total=0；alice download own=200
+  - 带 alice token SSE /agent/coding 正常流式（RUN_STARTED + RAW on_chain_start 事件）；POST /agent（无 agentId）=404
+- OOS 9 条逐条核对（git diff 97944e4~1..HEAD 佐证，67 文件无 rbac/oauth/billing/market/version/channel/pdf/docx/migration 越界文件）：RBAC 未引入（仅 user_id 列+归属校验）；认证仍为配置化 token 列表无注册流；存量无迁移（旧 schema 启动拒绝+data/ 已删）；无计费；模板强 user_id 过滤无共享；模板仅 rename/delete 无编辑版本；上传仍限 xlsx/xls（E2E 实测 txt 被拒）；通道侧零改动；thread_id 语义未改。
+- 代码审查（安全点）：SCAFFOLD_API_KEY 全部移除无残留；auth 中间件无 token 日志；豁免仅 /health /docs /redoc /openapi.json；隔离在仓储/路由/workspace 三层强制；沙箱联网/内存/超时由工单05 探针测试覆盖。意见：无阻塞项。
+- requirement.md status: implementing → **done**；requirement.html chip 同步 Done · 已完成。

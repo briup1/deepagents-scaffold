@@ -1,7 +1,7 @@
 ---
 id: 0001
 slug: p0-gates-and-extraction-templates
-status: implementing
+status: done
 created: 2026-08-30
 source: docs/requirements/2026-08-30-p0-gates-and-extraction-templates.md（产品 PRD）
 ---
