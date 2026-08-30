@@ -90,6 +90,16 @@ tools:
     use: scaffold.plugins.tools.query_extracted_data:query_extracted_data
   - name: analyze_extracted_data
     use: scaffold.plugins.tools.analyze_extracted_data:analyze_extracted_data
+  - name: save_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:save_extraction_template
+  - name: match_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:match_extraction_template
+  - name: list_extraction_templates
+    use: scaffold.plugins.tools.extraction_templates:list_extraction_templates
+  - name: rename_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:rename_extraction_template
+  - name: delete_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:delete_extraction_template
 
 # 工具分组，按类别组织工具并选择性启用。
 tool_groups: []

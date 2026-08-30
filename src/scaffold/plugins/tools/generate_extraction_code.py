@@ -128,12 +128,14 @@ if __name__ == "__main__":
 async def generate_extraction_code(
     upload_artifact_id: str,
     requirements: dict[str, Any],
+    script: str | None = None,
 ) -> dict[str, Any]:
     """根据上传文件和抽取目标生成抽取脚本。
 
     Args:
         upload_artifact_id: 上传的 Excel 工件 ID。
         requirements: 抽取目标，包含 description、fields、constraints、expected_samples。
+        script: 可选——复用模板时传入已验证脚本源码，跳过重新生成。
 
     Returns:
         包含 task_id、script_artifact_id、script_content、status 的字典。
@@ -158,7 +160,9 @@ async def generate_extraction_code(
         )
         task_id = task.task_id
 
-        script_content = _build_extraction_script(requirements, upload_artifact_id)
+        script_content = script or _build_extraction_script(requirements, upload_artifact_id)
+        if script is not None:
+            logger.info("generate_extraction_code 复用模板脚本: task_id=%s", task.task_id)
         script_artifact = await ws.save_artifact(
             thread_id=upload_artifact.thread_id,
             artifact_type="script",

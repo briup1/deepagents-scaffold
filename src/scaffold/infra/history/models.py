@@ -51,6 +51,20 @@ class ExtractionTask(BaseModel):
     updated_at: str
 
 
+class ExtractionTemplate(BaseModel):
+    """抽取模板记录：验证通过的目标 + 脚本 + 结构指纹，归属用户。"""
+
+    template_id: str
+    user_id: str = "default"
+    name: str
+    goal: dict[str, Any]
+    script: str
+    fingerprint: dict[str, Any]
+    source_file_name: str | None = None
+    created_at: str
+    updated_at: str
+
+
 class ThreadCreate(BaseModel):
     """创建线程请求。"""
 

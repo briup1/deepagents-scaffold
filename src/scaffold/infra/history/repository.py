@@ -8,6 +8,7 @@ import aiosqlite
 
 from scaffold.infra.history.models import (
     ExtractionTask,
+    ExtractionTemplate,
     ThreadMessage,
     ThreadSummary,
 )
@@ -416,4 +417,130 @@ class ExtractionTaskRepository:
             validation_report=_parse_json(validation_json),
             created_at=row[9],
             updated_at=row[10],
+        )
+
+
+class ExtractionTemplateRepository:
+    """管理抽取模板的异步仓库（强制 user_id 过滤）。"""
+
+    def __init__(self, conn: aiosqlite.Connection) -> None:
+        self._conn = conn
+
+    async def migrate(self) -> None:
+        """创建抽取模板表。"""
+        await _assert_user_id_schema(self._conn, "extraction_templates")
+        await self._conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS extraction_templates (
+                template_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                script TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                source_file_name TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_templates_user ON extraction_templates(user_id);
+            CREATE INDEX IF NOT EXISTS idx_templates_signature
+                ON extraction_templates(user_id, json_extract(fingerprint, '$.signature'));
+            """
+        )
+        await self._conn.commit()
+
+    async def create(self, template: ExtractionTemplate) -> None:
+        """创建模板记录。"""
+        await self._conn.execute(
+            """
+            INSERT INTO extraction_templates
+            (template_id, user_id, name, goal, script, fingerprint, source_file_name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                template.template_id,
+                template.user_id,
+                template.name,
+                _dump_json(template.goal),
+                template.script,
+                _dump_json(template.fingerprint),
+                template.source_file_name,
+                template.created_at,
+                template.updated_at,
+            ),
+        )
+        await self._conn.commit()
+
+    async def get(self, template_id: str, user_id: str) -> ExtractionTemplate | None:
+        """按 id + 用户查询模板。"""
+        cursor = await self._conn.execute(
+            """
+            SELECT template_id, user_id, name, goal, script, fingerprint, source_file_name, created_at, updated_at
+            FROM extraction_templates
+            WHERE template_id = ? AND user_id = ?
+            """,
+            (template_id, user_id),
+        )
+        row = await cursor.fetchone()
+        return self._row_to_template(row) if row else None
+
+    async def find_by_signature(self, signature: str, user_id: str) -> ExtractionTemplate | None:
+        """按结构指纹 signature 查候选模板（取最近更新的一条）。"""
+        cursor = await self._conn.execute(
+            """
+            SELECT template_id, user_id, name, goal, script, fingerprint, source_file_name, created_at, updated_at
+            FROM extraction_templates
+            WHERE user_id = ? AND json_extract(fingerprint, '$.signature') = ?
+            ORDER BY updated_at DESC, created_at DESC, rowid DESC
+            LIMIT 1
+            """,
+            (user_id, signature),
+        )
+        row = await cursor.fetchone()
+        return self._row_to_template(row) if row else None
+
+    async def list_by_user(self, user_id: str) -> list[ExtractionTemplate]:
+        """列出某用户的全部模板。"""
+        cursor = await self._conn.execute(
+            """
+            SELECT template_id, user_id, name, goal, script, fingerprint, source_file_name, created_at, updated_at
+            FROM extraction_templates
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user_id,),
+        )
+        rows = await cursor.fetchall()
+        return [self._row_to_template(row) for row in rows]
+
+    async def rename(self, template_id: str, user_id: str, name: str, updated_at: str) -> bool:
+        """重命名模板（仅属主）；返回是否更新成功。"""
+        cursor = await self._conn.execute(
+            "UPDATE extraction_templates SET name = ?, updated_at = ? WHERE template_id = ? AND user_id = ?",
+            (name, updated_at, template_id, user_id),
+        )
+        await self._conn.commit()
+        return cursor.rowcount > 0
+
+    async def delete(self, template_id: str, user_id: str) -> bool:
+        """删除模板（仅属主）；返回是否删除成功。"""
+        cursor = await self._conn.execute(
+            "DELETE FROM extraction_templates WHERE template_id = ? AND user_id = ?",
+            (template_id, user_id),
+        )
+        await self._conn.commit()
+        return cursor.rowcount > 0
+
+    def _row_to_template(self, row: Any) -> ExtractionTemplate:
+        return ExtractionTemplate(
+            template_id=row[0],
+            user_id=row[1],
+            name=row[2],
+            goal=_parse_json(row[3]),
+            script=row[4],
+            fingerprint=_parse_json(row[5]),
+            source_file_name=row[6],
+            created_at=row[7],
+            updated_at=row[8],
         )

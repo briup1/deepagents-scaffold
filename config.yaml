@@ -117,6 +117,16 @@ tools:
     use: scaffold.plugins.tools.query_extracted_data:query_extracted_data
   - name: analyze_extracted_data
     use: scaffold.plugins.tools.analyze_extracted_data:analyze_extracted_data
+  - name: save_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:save_extraction_template
+  - name: match_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:match_extraction_template
+  - name: list_extraction_templates
+    use: scaffold.plugins.tools.extraction_templates:list_extraction_templates
+  - name: rename_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:rename_extraction_template
+  - name: delete_extraction_template
+    use: scaffold.plugins.tools.extraction_templates:delete_extraction_template
 
 # 工具分组，按类别组织工具并选择性启用。
 tool_groups: []
@@ -280,12 +290,14 @@ profiles:
         抽取验证通过后，你能对结果 CSV 执行 SQL 查询（query_extracted_data）或自然语言分析（analyze_extracted_data），并通过 render_ui 渲染表格、图表、指标卡。
       system_prompt_suffix: |
         工作流要求：
-        1. 当用户上传文件并表达抽取需求时，先调用 preview_excel(artifact_id=...) 查看 sheet、列名、样例行。
+        1. 当用户上传文件并表达抽取需求时，先调用 preview_excel(artifact_id=...) 查看 sheet、列名、样例行；同时调用 match_extraction_template(artifact_id=...) 检查是否命中已存模板。
+        1a. 模板命中（matched=true）时：向用户展示模板名称与来源文件，用 button_group 询问是否直接复用；用户确认后，直接调用 generate_extraction_code(requirements=模板的 goal, script=模板的 script, upload_artifact_id=...) 生成任务，再依次执行 execute_extraction_code → validate_extraction_result（从上传到验证通过不超过 2 次交互，不重复目标对齐）。
+        1b. 模板未命中（matched=false）或模板复用执行/验证失败：明确告知用户原因，回到步骤 2 走完整抽取流程，绝不伪装成功。
         2. 如果需求不完整（字段、类型、非空约束、示例行、过滤条件未明确），先向用户确认，不要直接生成脚本。
         3. 需求明确后，调用 generate_extraction_code(requirements=..., upload_artifact_id=...) 生成脚本，获取 task_id。
         4. 调用 execute_extraction_code(task_id=...) 在沙箱中执行脚本。
         5. 执行成功后，调用 validate_extraction_result(task_id=...) 验证抽取结果。
-        6. 验证通过 → 向用户展示摘要、列名、行数、extracted_artifact_id，并提供下载入口；可主动用 render_ui 展示数据表格或下载按钮。
+        6. 验证通过 → 向用户展示摘要、列名、行数、extracted_artifact_id，并提供下载入口；可主动用 render_ui 展示数据表格或下载按钮；随后用 button_group（按钮 id 如 save_template）询问是否把本次抽取保存为模板，用户确认后调用 save_extraction_template(task_id=..., name=<简短模板名>) 并告知 template_id。
         7. 验证失败 → 阅读 validation_report，判断是 requirements 问题还是脚本问题，回到步骤 2 或步骤 3 迭代，最多 3 轮。
 
         可交互组件使用规范（render_ui 的 props 必须严格符合以下格式）：

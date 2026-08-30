@@ -38,3 +38,11 @@
 - Ruling: apiFetch 在无 token 时保持原生 fetch 调用签名（不包 init），既有调用方测试零改动。
 - 排障：① 首次 /api/agents/ 在输入页期间即发起（无 token）→ effect 加 !token 早退；② A3 测试在 render 后才装 401 mock → 挂载期请求已用旧 mock 成功，改为 render 前安装。
 - 验证输出：`npm run build` ✓ built；`npm test` **94 passed**（新增 A1-A3 三个认证场景 + auth.test.ts 6 个单测）；后端 `.venv/bin/pytest -q` 409 passed 无回归。
+
+## 工单 06：抽取模板复用
+
+- 完成（待提交）。实现：extraction_templates 表（design.md 3.5 字段+索引，signature 索引走 json_extract）+ ExtractionTemplateRepository（get/find_by_signature/list/rename/delete 全部 user_id 强制过滤）；ExtractionTemplate 模型；infra/extraction/fingerprint.py（openpyxl 读 sheet 名+各 sheet 表头列 → canonical JSON → sha256 前16位）；workspace 生命周期挂 template_repo + save_template_from_task/match_template/list_templates/rename_template/delete_template（user_id 取 user_id_ctx，跨用户按不存在处理）；5 个工具（async+关键字参数）注册进 config.yaml/config.verify.yaml；generate_extraction_code 增加可选 script 参数（复用模板脚本，不新增执行工具）；data_extractor 提示词流更新（上传先 match→命中确认后复用→失败回退完整流程；验证通过后 button_group 询问保存）。
+- Ruling: 复用路径不加新执行工具，给 generate_extraction_code 加可选 script 覆盖——与 design 3.5 "从 match 取 template.script 走现有 execute/validate 链路"一致 — 代价：generate 的 schema 多一个可选字段。
+- Ruling: 模板 fingerprint 由 workspace 现场计算（复用 preview_excel 同源 openpyxl 逻辑但独立实现）——预览不落库结构信息，避免改 preview 返回值契约。
+- 排障：① find_by_signature 同时间戳并列 → ORDER BY 追加 created_at DESC, rowid DESC；② HistoryRepository.migrate 现在对 extraction_templates 也做 _assert_user_id_schema（新表天然通过，旧库无此表直接跳过）。
+- 验证输出：`.venv/bin/ruff check src tests` → All checks passed!；`.venv/bin/pytest -q` → **418 passed**（新增 test_extraction_templates.py 9 个：指纹稳定性/列序敏感/仓储 CRUD+签名取最新+隔离/workspace 保存需 success/保存-命中-未命中回环/跨用户不可见）；config.yaml 加载验证：5 工具已注册、data_extractor profile 存在。

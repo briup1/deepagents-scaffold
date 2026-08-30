@@ -20,8 +20,9 @@ import aiosqlite
 from scaffold.infra.artifacts import Artifact, ArtifactRepository, ArtifactStorage
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.context import get_current_user_id
-from scaffold.infra.history.models import ExtractionTask, TaskStatus, ValidationCheck, ValidationReport
-from scaffold.infra.history.repository import ExtractionTaskRepository
+from scaffold.infra.extraction.fingerprint import compute_fingerprint
+from scaffold.infra.history.models import ExtractionTask, ExtractionTemplate, TaskStatus, ValidationCheck, ValidationReport
+from scaffold.infra.history.repository import ExtractionTaskRepository, ExtractionTemplateRepository
 from scaffold.infra.time import _now
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         self._conn: aiosqlite.Connection | None = None
         self._artifact_repo: ArtifactRepository | None = None
         self._task_repo: ExtractionTaskRepository | None = None
+        self._template_repo: ExtractionTemplateRepository | None = None
         self._storage: ArtifactStorage | None = None
 
     async def __aenter__(self) -> ExtractionWorkspace:
@@ -54,9 +56,11 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         self._conn = await aiosqlite.connect(str(self._db_path))
         self._artifact_repo = ArtifactRepository(self._conn)
         self._task_repo = ExtractionTaskRepository(self._conn)
+        self._template_repo = ExtractionTemplateRepository(self._conn)
         self._storage = ArtifactStorage(self._artifacts_dir)
         await self._artifact_repo.migrate()
         await self._task_repo.migrate()
+        await self._template_repo.migrate()
         return self
 
     async def __aexit__(
@@ -95,6 +99,115 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
         )
         await self._task_repo.create(task)
         return task
+
+    async def save_template_from_task(self, task_id: str, name: str) -> dict[str, Any]:
+        """把验证通过的任务固化为模板；返回 error dict 或模板摘要。"""
+        if self._template_repo is None or self._task_repo is None:
+            raise RuntimeError("Workspace 未进入上下文")
+        user_id = get_current_user_id()
+        task = await self._task_repo.get(task_id)
+        if task is None or task.user_id != user_id:
+            return {"error": f"任务 {task_id} 不存在"}
+        if task.status != "success":
+            return {"error": f"任务 {task_id} 状态为 {task.status}，仅验证通过（success）的任务可保存为模板"}
+        if task.script_artifact_id is None:
+            return {"error": f"任务 {task_id} 没有抽取脚本工件，无法保存模板"}
+
+        script_artifact = await self._artifact_repo.get(task.script_artifact_id) if self._artifact_repo else None
+        if script_artifact is None or script_artifact.user_id != user_id:
+            return {"error": f"任务 {task_id} 的脚本工件不存在"}
+        script = (await self.read_artifact(script_artifact.artifact_id)).decode("utf-8", errors="replace")
+
+        upload = await self._artifact_repo.get(task.upload_artifact_id) if self._artifact_repo else None
+        if upload is None or upload.user_id != user_id:
+            return {"error": f"任务 {task_id} 的来源文件不存在"}
+        content = await self.read_artifact(upload.artifact_id)
+        fingerprint = await asyncio.to_thread(compute_fingerprint, content)
+
+        now = _now()
+        template = ExtractionTemplate(
+            template_id=f"tpl-{uuid.uuid4().hex[:12]}",
+            user_id=user_id,
+            name=name,
+            goal=task.requirements or {},
+            script=script,
+            fingerprint=fingerprint,
+            source_file_name=upload.original_name,
+            created_at=now,
+            updated_at=now,
+        )
+        await self._template_repo.create(template)
+        return {
+            "template_id": template.template_id,
+            "name": template.name,
+            "signature": fingerprint["signature"],
+        }
+
+    async def match_template(self, artifact_id: str) -> dict[str, Any]:
+        """按工件结构指纹匹配当前用户的模板；返回 matched 或 error。"""
+        if self._template_repo is None:
+            raise RuntimeError("Workspace 未进入上下文")
+        user_id = get_current_user_id()
+        artifact = await self.get_artifact(artifact_id)
+        if artifact is None:
+            return {"error": f"工件 {artifact_id} 不存在"}
+        if artifact.artifact_type != "upload":
+            return {"error": f"工件 {artifact_id} 不是上传文件，无法匹配模板"}
+        content = await self.read_artifact(artifact_id)
+        fingerprint = await asyncio.to_thread(compute_fingerprint, content)
+        template = await self._template_repo.find_by_signature(fingerprint["signature"], user_id)
+        if template is None:
+            return {
+                "matched": False,
+                "reason": "结构指纹不匹配：列名或表结构与已存模板不一致，需走完整抽取流程",
+                "signature": fingerprint["signature"],
+            }
+        return {
+            "matched": True,
+            "template": {
+                "template_id": template.template_id,
+                "name": template.name,
+                "source_file_name": template.source_file_name,
+                "script": template.script,
+                "signature": template.fingerprint.get("signature"),
+            },
+        }
+
+    async def list_templates(self) -> list[dict[str, Any]]:
+        """列出当前用户的模板摘要（不含脚本全文）。"""
+        if self._template_repo is None:
+            raise RuntimeError("Workspace 未进入上下文")
+        templates = await self._template_repo.list_by_user(get_current_user_id())
+        return [
+            {
+                "template_id": t.template_id,
+                "name": t.name,
+                "source_file_name": t.source_file_name,
+                "signature": t.fingerprint.get("signature"),
+                "created_at": t.created_at,
+                "updated_at": t.updated_at,
+            }
+            for t in templates
+        ]
+
+    async def rename_template(self, template_id: str, name: str) -> dict[str, Any]:
+        """重命名当前用户的模板。"""
+        if self._template_repo is None:
+            raise RuntimeError("Workspace 未进入上下文")
+        user_id = get_current_user_id()
+        ok = await self._template_repo.rename(template_id, user_id, name, _now())
+        if not ok:
+            return {"error": f"模板 {template_id} 不存在"}
+        return {"template_id": template_id, "name": name}
+
+    async def delete_template(self, template_id: str) -> dict[str, Any]:
+        """删除当前用户的模板。"""
+        if self._template_repo is None:
+            raise RuntimeError("Workspace 未进入上下文")
+        ok = await self._template_repo.delete(template_id, get_current_user_id())
+        if not ok:
+            return {"error": f"模板 {template_id} 不存在"}
+        return {"template_id": template_id, "deleted": True}
 
     async def get_task(self, task_id: str) -> ExtractionTask | None:
         """根据 task_id 查询抽取任务（非当前用户的任务视为不存在）。"""
