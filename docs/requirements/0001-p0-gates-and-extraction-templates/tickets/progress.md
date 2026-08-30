@@ -57,3 +57,10 @@
 - OOS 9 条逐条核对（git diff 97944e4~1..HEAD 佐证，67 文件无 rbac/oauth/billing/market/version/channel/pdf/docx/migration 越界文件）：RBAC 未引入（仅 user_id 列+归属校验）；认证仍为配置化 token 列表无注册流；存量无迁移（旧 schema 启动拒绝+data/ 已删）；无计费；模板强 user_id 过滤无共享；模板仅 rename/delete 无编辑版本；上传仍限 xlsx/xls（E2E 实测 txt 被拒）；通道侧零改动；thread_id 语义未改。
 - 代码审查（安全点）：SCAFFOLD_API_KEY 全部移除无残留；auth 中间件无 token 日志；豁免仅 /health /docs /redoc /openapi.json；隔离在仓储/路由/workspace 三层强制；沙箱联网/内存/超时由工单05 探针测试覆盖。意见：无阻塞项。
 - requirement.md status: implementing → **done**；requirement.html chip 同步 Done · 已完成。
+
+## 清单关闭复核（2026-08-30 收尾）
+
+- 工单 02/03/05/04/06 完成度审计逐条核对通过，complete_goal 已逐项提交（审计器异步复核）。
+- 最终全量状态：`.venv/bin/ruff check src tests` All checks passed!；`.venv/bin/pytest -q` 418 passed（含隔离 13、模板 9、认证 48、bwrap 7）；`npm run build` ✓；`npm test` 94 passed。
+- E2E（verify 模式实测）：401×4 / 403×3 / 200 / SSE 流式 / POST /agent=404 全部符合契约；data/ 为新 schema（user_id 列）。
+- 需求 0001 七工单全部实现并验证，requirement.md status: done。
