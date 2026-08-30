@@ -216,9 +216,3 @@ def _values_equal(actual: str, expected: Any) -> bool:
         return abs(float(actual_str) - float(expected_str)) < 1e-6
     except ValueError:
         return False
-
-
-def _now() -> str:
-    from datetime import datetime, timezone  # noqa: PLC0415
-
-    return datetime.now(timezone.utc).isoformat()

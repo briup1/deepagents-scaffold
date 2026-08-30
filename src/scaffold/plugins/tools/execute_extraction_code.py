@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from scaffold.infra.sandbox import get_sandbox
-from scaffold.plugins.tools._extraction_common import _now, get_extraction_workspace
+from scaffold.infra.time import _now
+from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
 

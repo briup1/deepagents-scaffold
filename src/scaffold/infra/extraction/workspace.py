@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import uuid
 from contextlib import AbstractAsyncContextManager
-from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -21,6 +20,7 @@ from scaffold.infra.artifacts import Artifact, ArtifactRepository, ArtifactStora
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.history.models import ExtractionTask
 from scaffold.infra.history.repository import ExtractionTaskRepository
+from scaffold.infra.time import _now
 
 
 class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
@@ -171,10 +171,6 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
 
 def _new_task_id() -> str:
     return f"ext-{uuid.uuid4().hex[:12]}"
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def get_extraction_workspace(

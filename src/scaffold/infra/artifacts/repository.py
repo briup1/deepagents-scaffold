@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from typing import Any
 
 import aiosqlite
@@ -16,10 +15,6 @@ class ArtifactRepository:
 
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
-
-    @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat()
 
     async def migrate(self) -> None:
         """创建工件元数据表。"""

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 import aiosqlite
@@ -12,6 +11,7 @@ from scaffold.infra.history.models import (
     ThreadMessage,
     ThreadSummary,
 )
+from scaffold.infra.time import _now
 
 
 class HistoryRepository:
@@ -52,13 +52,9 @@ class HistoryRepository:
         )
         await self._conn.commit()
 
-    @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat()
-
     async def ensure_thread(self, thread_id: str, agent_id: str) -> None:
         """确保线程记录存在；不存在则创建。"""
-        now = self._now()
+        now = _now()
         await self._conn.execute(
             """
             INSERT INTO threads (thread_id, agent_id, title, created_at, updated_at)
@@ -182,7 +178,7 @@ class HistoryRepository:
         )
         await self._conn.execute(
             "UPDATE threads SET updated_at = ? WHERE thread_id = ?",
-            (self._now(), message.thread_id),
+            (_now(), message.thread_id),
         )
         await self._conn.commit()
 
@@ -195,7 +191,7 @@ class HistoryRepository:
         """更新会话标题。"""
         await self._conn.execute(
             "UPDATE threads SET title = ?, updated_at = ? WHERE thread_id = ?",
-            (title, self._now(), thread_id),
+            (title, _now(), thread_id),
         )
         await self._conn.commit()
 
@@ -274,10 +270,6 @@ class ExtractionTaskRepository:
             """
         )
         await self._conn.commit()
-
-    @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat()
 
     async def create(self, task: ExtractionTask) -> None:
         """创建抽取任务记录。"""
