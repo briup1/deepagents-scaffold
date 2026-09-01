@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案设计：data_extractor → Code Agent 式复杂抽取</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #F7F6F3;
+  --surface: #FFFFFF;
+  --text: #2F3437;
+  --text-secondary: #787774;
+  --text-muted: #A8A49C;
+  --border: #EAE7E0;
+  --accent: #9F2F2D;
+  --accent-soft: #FDEBEC;
+  --pass: #346538;
+  --pass-bg: #EDF3EC;
+  --warn: #956400;
+  --warn-bg: #FBF3DB;
+  --info: #1F6C9F;
+  --info-bg: #E1F3FE;
+  --code-bg: #26221E;
+  --code-text: #EDE8E0;
+  --sidebar-width: 280px;
+  --serif: 'Instrument Serif', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --sans: 'Plus Jakarta Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.doc-title {
+  font-family: var(--serif);
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+}
+
+.nav-item {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-item:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-left: 2px solid var(--accent);
+}
+
+.nav-num {
+  font-weight: 600;
+  min-width: 20px;
+}
+
+/* Main Content */
+.main {
+  flex: 1;
+  max-width: 720px;
+  padding: 48px 48px 96px;
+}
+
+.breadcrumb {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.breadcrumb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 32px;
+  line-height: 1.2;
+}
+
+/* Section Panel */
+.section-panel {
+  display: none;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.section-panel.active {
+  display: block;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0;
+  font-size: 14px;
+}
+
+thead {
+  background: #FBFAF7;
+}
+
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* Badges */
+.badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.badge-pass {
+  background: var(--pass-bg);
+  color: var(--pass);
+}
+
+.badge-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+/* Code Blocks */
+pre {
+  background: var(--code-bg);
+  color: var(--code-text);
+  padding: 20px 24px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 16px 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Accordion */
+.accordion {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 16px 0;
+  background: var(--surface);
+}
+
+.accordion-header {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.accordion-header::before {
+  content: '+';
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.accordion.open .accordion-header::before {
+  content: '−';
+}
+
+.accordion-content {
+  display: none;
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.accordion.open .accordion-content {
+  display: block;
+}
+
+/* Before/After Cards */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.compare-card {
+  padding: 20px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.compare-card.before {
+  border-color: var(--border);
+}
+
+.compare-card.after {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.compare-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.compare-card.after .compare-label {
+  color: var(--accent);
+}
+
+/* Flow Diagram */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  font-size: 13px;
+}
+
+.flow-node {
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.flow-node.new {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.flow-arrow {
+  color: var(--text-muted);
+}
+
+/* dl */
+dl {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px 16px;
+  margin: 16px 0;
+}
+
+dt {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+dd {
+  color: var(--text);
+}
+
+/* Navigation Footer */
+.nav-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Mobile */
+@media (max-width: 860px) {
+  body {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .main {
+    padding: 24px;
+  }
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+  dl {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="eyebrow">DESIGN DOC</div>
+  <h1 class="doc-title">data_extractor 演进为 Code Agent 式复杂抽取</h1>
+  <div class="meta-chips">
+    <span class="chip">0002</span>
+    <span class="chip">2026-09-01</span>
+    <span class="chip">DRAFT</span>
+  </div>
+  <nav>
+    <ul class="nav-list" id="navList">
+      <li class="nav-item active" data-section="01"><span class="nav-num">01</span> 需求↔方案映射</li>
+      <li class="nav-item" data-section="02"><span class="nav-num">02</span> 前后对比</li>
+      <li class="nav-item" data-section="03"><span class="nav-num">03</span> 接口与契约设计</li>
+      <li class="nav-item" data-section="04"><span class="nav-num">04</span> 历史资产复用分析</li>
+      <li class="nav-item" data-section="05"><span class="nav-num">05</span> 多方案并列</li>
+      <li class="nav-item" data-section="06"><span class="nav-num">06</span> 审查结论</li>
+      <li class="nav-item" data-section="07"><span class="nav-num">07</span> 最小验证</li>
+    </ul>
+  </nav>
+</aside>
+
+<main class="main">
+
+  <!-- Section 01 -->
+  <section class="section-panel active" id="section-01">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 01 / 07
+    </div>
+    <h2 class="section-title">需求↔方案映射</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>需求子项</th>
+          <th>方案模块</th>
+          <th>覆盖</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>R1 复杂抽取能力</td><td>extraction_coder 子 Agent + run_extraction_script 双模式</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>R2 Code Agent 范式</td><td>extraction-coder 技能 + 工作区文件工具 + 迭代上限</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>R3 模板匹配后置</td><td>不做，仅通过脚本固化沉淀素材</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US1 复杂表格抽取</td><td>extraction_coder 自由代码能力</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US2 自动改代码重试</td><td>技能驱动迭代工作流（8 轮上限）</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US3 迭代失败人工介入</td><td>主 Agent 降级流程</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US4 脚本可审计</td><td>工作区脚本固化 + update_task_script</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US5 常规快路径</td><td>主 Agent 路由决策</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US6 格式异常处理</td><td>normalize_upload_file 预处理工具</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+        <tr><td>US7-25 其余需求</td><td>对应方案模块</td><td><span class="badge badge-pass">覆盖</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="nav-footer">
+      <span></span>
+      <button class="nav-btn" onclick="goSection(02)">下一节 →</button>
+    </div>
+  </section>
+
+  <!-- Section 02 -->
+  <section class="section-panel" id="section-02">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 02 / 07
+    </div>
+    <h2 class="section-title">前后对比</h2>
+
+    <h3 style="font-family:var(--sans);font-size:16px;font-weight:600;margin:24px 0 16px;">用户视角</h3>
+
+    <div class="compare-grid">
+      <div class="compare-card before">
+        <div class="compare-label">BEFORE</div>
+        <p>用户上传复杂表格（多 sheet + 合并单元格）→ Agent 调用固定模板 → 脚本无法处理 → 告知用户"无法处理" → 流程终止</p>
+      </div>
+      <div class="compare-card after">
+        <div class="compare-label">AFTER</div>
+        <p>用户上传复杂表格 → 主 Agent 预处理异常 → 委派子 Agent 迭代编码 → 最终脚本固化 → 验证通过 → 交付</p>
+      </div>
+    </div>
+
+    <h3 style="font-family:var(--sans);font-size:16px;font-weight:600;margin:24px 0 16px;">系统视角</h3>
+
+    <p style="color:var(--text-secondary);margin-bottom:12px;">新增节点高亮，复用资产普通样式：</p>
+
+    <div class="accordion">
+      <div class="accordion-header">现状链路图</div>
+      <div class="accordion-content">
+        <div class="flow">
+          <span class="flow-node">preview_excel</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node">generate_extraction_code（模板渲染）</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node">execute_extraction_code</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node">validate_extraction_result</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header">设计后链路图</div>
+      <div class="accordion-content">
+        <div class="flow">
+          <span class="flow-node">preview_excel（增强）</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node new">normalize_upload_file</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node new">主 Agent 路由决策</span>
+        </div>
+        <div style="margin:12px 0;color:var(--text-muted);font-size:13px;">分两路：</div>
+        <div class="flow">
+          <span class="flow-node">快路径：generate_extraction_code</span>
+        </div>
+        <div class="flow" style="margin-top:8px;">
+          <span class="flow-node new">复杂路径：extraction_coder 子 Agent</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node new">run_extraction_script（双模式）</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-node">validate_extraction_result</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-footer">
+      <button class="nav-btn" onclick="goSection(01)">← 上一节</button>
+      <button class="nav-btn" onclick="goSection(03)">下一节 →</button>
+    </div>
+  </section>
+
+  <!-- Section 03 -->
+  <section class="section-panel" id="section-03">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 03 / 07
+    </div>
+    <h2 class="section-title">接口与契约设计</h2>
+
+    <div class="accordion open">
+      <div class="accordion-header">run_extraction_script 工具</div>
+      <div class="accordion-content">
+        <pre><code>async def run_extraction_script(
+    task_id: str,
+    script_path: str | None = None,
+    mode: Literal["iterate", "finalize"] = "iterate",
+    input_file: str | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]</code></pre>
+        <dl>
+          <dt>迭代模式</dt><dd>不迁移状态、不落盘工件、计入 run_count</dd>
+          <dt>收口模式</dt><dd>迁移 code_generated → validating、落盘工件、不计入 run_count</dd>
+          <dt>返回</dt><dd>stdout/stderr/exit_code/output_files/preview（前 N 行 + 列名）</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="accordion open">
+      <div class="accordion-header">normalize_upload_file 工具</div>
+      <div class="accordion-content">
+        <pre><code>async def normalize_upload_file(
+    artifact_id: str,
+    config: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]</code></pre>
+        <dl>
+          <dt>清洗语义</dt><dd>合并单元格拆分填充同值；删除线默认过滤</dd>
+          <dt>返回</dt><dd>normalized_artifact_id + source_upload_artifact_id + summary</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header">workspace 新增接口</div>
+      <div class="accordion-content">
+        <pre><code>async def update_task_script(task_id: str, content: bytes) -> bool</code></pre>
+        <p style="margin-top:8px;">更新任务脚本工件（覆盖式），固化前做 ast.parse 语法校验。</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header">schema 变更</div>
+      <div class="accordion-content">
+        <pre><code>ALTER TABLE extraction_tasks ADD COLUMN run_count INTEGER NOT NULL DEFAULT 0;</code></pre>
+        <p style="margin-top:8px;">ArtifactType 扩展：增加 "normalized" 类型。</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header">extraction_coder 子 Agent 配置</div>
+      <div class="accordion-content">
+        <pre><code>subagent_definitions:
+  items:
+    - name: extraction_coder
+      description: "复杂 Excel 抽取：自由编写和迭代抽取脚本"
+      tools: ["run_extraction_script", "normalize_upload_file"]
+      skills: ["src/scaffold/plugins/skills/extraction/extraction-coder"]
+      permissions:
+        - paths: ["&lt;workspace_dir&gt;/**"]
+          operations: ["read", "write"]
+          mode: "allow"
+        - paths: ["/**"]
+          operations: ["read", "write"]
+          mode: "deny"
+      enabled: true</code></pre>
+      </div>
+    </div>
+
+    <div class="nav-footer">
+      <button class="nav-btn" onclick="goSection(02)">← 上一节</button>
+      <button class="nav-btn" onclick="goSection(04)">下一节 →</button>
+    </div>
+  </section>
+
+  <!-- Section 04 -->
+  <section class="section-panel" id="section-04">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 04 / 07
+    </div>
+    <h2 class="section-title">历史资产复用分析</h2>
+
+    <p style="color:var(--text-secondary);margin-bottom:16px;">复用是默认，从零需要理由。</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>资产</th>
+          <th>复用方式</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>bwrap 隔离沙箱</td><td>run_extraction_script 调用 get_sandbox().run()</td><td><span class="badge badge-pass">复用</span></td></tr>
+        <tr><td>ExtractionWorkspace</td><td>create_task/get_task/update_task/save_artifact</td><td><span class="badge badge-pass">复用</span></td></tr>
+        <tr><td>ArtifactStorage</td><td>工件读写，thread_id 隔离</td><td><span class="badge badge-pass">复用</span></td></tr>
+        <tr><td>ExtractionTask 模型</td><td>扩展 run_count 字段</td><td><span class="badge badge-info">扩展</span></td></tr>
+        <tr><td>SubAgent 配置</td><td>扩展 permissions 字段</td><td><span class="badge badge-info">扩展</span></td></tr>
+        <tr><td>preview_excel</td><td>增强返回异常信号</td><td><span class="badge badge-info">增强</span></td></tr>
+        <tr><td>现有工具链</td><td>全部保留不变</td><td><span class="badge badge-pass">保留</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-family:var(--sans);font-size:16px;font-weight:600;margin:24px 0 16px;">从零开发的项</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>项</th>
+          <th>理由</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>run_extraction_script 工具</td><td>双模式执行语义不同于现有 execute_extraction_code</td></tr>
+        <tr><td>normalize_upload_file 工具</td><td>封装 openpyxl 预处理脚本语义</td></tr>
+        <tr><td>extraction_coder 子 Agent</td><td>Code Agent 工作流</td></tr>
+        <tr><td>extraction-coder 技能文件</td><td>定义解析选型与迭代工作流</td></tr>
+      </tbody>
+    </table>
+
+    <div class="nav-footer">
+      <button class="nav-btn" onclick="goSection(03)">← 上一节</button>
+      <button class="nav-btn" onclick="goSection(05)">下一节 →</button>
+    </div>
+  </section>
+
+  <!-- Section 05 -->
+  <section class="section-panel" id="section-05">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 05 / 07
+    </div>
+    <h2 class="section-title">多方案并列</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>A: 子 Agent + 两个新工具</th>
+          <th>B: 主 Agent 内直接迭代</th>
+          <th>C: 独立微服务</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>复杂度</td><td><span class="badge badge-pass">中等</span></td><td><span class="badge badge-pass">低</span></td><td><span class="badge badge-warn">高</span></td></tr>
+        <tr><td>隔离性</td><td><span class="badge badge-pass">好</span></td><td><span class="badge badge-warn">差</span></td><td><span class="badge badge-pass">最好</span></td></tr>
+        <tr><td>可测试性</td><td><span class="badge badge-pass">好</span></td><td><span class="badge badge-warn">中</span></td><td><span class="badge badge-pass">好</span></td></tr>
+        <tr><td>扩展性</td><td><span class="badge badge-pass">好</span></td><td><span class="badge badge-warn">差</span></td><td><span class="badge badge-pass">好</span></td></tr>
+        <tr><td>风险</td><td><span class="badge badge-info">中</span></td><td><span class="badge badge-warn">高</span></td><td><span class="badge badge-warn">高</span></td></tr>
+      </tbody>
+    </table>
+
+    <div style="margin:24px 0;padding:16px 20px;background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:4px;">
+      <strong style="color:var(--accent);">推荐方案 A</strong>
+      <p style="margin-top:8px;color:var(--text-secondary);">平衡复杂度与能力，复用现有子 Agent 基础设施，隔离性足够，可测试性好。</p>
+    </div>
+
+    <div class="nav-footer">
+      <button class="nav-btn" onclick="goSection(04)">← 上一节</button>
+      <button class="nav-btn" onclick="goSection(06)">下一节 →</button>
+    </div>
+  </section>
+
+  <!-- Section 06 -->
+  <section class="section-panel" id="section-06">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 06 / 07
+    </div>
+    <h2 class="section-title">审查结论</h2>
+
+    <h3 style="font-family:var(--sans);font-size:16px;font-weight:600;margin:24px 0 16px;">可行性</h3>
+    <table>
+      <thead><tr><th>检查项</th><th>状态</th><th>证据</th></tr></thead>
+      <tbody>
+        <tr><td>bwrap 沙箱支持 extra_env</td><td><span class="badge badge-pass">通过</span></td><td><code>bwrap_sandbox.py:93-94</code> 遍历 extra_env 设置 --setenv</td></tr>
+        <tr><td>子 Agent 机制可用</td><td><span class="badge badge-pass">通过</span></td><td><code>core/subagents.py</code> 已有完整 build_subagents</td></tr>
+        <tr><td>工件系统支持 normalized</td><td><span class="badge badge-pass">通过</span></td><td><code>workspace.py:304</code> artifact_type 为 str，可扩展</td></tr>
+        <tr><td>状态机支持 code_generated 保持</td><td><span class="badge badge-pass">通过</span></td><td><code>workspace.py:234</code> check_task_transition 支持 allowed</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-family:var(--sans);font-size:16px;font-weight:600;margin:24px 0 16px;">复用性</h3>
+    <table>
+      <thead><tr><th>检查项</th><th>状态</th><th>证据</th></tr></thead>
+      <tbody>
+        <tr><td>沙箱执行可复用</td><td><span class="badge badge-pass">通过</span></td><td><code>execute_extraction_code.py:56-67</code> 已有调用模式</td></tr>
+        <tr><td>工件读写可复用</td><td><span class="badge badge-pass">通过</span></td><td><code>workspace.py:290-332</code> save_artifact/read_artifact</td></tr>
+        <tr><td>任务状态机可复用</td><td><span class="badge badge-pass">通过</span></td><td><code>workspace.py:246-260</code> transition_task</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-family:var(--sans);font-size:16px;font-weight:600;margin:24px 0 16px;">规范性</h3>
+    <table>
+      <thead><tr><th>检查项</th><th>状态</th><th>证据</th></tr></thead>
+      <tbody>
+        <tr><td>分层依赖合规</td><td><span class="badge badge-pass">通过</span></td><td>新工具 plugins/tools/ 调用 infra/extraction/（允许方向）</td></tr>
+        <tr><td>工具异步签名</td><td><span class="badge badge-pass">通过</span></td><td>所有新增工具均为 async def，接受 **kwargs</td></tr>
+        <tr><td>类型注解完整</td><td><span class="badge badge-pass">通过</span></td><td>将按规范添加完整类型注解</td></tr>
+        <tr><td>ruff 检查通过</td><td><span class="badge badge-warn">未执行</span></td><td>待实现后验证</td></tr>
+      </tbody>
+    </table>
+
+    <div class="nav-footer">
+      <button class="nav-btn" onclick="goSection(05)">← 上一节</button>
+      <button class="nav-btn" onclick="goSection(07)">下一节 →</button>
+    </div>
+  </section>
+
+  <!-- Section 07 -->
+  <section class="section-panel" id="section-07">
+    <div class="breadcrumb">
+      <span class="breadcrumb-dot"></span>
+      SEC 07 / 07
+    </div>
+    <h2 class="section-title">最小验证</h2>
+
+    <dl>
+      <dt>风险点</dt>
+      <dd>DeepAgents 子 Agent 的 permissions 字段是否支持 list[dict] 格式，以及 builder 是否能正确映射为 FilesystemPermission。</dd>
+
+      <dt>验证方法</dt>
+      <dd>检查 DeepAgents 源码中 SubAgent 的 permissions 处理逻辑，确认是否支持 dict 格式。</dd>
+
+      <dt>结论</dt>
+      <dd><span class="badge badge-warn">待验证</span> 需在实现阶段确认 DeepAgents permissions 接线方式。若不支持 dict 格式，退化为显式声明"子 Agent 原生文件工具不受限 + 受信用户前提"并记录为已知风险。</dd>
+    </dl>
+
+    <div class="nav-footer">
+      <button class="nav-btn" onclick="goSection(06)">← 上一节</button>
+      <span></span>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const sections = ['01','02','03','04','05','06','07'];
+let current = 0;
+
+function goSection(num) {
+  const idx = sections.indexOf(String(num).padStart(2,'0'));
+  if (idx === -1) return;
+  document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('section-' + sections[idx]).classList.add('active');
+  document.querySelectorAll('.nav-item')[idx].classList.add('active');
+  current = idx;
+  window.scrollTo(0, 0);
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    goSection(item.dataset.section);
+  });
+});
+
+document.querySelectorAll('.accordion-header').forEach(header => {
+  header.addEventListener('click', () => {
+    header.parentElement.classList.toggle('open');
+  });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' && current < sections.length - 1) {
+    goSection(sections[current + 1]);
+  } else if (e.key === 'ArrowUp' && current > 0) {
+    goSection(sections[current - 1]);
+  }
+});
+</script>
+
+</body>
+</html>

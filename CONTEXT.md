@@ -56,6 +56,10 @@ Skill 3 对抽取结果进行校验后输出的报告，包含各项检查是否
 
 描述上传文件结构特征的签名（sheet 名、列头签名等），用于判断新上传文件是否可复用已有 Extraction Template。匹配方向保守：宁可误判不匹配走完整流程，也不套错模板。
 
+### Normalized Artifact / 规范化工件
+
+经预处理工具（normalize_upload_file）对上传文件清洗后产出的新工件，拆分合并单元格、处理删除线标记等。`artifact_type` 为 `normalized`，元数据记录 `source_upload_artifact_id` 指向来源上传文件；仅当前会话可见，供 preview 与执行输入使用（模板匹配等既有工具仍只接受 upload 类型）。
+
 ### Sandbox Provider / 沙箱提供者
 
 Extraction Script 执行环境的实现选型，由配置驱动切换。本地开发默认使用 subprocess；生产隔离的具体实现（容器 / 托管沙箱 / 其他方案）在方案设计阶段确定。
