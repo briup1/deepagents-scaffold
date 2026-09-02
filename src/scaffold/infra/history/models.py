@@ -47,6 +47,7 @@ class ExtractionTask(BaseModel):
     script_artifact_id: str | None = None
     extracted_artifact_id: str | None = None
     validation_report: dict[str, Any] | None = None
+    run_count: int = 0
     created_at: str
     updated_at: str
 

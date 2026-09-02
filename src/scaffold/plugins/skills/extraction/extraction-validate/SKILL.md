@@ -1,15 +1,15 @@
 ---
 name: extraction-validate
 description: 验证抽取结果是否符合目标
-allowed-tools: execute_extraction_code validate_extraction_result
+allowed-tools: run_extraction_script validate_extraction_result
 ---
 
 # Excel 抽取结果验证
 
 ## 触发时机
 
-- `execute_extraction_code` 成功返回后，状态为 `validating`，应立即进入本 Skill。
-- 用户说“验证一下结果”、“检查一下对不对”时进入。
+- `run_extraction_script(mode="finalize")` 成功返回后，状态为 `validating`，应立即进入本 Skill。
+- 用户说"验证一下结果"、"检查一下对不对"时进入。
 
 ## 执行步骤
 

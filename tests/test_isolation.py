@@ -274,6 +274,7 @@ class TestLegacySchemaGuard:
             await repo.ensure_thread("t-1", "default", "alice")
             assert (await repo.get_thread_owner("t-1"))["user_id"] == "alice"
 
+
 # ---------------------------------------------------------------------------
 # 审计补充（2026-08-30 复审）：/state 端点归属校验 + 仓储层 user_id 过滤契约
 # ---------------------------------------------------------------------------
@@ -284,20 +285,12 @@ class TestStateEndpointIsolation:
         """bob 读/写 alice 线程的 /state 一律 403（与 messages/threads 同规则）。"""
         tid, _ = TestRestIsolation._seed_alice(client)
         assert client.get(f"/api/threads/{tid}/state").status_code == 403
-        assert (
-            client.post(f"/api/threads/{tid}/state", json={"state": {"x": 1}}).status_code
-            == 403
-        )
+        assert client.post(f"/api/threads/{tid}/state", json={"state": {"x": 1}}).status_code == 403
 
     def test_unknown_thread_state_404(self, client: TestClient):
         """不存在的线程访问 /state → 404（任何用户）。"""
         assert client.get("/api/threads/thread-missing/state").status_code == 404
-        assert (
-            client.post(
-                "/api/threads/thread-missing/state", json={"state": {"x": 1}}
-            ).status_code
-            == 404
-        )
+        assert client.post("/api/threads/thread-missing/state", json={"state": {"x": 1}}).status_code == 404
 
     def test_owner_state_access_not_403(self, client: TestClient):
         """属主访问 /state 不触发归属拒绝（default 建线程后访问，无 checkpoint 时为 404，绝不 403）。"""

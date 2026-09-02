@@ -214,3 +214,103 @@ class TestTaskStateMachine:
         assert repo.saved == [task]
         saved_report = repo.saved[0].validation_report
         assert saved_report == task.validation_report
+
+
+class TestUpdateTaskScript:
+    """update_task_script 方法测试。"""
+
+    async def test_update_task_script_success(self, workspace: ExtractionWorkspace) -> None:
+        """正常固化脚本到任务。"""
+        task = await workspace.create_task(
+            thread_id="t-001",
+            upload_artifact_id="art-upload-001",
+        )
+
+        script_content = """
+import pandas as pd
+
+def extract(data: pd.DataFrame) -> pd.DataFrame:
+    return data[['amount', 'date']]
+"""
+        result = await workspace.update_task_script(task.task_id, script_content)
+
+        assert "error" not in result
+        assert result["task_id"] == task.task_id
+        assert "script_artifact_id" in result
+        assert result["script_artifact_id"].startswith("art-")
+
+        updated_task = await workspace.get_task(task.task_id)
+        assert updated_task is not None
+        assert updated_task.script_artifact_id == result["script_artifact_id"]
+
+        saved_content = await workspace.read_artifact(result["script_artifact_id"])
+        assert b"import pandas" in saved_content
+        assert b"def extract" in saved_content
+
+    async def test_update_task_script_syntax_error(self, workspace: ExtractionWorkspace) -> None:
+        """语法错误的脚本被拒绝。"""
+        task = await workspace.create_task(
+            thread_id="t-001",
+            upload_artifact_id="art-upload-001",
+        )
+
+        invalid_script = """
+import pandas as pd
+
+def extract(data: pd.DataFrame) -> pd.DataFrame
+    return data[['amount', 'date']]
+"""
+
+        result = await workspace.update_task_script(task.task_id, invalid_script)
+
+        assert "error" in result
+        assert "语法错误" in result["error"]
+
+        updated_task = await workspace.get_task(task.task_id)
+        assert updated_task is not None
+        assert updated_task.script_artifact_id is None
+
+    async def test_update_task_script_bytes_input(self, workspace: ExtractionWorkspace) -> None:
+        """支持 bytes 类型输入。"""
+        task = await workspace.create_task(
+            thread_id="t-001",
+            upload_artifact_id="art-upload-001",
+        )
+
+        script_bytes = b"print('hello')\n"
+        result = await workspace.update_task_script(task.task_id, script_bytes)
+
+        assert "error" not in result
+        assert result["script_artifact_id"].startswith("art-")
+
+    async def test_update_task_script_nonexistent_task(self, workspace: ExtractionWorkspace) -> None:
+        """不存在的任务返回错误。"""
+        result = await workspace.update_task_script("ext-nonexistent", "print('hello')")
+
+        assert "error" in result
+        assert "不存在" in result["error"]
+
+    async def test_update_task_script_overwrites_existing(self, workspace: ExtractionWorkspace) -> None:
+        """覆盖已有脚本。"""
+        task = await workspace.create_task(
+            thread_id="t-001",
+            upload_artifact_id="art-upload-001",
+        )
+
+        first_script = "print('first')\n"
+        result1 = await workspace.update_task_script(task.task_id, first_script)
+        assert "error" not in result1
+        first_artifact_id = result1["script_artifact_id"]
+
+        second_script = "print('second')\n"
+        result2 = await workspace.update_task_script(task.task_id, second_script)
+        assert "error" not in result2
+        second_artifact_id = result2["script_artifact_id"]
+
+        assert second_artifact_id != first_artifact_id
+
+        updated_task = await workspace.get_task(task.task_id)
+        assert updated_task.script_artifact_id == second_artifact_id
+
+        saved_content = await workspace.read_artifact(second_artifact_id)
+        assert saved_content == b"print('second')\n"

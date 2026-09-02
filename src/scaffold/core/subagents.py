@@ -56,6 +56,7 @@ def _build_single_subagent(
 ) -> Any | None:
     """根据配置构建单个 DeepAgents SubAgent。"""
     from deepagents.middleware.subagents import SubAgent
+    from deepagents.middleware.filesystem import FilesystemPermission
 
     # 解析工具
     tools = _resolve_tools(cfg.tools, app_config)
@@ -92,6 +93,19 @@ def _build_single_subagent(
         except Exception:
             logger.warning("Could not resolve middleware '%s' for subagent '%s'", mw_name, cfg.name)
 
+    # 解析权限规则
+    permissions = []
+    for rule in cfg.permissions:
+        try:
+            permission = FilesystemPermission(
+                paths=rule.paths,
+                operations=rule.operations,
+                mode=rule.mode,
+            )
+            permissions.append(permission)
+        except Exception:
+            logger.exception("Invalid permission rule for subagent '%s', skipping", cfg.name)
+
     # 构建 SubAgent 规格
     spec: dict[str, Any] = {
         "name": cfg.name,
@@ -108,6 +122,8 @@ def _build_single_subagent(
         spec["skills"] = cfg.skills
     if cfg.interrupt_on:
         spec["interrupt_on"] = cfg.interrupt_on
+    if permissions:
+        spec["permissions"] = permissions
 
     return SubAgent(**spec)
 

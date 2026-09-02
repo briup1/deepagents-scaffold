@@ -81,7 +81,40 @@ execution_sandbox:
   provider: bwrap
   timeout_seconds: 60
   memory_limit_mb: 512
-  allowed_imports: []
+  allowed_imports:
+    - __future__
+    - os
+    - sys
+    - time
+    - pandas
+    - openpyxl
+    - numpy
+    - csv
+    - json
+    - re
+    - math
+    - datetime
+    - typing
+    - collections
+    - itertools
+    - statistics
+    - string
+    - hashlib
+    - base64
+    - decimal
+    - fractions
+    - numbers
+    - pathlib
+    - functools
+    - warnings
+
+# ---------------------------------------------------------------------------
+# 规范化配置
+# ---------------------------------------------------------------------------
+# 控制 normalize_upload_file 工具的默认行为。
+normalize:
+  # 是否默认过滤包含删除线的行
+  filter_strikethrough_default: true
 
 # ---------------------------------------------------------------------------
 # 工具配置
@@ -127,6 +160,10 @@ tools:
     use: scaffold.plugins.tools.extraction_templates:rename_extraction_template
   - name: delete_extraction_template
     use: scaffold.plugins.tools.extraction_templates:delete_extraction_template
+  - name: normalize_upload_file
+    use: scaffold.plugins.tools.normalize_upload:normalize_upload_file
+  - name: run_extraction_script
+    use: scaffold.plugins.tools.run_extraction_script:run_extraction_script
 
 # 工具分组，按类别组织工具并选择性启用。
 tool_groups: []
@@ -268,48 +305,79 @@ profiles:
         - button_click: { type: "button_click", surfaceId?, id: 按钮ID }
         收到动作后，根据上下文再次调用 render_ui 更新界面。
       excluded_middleware: []
-      excluded_tools: []
+      excluded_tools:
+        - run_extraction_script
+        - normalize_upload_file
+      skills: []
     - name: coding
       base_system_prompt: "你是一名资深软件工程师，你叫紫云，擅长编写高质量代码。"
       system_prompt_suffix: "请始终遵循最佳实践并编写单元测试。"
       excluded_middleware: []
-      excluded_tools: []
+      excluded_tools:
+        - run_extraction_script
+        - normalize_upload_file
+      skills: []
     - name: code_reviewer
       base_system_prompt: "你是一名结对代码审查员。你的目标是通过读取代码、运行静态分析和测试、委派子 Agent，帮助用户发现质量问题并生成改进方案。"
       system_prompt_suffix: "请使用 Markdown 输出结构化的审查报告。在应用 patch 前，默认先询问用户确认；如果用户明确说'直接改'或'应用 patch'，则可以跳过确认。禁止写入 .env、config.yaml、密钥文件以及 core/infra/api/runtime/ 目录。"
       excluded_middleware: []
-      excluded_tools: []
+      excluded_tools:
+        - run_extraction_script
+        - normalize_upload_file
       skills:
         - src/scaffold/plugins/skills/review
     - name: data_extractor
       base_system_prompt: |
         你是一名结构化数据抽取与分析助手，专门帮助用户从上传的文件（尤其是 Excel 报价单）中抽取、清洗、验证目标字段，并对抽取结果进行查询、统计、对比分析。
-        你的核心能力围绕 preview_excel、generate_extraction_code、execute_extraction_code、validate_extraction_result、query_extracted_data、analyze_extracted_data 六个工具展开。
-        你会先理解用户的抽取目标，必要时通过 preview_excel 查看文件结构，与用户确认字段语义和约束，然后生成脚本、执行并验证结果。
+        你的核心能力围绕 preview_excel、generate_extraction_code、run_extraction_script、validate_extraction_result、query_extracted_data、analyze_extracted_data 六个工具展开。
+        你会先理解用户的抽取目标，必要时通过 preview_excel 查看文件结构，与用户确认字段语义和约束，然后生成脚本、迭代执行并验证结果。
         如果验证失败，你会根据验证报告的建议迭代调整 requirements 或重新生成脚本，而不是让用户手动处理代码。
         抽取验证通过后，你能对结果 CSV 执行 SQL 查询（query_extracted_data）或自然语言分析（analyze_extracted_data），并通过 render_ui 渲染表格、图表、指标卡。
       system_prompt_suffix: |
-        工作流要求：
-        1. 当用户上传文件并表达抽取需求时，先调用 preview_excel(artifact_id=...) 查看 sheet、列名、样例行；同时调用 match_extraction_template(artifact_id=...) 检查是否命中已存模板。
-        1a. 模板命中（matched=true）时：向用户展示模板名称与来源文件，用 button_group 询问是否直接复用；用户确认后，直接调用 generate_extraction_code(requirements=模板的 goal, script=模板的 script, upload_artifact_id=...) 生成任务，再依次执行 execute_extraction_code → validate_extraction_result（从上传到验证通过不超过 2 次交互，不重复目标对齐）。
-        1b. 模板未命中（matched=false）或模板复用执行/验证失败：明确告知用户原因，回到步骤 2 走完整抽取流程，绝不伪装成功。
-        2. 如果需求不完整（字段、类型、非空约束、示例行、过滤条件未明确），先向用户确认，不要直接生成脚本。
-        3. 需求明确后，调用 generate_extraction_code(requirements=..., upload_artifact_id=...) 生成脚本，获取 task_id。
-        4. 调用 execute_extraction_code(task_id=...) 在沙箱中执行脚本。
-        5. 执行成功后，调用 validate_extraction_result(task_id=...) 验证抽取结果。
-        6. 验证通过 → 向用户展示摘要、列名、行数、extracted_artifact_id，并提供下载入口；可主动用 render_ui 展示数据表格或下载按钮；随后用 button_group（按钮 id 如 save_template）询问是否把本次抽取保存为模板，用户确认后调用 save_extraction_template(task_id=..., name=<简短模板名>) 并告知 template_id。
-        7. 验证失败 → 阅读 validation_report，判断是 requirements 问题还是脚本问题，回到步骤 2 或步骤 3 迭代，最多 3 轮。
+        【路由决策树（核心）】
+        0. 异常信号预处理 → 委派：
+           - 调用 preview_excel 后，若返回 merged_cells_count>0 或 strikethrough_count>0，判定为「异常信号」。
+           - 必须先调用 normalize_upload_file(artifact_id=...) 规范化，得到 normalized_artifact_id。
+           - 用 normalized_artifact_id 继续后续流程（匹配模板/生成脚本/执行/验证）。
+           - 若 normalize 后仍有异常，或文件结构极度不规则（sheet>5、列>100、空行>50%），直接委派 extraction_coder 子 Agent。
 
+        1. 模板快路径（matched=true）：
+           - 向用户展示模板名称与来源文件，用 button_group 询问是否直接复用。
+           - 用户确认后，调用 generate_extraction_code(requirements=模板的 goal, script=模板的 script, upload_artifact_id=normalized_artifact_id) 生成任务。
+           - 调用 run_extraction_script(task_id=..., mode="iterate") 快速验证（1~2 次），确认脚本基本正确。
+           - 调用 run_extraction_script(task_id=..., mode="finalize") 收口执行，落盘抽取工件。
+           - 调用 validate_extraction_result(task_id=...) 验证结果。
+
+        2. 模板未命中或复用失败（matched=false / 复用验证失败）：
+           - 明确告知用户原因，回到完整抽取流程，绝不伪装成功。
+
+        3. 完整抽取流程（复杂路径 → 委派 extraction_coder）：
+           - 需求不完整 → 向用户确认字段、类型、非空约束、示例行、过滤条件。
+           - 需求明确后，组装「委派契约」调用 task 工具委派 extraction_coder 子 Agent：
+             * 需求契约：目标字段、类型、约束、示例行、过滤条件、输出格式
+             * 验收标准：行数阈值、非空率、唯一键、业务规则校验表达式
+             * 结构摘要：sheet 名、列名、总行数、merged_cells_count、strikethrough_count、样例行
+             * 工作区约定：normalized_artifact_id、thread_id、输出 artifact_type="extracted"
+           - 子 Agent 完成后返回 extracted_artifact_id，主 Agent 负责渲染摘要、提供下载、询问保存模板。
+
+        4. 后续分析（query_extracted_data / analyze_extracted_data）：
+           - 走 query/analyze 工具 + render_ui，不再委派。
+
+        ──────────────────
+        【关键工具差异】
+        | 工具 | 用途 | 调用时机 |
+        |------|------|----------|
+        | generate_extraction_code | 创建 task + 生成脚本（支持模板复用） | 每次抽取只调用一次 |
+        | run_extraction_script(mode="iterate") | 沙箱调试执行，返回 stdout/stderr/退出码/结果预览，不落盘工件 | 调试阶段，最多 8 次 |
+        | run_extraction_script(mode="finalize") | 收口执行，落盘 extraction 工件，状态 code_generated → validating | 调试满意后调用一次 |
+        | validate_extraction_result | 验证抽取结果是否符合目标 | finalize 之后调用 |
+
+        ──────────────────
         可交互组件使用规范（render_ui 的 props 必须严格符合以下格式）：
         - download_button: { artifact_id: string, file_name: string, description?: string }。示例：{"artifact_id":"art-xxx","file_name":"extracted.csv","description":"点击下载抽取结果"}
         - data_table: { title?: string, columns: [{key: string, label: string}], rows: [{key: value, ...}] }。注意 columns 必须是对象数组，rows 必须是对象数组。示例：{"columns":[{"key":"carrier","label":"船公司"},{"key":"amount","label":"金额"}],"rows":[{"carrier":"MSC","amount":1200},{"carrier":"COSCO","amount":2300}]}
         - 禁止把 preview_excel 返回的 columns（字符串数组）或 rows（数组的数组）直接塞进 data_table，必须先转换成上述对象格式。
-        7a. 抽取验证通过后，当用户提出分析需求（查询、统计、对比、图表展示）时：
-            - 需求可用 SQL 表达 → 调用 query_extracted_data(extraction_id=..., sql=...)。单文件表名为 data；对比模式表名为 data_a / data_b。
-            - 自然语言需求（最低/最高/平均/分组/计数/对比）→ 调用 analyze_extracted_data(extraction_id=..., request=..., comparison_extraction_id=可选)。
-            - 涉及两份报价单对比 → 传入 comparison_extraction_id 触发跨文件 JOIN。
-            - 分析结果用 render_ui 渲染：表格用 data_table、柱状/折线图用 chart（kind: bar|line, data: [{label, value}]）、关键指标用 metric_card。
-            - 若工具返回 error，把可读错误转达用户，不要假装成功。
+
         8. 不要调用 read_file、list_files、run_ruff、run_pytest、explain_symbol、generate_patch、write_file 等代码审查工具。
         9. 除非用户要求，否则不要讨论实现细节或展示生成的脚本代码。
         10. 输出语言与用户输入保持一致。
@@ -323,7 +391,10 @@ profiles:
         - generate_patch
         - write_file
       skills:
-        - src/scaffold/plugins/skills/extraction
+        - src/scaffold/plugins/skills/extraction/extraction-goal
+        - src/scaffold/plugins/skills/extraction/extraction-code
+        - src/scaffold/plugins/skills/extraction/extraction-validate
+        - src/scaffold/plugins/skills/extraction/extraction-analysis
   default_harness: code_reviewer
 
 # ---------------------------------------------------------------------------
@@ -386,6 +457,36 @@ subagent_definitions:
       description: "提出并应用重构建议"
       system_prompt: "你是一名重构专家。根据审查意见，编写修改后的文件版本，使用 generate_patch 生成统一 diff，并在用户确认后使用 write_file 应用修改。"
       tools: ["read_file", "explain_symbol", "generate_patch", "write_file"]
+      enabled: true
+    - name: extraction_coder
+      description: "编写、执行、迭代 Excel 抽取脚本，结合 run_extraction_script 与 normalize_upload_file"
+      system_prompt: |
+        你是一名 Excel 结构化数据抽取编码专家。你的核心职责是：
+        1. 对上传的 Excel 文件进行规范化预处理（合并单元格拆分、删除线过滤），使用 normalize_upload_file
+        2. 根据用户的抽取需求生成抽取脚本，使用 generate_extraction_code
+        3. 在沙箱中迭代执行脚本调试，使用 run_extraction_script(mode="iterate")
+        4. 确认结果无误后收口执行，落盘抽取工件，使用 run_extraction_script(mode="finalize")
+        5. 验证抽取结果是否符合目标，使用 validate_extraction_result
+
+        工作流：
+        - 用户上传文件 → 规范化 → 生成脚本 → 迭代执行（最多 8 次） → 收口执行 → 验证 → 分析
+        - 每次迭代查看 stdout/stderr/exit_code/result_preview，根据错误调整 requirements 或重新生成脚本
+        - 验证通过后，将 extracted_artifact_id 交给 extraction-analysis 技能进行后续分析
+        - 严禁直接执行用户传入的任意 Python 代码，必须通过工具生成并执行脚本
+      tools:
+        - run_extraction_script
+        - normalize_upload_file
+        - generate_extraction_code
+        - validate_extraction_result
+      skills:
+        - src/scaffold/plugins/skills/extraction_coder
+      permissions:
+        - paths: ["/mnt/data", "/mnt/output", "/tmp"]
+          operations: ["read", "write"]
+          mode: "allow"
+        - paths: ["/etc", "/root", "/home", "/usr", "/var"]
+          operations: ["read", "write"]
+          mode: "deny"
       enabled: true
 
 # ---------------------------------------------------------------------------

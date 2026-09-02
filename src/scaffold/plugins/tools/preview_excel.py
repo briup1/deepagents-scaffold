@@ -16,6 +16,8 @@ from scaffold.plugins.tools._extraction_common import get_extraction_workspace
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_ARTIFACT_TYPES = ("upload", "normalized")
+
 
 async def preview_excel(
     artifact_id: str,
@@ -23,15 +25,16 @@ async def preview_excel(
     limit: int = 20,
     **kwargs: Any,
 ) -> dict:
-    """预览已上传 Excel 文件的结构。
+    """预览已上传或规范化 Excel 文件的结构。
 
     Args:
-        artifact_id: 上传工件的 ID。
+        artifact_id: 工件的 ID（支持 upload 或 normalized 类型）。
         sheet_index: 要预览的 sheet 索引，默认 0。
         limit: 返回的最大样本行数（不含表头），默认 20。
 
     Returns:
-        包含 sheet_names、columns、sample_rows、total_rows 的字典。
+        包含 sheet_names、columns、sample_rows、total_rows、
+        merged_cells_count、strikethrough_count 的字典。
     """
     logger.info("preview_excel 被调用: artifact_id=%s sheet_index=%s limit=%s", artifact_id, sheet_index, limit)
 
@@ -40,8 +43,10 @@ async def preview_excel(
         if artifact is None:
             return {"error": f"工件 {artifact_id} 不存在"}
 
-        if artifact.artifact_type != "upload":
-            return {"error": f"工件 {artifact_id} 不是上传文件"}
+        if artifact.artifact_type not in ALLOWED_ARTIFACT_TYPES:
+            return {
+                "error": f"工件 {artifact_id} 类型 {artifact.artifact_type} 不支持预览，仅支持 {ALLOWED_ARTIFACT_TYPES}"
+            }
 
         try:
             content = await ws.read_artifact(artifact_id)
@@ -61,11 +66,22 @@ async def preview_excel(
         columns = [str(cell) for cell in rows[0]] if rows else []
         sample_rows = rows[1 : limit + 1]
         total_rows = max(0, len(rows) - 1)
+
+        merged_cells_count = len(list(ws.merged_cells.ranges))
+
+        strikethrough_count = 0
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.font and cell.font.strikethrough:
+                    strikethrough_count += 1
+
         return {
             "sheet_names": sheet_names,
             "columns": columns,
             "sample_rows": [list(row) for row in sample_rows],
             "total_rows": total_rows,
+            "merged_cells_count": merged_cells_count,
+            "strikethrough_count": strikethrough_count,
         }
 
     return await asyncio.to_thread(_parse)

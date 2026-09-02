@@ -123,6 +123,7 @@ class TestModelFallbackStructuredLogging:
 
     def test_all_models_failed_reraises(self, monkeypatch):
         """主备全部失败：最后异常原样抛出（由上层转为可读错误）。"""
+
         def fake_create_chat_model(config, **kwargs):
             return type(f"Fake{config.name}", (), {"model": config.model})()
 

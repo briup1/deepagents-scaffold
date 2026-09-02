@@ -49,7 +49,7 @@ class BwrapSandbox(SubprocessSandbox):
         """把 extra_env 中的宿主机路径前缀替换为沙箱内路径。"""
         for host_prefix, sandbox_prefix in ((str(output_dir), SANDBOX_OUTPUT), (str(input_dir), SANDBOX_INPUT)):
             if value.startswith(host_prefix):
-                return sandbox_prefix + value[len(host_prefix):]
+                return sandbox_prefix + value[len(host_prefix) :]
         return value
 
     def _build_args(
@@ -66,9 +66,15 @@ class BwrapSandbox(SubprocessSandbox):
             "--die-with-parent",
             "--clearenv",
             # Python 运行时（系统目录 + venv）
-            "--ro-bind", "/usr", "/usr",
-            "--ro-bind", "/lib", "/lib",
-            "--ro-bind", "/bin", "/bin",
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--ro-bind",
+            "/lib",
+            "/lib",
+            "--ro-bind",
+            "/bin",
+            "/bin",
         ]
         if Path("/lib64").exists():
             args += ["--ro-bind", "/lib64", "/lib64"]
@@ -77,18 +83,34 @@ class BwrapSandbox(SubprocessSandbox):
             args += ["--ro-bind", str(venv_root), str(venv_root)]
         # 工作区：输入只读、输出可写、脚本只读
         args += [
-            "--ro-bind", str(input_dir), SANDBOX_INPUT,
-            "--ro-bind", str(script_path), f"/work/{script_path.name}",
-            "--bind", str(output_dir), SANDBOX_OUTPUT,
-            "--tmpfs", "/tmp",
-            "--chdir", SANDBOX_OUTPUT,
+            "--ro-bind",
+            str(input_dir),
+            SANDBOX_INPUT,
+            "--ro-bind",
+            str(script_path),
+            f"/work/{script_path.name}",
+            "--bind",
+            str(output_dir),
+            SANDBOX_OUTPUT,
+            "--tmpfs",
+            "/tmp",
+            "--chdir",
+            SANDBOX_OUTPUT,
         ]
         # 最小环境变量
         args += [
-            "--setenv", "PATH", "/usr/bin:/bin",
-            "--setenv", "HOME", "/tmp",
-            "--setenv", "INPUT_DIR", SANDBOX_INPUT,
-            "--setenv", "OUTPUT_DIR", SANDBOX_OUTPUT,
+            "--setenv",
+            "PATH",
+            "/usr/bin:/bin",
+            "--setenv",
+            "HOME",
+            "/tmp",
+            "--setenv",
+            "INPUT_DIR",
+            SANDBOX_INPUT,
+            "--setenv",
+            "OUTPUT_DIR",
+            SANDBOX_OUTPUT,
         ]
         for key, value in (extra_env or {}).items():
             args += ["--setenv", key, self._map_env_value(value, input_dir, output_dir)]

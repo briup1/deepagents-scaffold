@@ -24,8 +24,23 @@ def _bindings_ok() -> bool:
 
     try:
         subprocess.run(
-            ["bwrap", "--unshare-all", "--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin",
-             "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64", "/bin/true"],
+            [
+                "bwrap",
+                "--unshare-all",
+                "--ro-bind",
+                "/usr",
+                "/usr",
+                "--ro-bind",
+                "/bin",
+                "/bin",
+                "--ro-bind",
+                "/lib",
+                "/lib",
+                "--ro-bind",
+                "/lib64",
+                "/lib64",
+                "/bin/true",
+            ],
             check=True,
             capture_output=True,
             timeout=10,
@@ -35,7 +50,9 @@ def _bindings_ok() -> bool:
         return False
 
 
-requires_userns = pytest.mark.skipif(not _bindings_ok(), reason="bwrap userns 被 AppArmor 限制（先执行 scripts/setup_bwrap_apparmor.sh）")
+requires_userns = pytest.mark.skipif(
+    not _bindings_ok(), reason="bwrap userns 被 AppArmor 限制（先执行 scripts/setup_bwrap_apparmor.sh）"
+)
 
 
 @pytest.fixture

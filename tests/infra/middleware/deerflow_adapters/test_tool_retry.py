@@ -150,9 +150,7 @@ class TestToolRetryStructuredLogging:
             calls.append(1)
             raise FakeException("bad gateway")
 
-        request = ToolCallRequest(
-            tool_call={"id": "call-1", "name": "tool"}, tool=None, state={}, runtime=None
-        )
+        request = ToolCallRequest(tool_call={"id": "call-1", "name": "tool"}, tool=None, state={}, runtime=None)
         with caplog.at_level(logging.DEBUG):
             mw.wrap_tool_call(request, handler)  # on_failure="continue" → 返回错误 ToolMessage
 

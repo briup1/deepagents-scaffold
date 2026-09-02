@@ -80,9 +80,7 @@ class HistoryRepository:
         """查询线程原始行（含 user_id）。授权层专用：路由需区分 403（非属主）与 404（不存在）。"""
         return await self._get_thread_row(thread_id, user_id=None)
 
-    async def _get_thread_row(
-        self, thread_id: str, *, user_id: str | None
-    ) -> dict[str, Any] | None:
+    async def _get_thread_row(self, thread_id: str, *, user_id: str | None) -> dict[str, Any] | None:
         cursor = await self._conn.execute(
             "SELECT thread_id, agent_id, user_id, title, created_at, updated_at FROM threads WHERE thread_id = ?"
             + (" AND user_id = ?" if user_id is not None else ""),
@@ -115,9 +113,7 @@ class HistoryRepository:
             where_clause += " AND t.agent_id = ?"
             params.append(agent_id)
 
-        cursor = await self._conn.execute(
-            f"SELECT COUNT(*) FROM threads t {where_clause}", tuple(params)
-        )
+        cursor = await self._conn.execute(f"SELECT COUNT(*) FROM threads t {where_clause}", tuple(params))
         row = await cursor.fetchone()
         total = row[0] if row else 0
 
@@ -271,9 +267,7 @@ async def _assert_user_id_schema(conn: aiosqlite.Connection, table: str) -> None
     cursor = await conn.execute(f"PRAGMA table_info({table})")
     cols = [row[1] for row in await cursor.fetchall()]
     if cols and "user_id" not in cols:
-        raise RuntimeError(
-            f"表 {table} 为旧版 schema（缺 user_id 列）。存量数据不迁移，请删除 data/ 目录后重启服务。"
-        )
+        raise RuntimeError(f"表 {table} 为旧版 schema（缺 user_id 列）。存量数据不迁移，请删除 data/ 目录后重启服务。")
 
 
 def _parse_json(value: str | None) -> list[dict[str, Any]] | None:
@@ -312,6 +306,7 @@ class ExtractionTaskRepository:
                 script_artifact_id TEXT,
                 extracted_artifact_id TEXT,
                 validation_report TEXT,
+                run_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
@@ -324,7 +319,15 @@ class ExtractionTaskRepository:
             CREATE INDEX IF NOT EXISTS idx_extraction_tasks_user_id ON extraction_tasks(user_id);
             """
         )
+        await self._migrate_add_run_count()
         await self._conn.commit()
+
+    async def _migrate_add_run_count(self) -> None:
+        """为存量库添加 run_count 列（若不存在）。"""
+        cursor = await self._conn.execute("PRAGMA table_info(extraction_tasks)")
+        cols = [row[1] for row in await cursor.fetchall()]
+        if "run_count" not in cols:
+            await self._conn.execute("ALTER TABLE extraction_tasks ADD COLUMN run_count INTEGER NOT NULL DEFAULT 0")
 
     async def create(self, task: ExtractionTask) -> None:
         """创建抽取任务记录。"""
@@ -332,8 +335,8 @@ class ExtractionTaskRepository:
             """
             INSERT INTO extraction_tasks
             (task_id, thread_id, user_id, upload_artifact_id, status, requirements,
-             script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             script_artifact_id, extracted_artifact_id, validation_report, run_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task.task_id,
@@ -345,6 +348,7 @@ class ExtractionTaskRepository:
                 task.script_artifact_id,
                 task.extracted_artifact_id,
                 _dump_json(task.validation_report),
+                task.run_count,
                 task.created_at,
                 task.updated_at,
             ),
@@ -357,7 +361,7 @@ class ExtractionTaskRepository:
             """
             SELECT
                 task_id, thread_id, user_id, upload_artifact_id, status, requirements,
-                script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
+                script_artifact_id, extracted_artifact_id, validation_report, run_count, created_at, updated_at
             FROM extraction_tasks
             WHERE task_id = ? AND user_id = ?
             """,
@@ -374,7 +378,7 @@ class ExtractionTaskRepository:
             """
             SELECT
                 task_id, thread_id, user_id, upload_artifact_id, status, requirements,
-                script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
+                script_artifact_id, extracted_artifact_id, validation_report, run_count, created_at, updated_at
             FROM extraction_tasks
             WHERE task_id = ?
             """,
@@ -395,6 +399,7 @@ class ExtractionTaskRepository:
                 script_artifact_id = ?,
                 extracted_artifact_id = ?,
                 validation_report = ?,
+                run_count = ?,
                 updated_at = ?
             WHERE task_id = ? AND user_id = ?
             """,
@@ -404,6 +409,7 @@ class ExtractionTaskRepository:
                 task.script_artifact_id,
                 task.extracted_artifact_id,
                 _dump_json(task.validation_report),
+                task.run_count,
                 task.updated_at,
                 task.task_id,
                 user_id,
@@ -418,7 +424,7 @@ class ExtractionTaskRepository:
             """
             SELECT
                 task_id, thread_id, user_id, upload_artifact_id, status, requirements,
-                script_artifact_id, extracted_artifact_id, validation_report, created_at, updated_at
+                script_artifact_id, extracted_artifact_id, validation_report, run_count, created_at, updated_at
             FROM extraction_tasks
             WHERE thread_id = ? AND user_id = ?
             ORDER BY created_at DESC
@@ -441,8 +447,9 @@ class ExtractionTaskRepository:
             script_artifact_id=row[6],
             extracted_artifact_id=row[7],
             validation_report=_parse_json(validation_json),
-            created_at=row[9],
-            updated_at=row[10],
+            run_count=row[9],
+            created_at=row[10],
+            updated_at=row[11],
         )
 
 

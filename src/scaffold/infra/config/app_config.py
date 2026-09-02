@@ -121,7 +121,9 @@ class AuthConfig(BaseModel):
             seen_ids: set[str] = set()
             for user in self.users:
                 if not user.token:
-                    raise ValueError(f"auth user '{user.user_id}' has empty token（检查 config.yaml auth 段的 $ENV_VAR 引用）")
+                    raise ValueError(
+                        f"auth user '{user.user_id}' has empty token（检查 config.yaml auth 段的 $ENV_VAR 引用）"
+                    )
                 if user.token in seen_tokens:
                     raise ValueError(f"auth users have duplicate token（user_id='{user.user_id}'）")
                 if user.user_id in seen_ids:

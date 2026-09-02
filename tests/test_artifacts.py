@@ -157,3 +157,23 @@ class TestArtifactRepository:
         uploads = await artifact_repo.list_by_thread("t-001", "default", "upload")
         assert len(uploads) == 1
         assert uploads[0].artifact_type == "upload"
+
+    async def test_normalized_artifact_type(self, artifact_repo: ArtifactRepository) -> None:
+        """测试 normalized 类型工件可以正常创建和查询。"""
+        artifact = Artifact(
+            artifact_id="art-normalized-001",
+            thread_id="t-001",
+            artifact_type="normalized",
+            original_name="normalized_quote.xlsx",
+            stored_path="t-001/normalized/art-normalized-001-quote.xlsx",
+            mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            size_bytes=2048,
+            created_at="2025-01-01T00:00:00+00:00",
+            metadata={"source_upload_artifact_id": "art-upload-001"},
+        )
+        await artifact_repo.create(artifact)
+
+        found = await artifact_repo.get("art-normalized-001", "default")
+        assert found is not None
+        assert found.artifact_type == "normalized"
+        assert found.metadata["source_upload_artifact_id"] == "art-upload-001"

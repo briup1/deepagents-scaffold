@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import logging
 import uuid
@@ -21,7 +22,13 @@ from scaffold.infra.artifacts import Artifact, ArtifactRepository, ArtifactStora
 from scaffold.infra.config.app_config import AppConfig, get_app_config
 from scaffold.infra.context import get_current_user_id
 from scaffold.infra.extraction.fingerprint import compute_fingerprint
-from scaffold.infra.history.models import ExtractionTask, ExtractionTemplate, TaskStatus, ValidationCheck, ValidationReport
+from scaffold.infra.history.models import (
+    ExtractionTask,
+    ExtractionTemplate,
+    TaskStatus,
+    ValidationCheck,
+    ValidationReport,
+)
 from scaffold.infra.history.repository import ExtractionTaskRepository, ExtractionTemplateRepository
 from scaffold.infra.time import _now
 
@@ -230,6 +237,57 @@ class ExtractionWorkspace(AbstractAsyncContextManager["ExtractionWorkspace"]):
             raise RuntimeError("Workspace 未进入上下文")
         task.updated_at = _now()
         return await self._task_repo.update(task, get_current_user_id())
+
+    async def update_task_script(
+        self,
+        task_id: str,
+        content: str | bytes,
+    ) -> dict[str, Any]:
+        """固化子 Agent 最终脚本到现有任务（覆盖式）。
+
+        参数：
+            task_id: 任务 ID
+            content: 脚本内容（字符串或字节）
+
+        返回：
+            成功时返回 {"task_id": ..., "script_artifact_id": ...}
+            失败时返回 {"error": ...}
+
+        校验：
+            - 任务必须存在且属于当前用户
+            - 内容必须通过 ast.parse 语法校验
+        """
+        if self._task_repo is None or self._artifact_repo is None or self._storage is None:
+            raise RuntimeError("Workspace 未进入上下文")
+
+        task = await self.get_task(task_id)
+        if task is None:
+            return {"error": f"任务 {task_id} 不存在"}
+
+        if isinstance(content, bytes):
+            script_text = content.decode("utf-8", errors="replace")
+        else:
+            script_text = content
+
+        try:
+            ast.parse(script_text)
+        except SyntaxError as e:
+            return {"error": f"脚本语法错误: {e.msg} (line {e.lineno}, offset {e.offset})"}
+
+        artifact = await self.save_artifact(
+            thread_id=task.thread_id,
+            artifact_type="script",
+            filename="extract.py",
+            content=script_text.encode("utf-8"),
+            original_name="extract.py",
+            mime_type="text/x-python",
+            metadata={"task_id": task_id},
+        )
+
+        task.script_artifact_id = artifact.artifact_id
+        await self.update_task(task)
+
+        return {"task_id": task.task_id, "script_artifact_id": artifact.artifact_id}
 
     def check_task_transition(
         self,

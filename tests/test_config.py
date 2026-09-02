@@ -116,9 +116,7 @@ class TestAuthConfig:
         import pytest
 
         with pytest.raises(ValueError, match="empty token"):
-            AppConfig.model_validate(
-                {"auth": {"enabled": True, "users": [{"user_id": "alice", "token": ""}]}}
-            )
+            AppConfig.model_validate({"auth": {"enabled": True, "users": [{"user_id": "alice", "token": ""}]}})
 
     def test_enabled_duplicate_token_raises(self):
         import pytest
