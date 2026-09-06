@@ -194,7 +194,8 @@ class SubprocessSandbox(Sandbox):
                 try:
                     await asyncio.wait_for(proc.communicate(), timeout=2)
                 except asyncio.TimeoutError:
-                    pass
+                    # 超时不中断主流程，但禁止静默忽略（红线 4）：进程可能已成僵尸，需留痕排查
+                    logger.warning("subprocess 沙箱：进程 kill 后 2s 内仍未退出，放弃回收（不影响主流程）")
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
         stdout = stdout_bytes.decode("utf-8", errors="replace")

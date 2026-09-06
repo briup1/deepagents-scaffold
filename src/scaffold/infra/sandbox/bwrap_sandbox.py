@@ -161,7 +161,8 @@ class BwrapSandbox(SubprocessSandbox):
                 try:
                     await asyncio.wait_for(proc.communicate(), timeout=2)
                 except TimeoutError:
-                    pass
+                    # 超时不中断主流程，但禁止静默忽略（红线 4）：进程可能已成僵尸，需留痕排查
+                    logger.warning("bwrap 沙箱：进程 kill 后 2s 内仍未退出，放弃回收（不影响主流程）")
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
         stdout = stdout_bytes.decode("utf-8", errors="replace")
