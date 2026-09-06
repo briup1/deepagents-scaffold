@@ -11,8 +11,13 @@ const mockUploadFile = vi.mocked(uploadFile)
 
 const UPLOADED: UploadedFile = {
   artifact_id: 'art-1',
+  thread_id: 't-1',
+  artifact_type: 'excel',
   original_name: 'data.xlsx',
+  stored_path: 'data/art-1.xlsx',
+  mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   size_bytes: 10,
+  created_at: '2026-01-01T00:00:00Z',
 }
 
 function makeExcelFile(name = 'data.xlsx'): File {
