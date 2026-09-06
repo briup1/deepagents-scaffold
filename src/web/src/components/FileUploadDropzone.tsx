@@ -67,9 +67,7 @@ export function FileUploadDropzone({
 
       for (const file of excelFiles) {
         try {
-          console.log('[FileUpload] uploading:', file.name)
           const uploaded = await uploadFile(threadId, file)
-          console.log('[FileUpload] upload success:', uploaded)
           onFileUploaded(uploaded)
         } catch (err) {
           const msg = err instanceof Error ? err.message : '上传失败'
@@ -123,7 +121,6 @@ export function FileUploadDropzone({
       setIsDragging(false)
 
       const files = Array.from(e.dataTransfer?.files ?? [])
-      console.log('[FileUpload] dropped files:', files.length)
       if (files.length === 0) {
         setError('未检测到文件，请重新拖拽')
         return
