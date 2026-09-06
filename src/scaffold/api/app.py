@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -108,10 +109,15 @@ def create_app() -> FastAPI:
         token_users=auth_config.token_user_map(),
         enabled=auth_config.enabled,
     )
-    # CORS
+    # CORS：显式源清单，禁止通配与 credentials 组合；CORS_ORIGINS 逗号分隔覆盖（本地默认可不改）
+    cors_origins = [
+        origin.strip()
+        for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3002").split(",")
+        if origin.strip()
+    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
