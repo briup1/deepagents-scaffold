@@ -8,11 +8,13 @@ from __future__ import annotations
 
 from scaffold.infra.logging.config import configure_logging
 from scaffold.infra.logging.middleware import LoggingMiddleware
-from scaffold.infra.logging.structured import JSONFormatter, get_logger
+from scaffold.infra.logging.structured import JSONFormatter, SensitiveDataFilter, get_logger, mask_sensitive
 
 __all__ = [
     "configure_logging",
     "LoggingMiddleware",
     "JSONFormatter",
+    "SensitiveDataFilter",
     "get_logger",
+    "mask_sensitive",
 ]
