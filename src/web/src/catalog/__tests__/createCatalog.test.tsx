@@ -46,6 +46,22 @@ describe('createCatalog', () => {
     errorSpy.mockRestore()
   })
 
+  it('props 经 schema 解析（含默认值补齐）后以收窄类型传入 renderer', () => {
+    const catalogWithDefault = createCatalog(
+      {
+        note: {
+          description: '带默认值的组件',
+          schema: z.object({ text: z.string().default('fallback-text') }),
+        },
+      },
+      {
+        note: ({ props }) => <span>{props.text}</span>,
+      },
+    )
+    render(<>{catalogWithDefault.render({ type: 'note' }, vi.fn())}</>)
+    expect(screen.getByText('fallback-text')).toBeInTheDocument()
+  })
+
   it('extractSchemas 返回 JSON Schema 描述', () => {
     expect(catalog.schema.test).toMatchObject({
       description: '测试组件',

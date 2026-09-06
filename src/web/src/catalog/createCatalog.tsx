@@ -140,8 +140,8 @@ export function createCatalog<TDefinitions extends Record<string, CatalogCompone
       }
 
       try {
-        const parsed = definition.schema.parse(envelope.props ?? {})
-        return renderer({ props: parsed as any, surfaceId: envelope.surfaceId, dispatch })
+        const parsed: unknown = definition.schema.parse(envelope.props ?? {})
+        return renderer({ props: parsed, surfaceId: envelope.surfaceId, dispatch })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error(`[Catalog] 渲染 ${type} 时 props 校验失败:`, err)
